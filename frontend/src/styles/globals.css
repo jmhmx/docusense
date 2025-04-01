@@ -1,0 +1,17 @@
+:root {
+  --primary: #2563eb;
+  /* Azul profesional */
+  --primary-hover: #1d4ed8;
+  --background: #f8fafc;
+  --text: #0f172a;
+  --error: #dc2626;
+}
+
+body {
+  @apply bg-gray-50 text-gray-900 font-sans antialiased;
+}
+
+/* Transiciones elegantes */
+* {
+  transition: background-color 0.2s, opacity 0.15s;
+}

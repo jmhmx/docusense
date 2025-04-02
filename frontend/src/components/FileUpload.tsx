@@ -27,6 +27,59 @@ const FileUpload = ({ onUploadSuccess, onCancel }: FileUploadProps) => {
     }
   };
 
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    
+    if (!file) {
+      setError('Por favor selecciona un archivo');
+      return;
+    }
+    
+    if (!title.trim()) {
+      setError('Por favor ingresa un título');
+      return;
+    }
+    
+    setIsLoading(true);
+    setError('');
+    setProgress(0);
+    
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('title', title);
+      
+      if (description.trim()) {
+        formData.append('description', description);
+      }
+      
+      const response = await api.post('/api/documents', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+        onUploadProgress: (progressEvent) => {
+          const percentCompleted = Math.round(
+            (progressEvent.loaded * 100) / (progressEvent.total || 100)
+          );
+          setProgress(percentCompleted);
+        },
+      });
+      
+      if (response.status === 201 || response.status === 200) {
+        onUploadSuccess();
+      }
+    } catch (err: any) {
+      console.error('Error al subir el documento:', err);
+      if (err?.response?.data?.message) {
+        setError(err.response.data.message);
+      } else {
+        setError('Error al subir el documento. Inténtalo de nuevo.');
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white rounded-lg p-8 max-w-md w-full">

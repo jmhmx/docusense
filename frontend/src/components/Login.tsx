@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Input from './Input';
 import Button from './Button';
-import useAuth from '../hooks/useAuth';
+import useAuth from '../hooks/UseAuth';
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -18,9 +18,9 @@ const Login = () => {
     try {
       await login(email, password);
       navigate('/dashboard');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error al iniciar sesión:', error);
-      if (error.response && error.response.data && error.response.data.message) {
+      if (error?.response?.data?.message) {
         setError(error.response.data.message);
       } else {
         setError('Error al iniciar sesión. Inténtalo de nuevo.');

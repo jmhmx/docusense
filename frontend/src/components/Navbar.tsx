@@ -1,26 +1,10 @@
-import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import Button from './Button';
-import useAuth from '../hooks/useAuth';
-
+import useAuth from '../hooks/UseAuth';
 
 const Navbar = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-
-  useEffect(() => {
-    // Verificar si hay un usuario logueado
-    const storedUser = localStorage.getItem('user');
-    if (storedUser) {
-      try {
-        setUser(JSON.parse(storedUser));
-      } catch (error) {
-        console.error('Error parsing user data:', error);
-        localStorage.removeItem('user');
-        localStorage.removeItem('token');
-      }
-    }
-  }, []);
 
     const handleLogout = () => {
     logout();

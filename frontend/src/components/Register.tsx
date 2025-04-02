@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Input from './Input';
 import Button from './Button';
-import useAuth from '../hooks/useAuth';
+import useAuth from '../hooks/UseAuth';
 
 const Register = () => {
    const [name, setName] = useState('');
@@ -19,9 +19,9 @@ const Register = () => {
     try {
       await register(name, email, password);
       navigate('/dashboard');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error al registrarse:', error);
-      if (error.response && error.response.data && error.response.data.message) {
+      if (error?.response?.data?.message) {
         setError(error.response.data.message);
       } else {
         setError('Error al registrarse. Inténtalo de nuevo.');

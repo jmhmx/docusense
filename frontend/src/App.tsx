@@ -12,9 +12,9 @@ function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <div className="min-h-screen flex flex-col">
+        <div className="min-h-screen flex flex-col bg-gray-50">
           <Navbar />
-          <div className="flex-grow container mx-auto px-4 py-8">
+          <div className="flex-grow">
             <Routes>
               <Route path="/" element={<Home />} />
               <Route path="/login" element={<Login />} />

@@ -4,7 +4,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import * as bcrypt from 'bcrypt';
+import * as crypto from 'crypto'; // Usar el módulo nativo de Node.js
 import { UsersService } from 'src/users/users.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
@@ -16,6 +16,33 @@ export class AuthService {
     private readonly jwtService: JwtService,
   ) {}
 
+  // Función para hashear contraseñas usando crypto
+  private async hashPassword(password: string): Promise<string> {
+    // Generar un salt aleatorio
+    const salt = crypto.randomBytes(16).toString('hex');
+    // Hashear la contraseña con el salt
+    const hash = crypto
+      .pbkdf2Sync(password, salt, 1000, 64, 'sha512')
+      .toString('hex');
+    // Devolver "salt:hash" para almacenar ambos
+    return `${salt}:${hash}`;
+  }
+
+  // Función para verificar contraseñas
+  private async verifyPassword(
+    storedPassword: string,
+    suppliedPassword: string,
+  ): Promise<boolean> {
+    // Separar el salt y hash almacenados
+    const [salt, storedHash] = storedPassword.split(':');
+    // Hashear la contraseña proporcionada con el mismo salt
+    const hash = crypto
+      .pbkdf2Sync(suppliedPassword, salt, 1000, 64, 'sha512')
+      .toString('hex');
+    // Comparar los hashes
+    return storedHash === hash;
+  }
+
   async register(registerDto: RegisterDto) {
     const { email, password } = registerDto;
 
@@ -26,7 +53,7 @@ export class AuthService {
     }
 
     // Hashear la contraseña
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const hashedPassword = await this.hashPassword(password);
 
     // Crear nuevo usuario
     const user = await this.usersService.create({
@@ -57,7 +84,7 @@ export class AuthService {
     }
 
     // Verificar contraseña
-    const isPasswordValid = await bcrypt.compare(password, user.password);
+    const isPasswordValid = await this.verifyPassword(user.password, password);
     if (!isPasswordValid) {
       throw new UnauthorizedException('Credenciales inválidas');
     }

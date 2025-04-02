@@ -2,9 +2,16 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { HealthController } from './health/health.controller';
+import { AuthModule } from './auth/auth.module';
+import { UsersModule } from './users/users.module';
+import { DocumentsModule } from './documents/documents.module';
+
 @Module({
   controllers: [HealthController],
   imports: [
+    ConfigModule.forRoot({
+      isGlobal: true,
+    }),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -24,6 +31,9 @@ import { HealthController } from './health/health.controller';
         },
       }),
     }),
+    AuthModule,
+    UsersModule,
+    DocumentsModule,
   ],
 })
 export class AppModule {}

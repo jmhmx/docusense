@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import useAuth from '../hooks/UseAuth';
 import { api } from '../api/client';
 import FileUpload from '../components/FileUpload';
+import ContentSearch from '../components/ContentSearch';
 
 interface DocumentType {
   id: string;
@@ -13,6 +14,7 @@ interface DocumentType {
   status: string;
   mimeType?: string;
   createdAt: string;
+  extractedContent?: Record<string, any>;
 }
 
 // Tipo para los filtros
@@ -25,27 +27,32 @@ interface Filters {
 const Dashboard = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  
+  // Estados para documentos
   const [documents, setDocuments] = useState<DocumentType[]>([]);
   const [filteredDocuments, setFilteredDocuments] = useState<DocumentType[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  
+  // Estados para modales
   const [showUploadModal, setShowUploadModal] = useState(false);
+  const [showContentSearch, setShowContentSearch] = useState(false);
+  const [contentSearchResults, setContentSearchResults] = useState<DocumentType[] | null>(null);
   
   // Estado para paginación
   const [currentPage, setCurrentPage] = useState(1);
   const [docsPerPage] = useState(5);
   
-  // Estado para filtros
+  // Estado para filtros y ordenamiento
   const [filters, setFilters] = useState<Filters>({
     status: 'all',
     dateRange: 'all',
     searchQuery: '',
   });
-  
-  // Estado para ordenamiento
   const [sortField, setSortField] = useState<string>('createdAt');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
 
+  // Cargar documentos al iniciar
   const fetchDocuments = async () => {
     setLoading(true);
     try {
@@ -64,7 +71,7 @@ const Dashboard = () => {
     fetchDocuments();
   }, []);
   
-  // Aplicar filtros, ordenamiento y establecer documentos filtrados
+  // Aplicar filtros y ordenamiento
   useEffect(() => {
     let result = [...documents];
     
@@ -135,6 +142,7 @@ const Dashboard = () => {
     setCurrentPage(1); // Reset to first page when filters change
   }, [documents, filters, sortField, sortDirection]);
 
+  // Eliminar documento
   const handleDeleteDocument = async (id: string) => {
     if (!window.confirm('¿Estás seguro de eliminar este documento?')) return;
     
@@ -147,7 +155,7 @@ const Dashboard = () => {
     }
   };
   
-  // Función para manejar el cambio de filtros
+  // Manejar cambio de filtros
   const handleFilterChange = (filterName: keyof Filters, value: string) => {
     setFilters(prev => ({
       ...prev,
@@ -155,7 +163,7 @@ const Dashboard = () => {
     }));
   };
   
-  // Función para manejar el ordenamiento
+  // Manejar ordenamiento
   const handleSort = (field: string) => {
     if (field === sortField) {
       setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
@@ -165,7 +173,7 @@ const Dashboard = () => {
     }
   };
 
-  // Funciones de paginación
+  // Paginación
   const indexOfLastDoc = currentPage * docsPerPage;
   const indexOfFirstDoc = indexOfLastDoc - docsPerPage;
   const currentDocs = filteredDocuments.slice(indexOfFirstDoc, indexOfLastDoc);
@@ -173,7 +181,7 @@ const Dashboard = () => {
   
   const paginate = (pageNumber: number) => setCurrentPage(pageNumber);
   
-  // Helpers
+  // Utilidades
   const formatFileSize = (bytes: number) => {
     if (bytes === 0) return '0 Bytes';
     const k = 1024;
@@ -243,6 +251,19 @@ const Dashboard = () => {
         <div className="flex mt-4 md:mt-0 md:ml-4">
           <button
             type="button"
+            onClick={() => {
+              setShowContentSearch(true);
+              setContentSearchResults(null);
+            }}
+            className="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 mr-2 -ml-1 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            Búsqueda avanzada
+          </button>
+          <button
+            type="button"
             onClick={() => setShowUploadModal(true)}
             className="inline-flex items-center px-4 py-2 ml-3 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
           >
@@ -275,175 +296,30 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="p-4 mb-6 bg-white rounded-lg shadow">
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-          <div>
-            <label htmlFor="status-filter" className="block mb-1 text-sm font-medium text-gray-700">
-              Estado
-            </label>
-            <select
-              id="status-filter"
-              value={filters.status}
-              onChange={(e) => handleFilterChange('status', e.target.value)}
-              className="block w-full py-2 pl-3 pr-10 text-base border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-            >
-              <option value="all">Todos los estados</option>
-              <option value="pending">Pendiente</option>
-              <option value="processing">Procesando</option>
-              <option value="completed">Completado</option>
-              <option value="error">Error</option>
-            </select>
-          </div>
-          
-          <div>
-            <label htmlFor="date-filter" className="block mb-1 text-sm font-medium text-gray-700">
-              Fecha
-            </label>
-            <select
-              id="date-filter"
-              value={filters.dateRange}
-              onChange={(e) => handleFilterChange('dateRange', e.target.value)}
-              className="block w-full py-2 pl-3 pr-10 text-base border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-            >
-              <option value="all">Todas las fechas</option>
-              <option value="today">Hoy</option>
-              <option value="week">Última semana</option>
-              <option value="month">Último mes</option>
-            </select>
-          </div>
-          
-          <div>
-            <label htmlFor="search-filter" className="block mb-1 text-sm font-medium text-gray-700">
-              Buscar
-            </label>
-            <div className="relative rounded-md shadow-sm">
-              <input
-                type="text"
-                id="search-filter"
-                value={filters.searchQuery}
-                onChange={(e) => handleFilterChange('searchQuery', e.target.value)}
-                placeholder="Buscar por título o nombre de archivo"
-                className="block w-full pr-10 border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-              />
-              <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-                <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {loading ? (
-        <div className="py-12 text-center">
-          <svg className="w-12 h-12 mx-auto text-gray-400 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-          </svg>
-          <p className="mt-2 text-sm font-medium text-gray-500">Cargando documentos...</p>
-        </div>
-      ) : error ? (
-        <div className="p-4 mb-6 rounded-md bg-red-50">
-          <div className="flex">
-            <div className="flex-shrink-0">
-              <svg className="w-5 h-5 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-              </svg>
-            </div>
-            <div className="ml-3">
-              <p className="text-sm font-medium text-red-800">{error}</p>
-            </div>
-          </div>
-        </div>
-      ) : filteredDocuments.length === 0 ? (
-        <div className="py-12 text-center bg-white rounded-lg shadow">
-          <svg className="w-12 h-12 mx-auto text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-          </svg>
-          <h3 className="mt-2 text-sm font-medium text-gray-900">No hay documentos</h3>
-          <p className="mt-1 text-sm text-gray-500">
-            {documents.length > 0 
-              ? 'No se encontraron documentos con los filtros seleccionados.' 
-              : 'Comienza subiendo tu primer documento.'}
-          </p>
-          <div className="mt-6">
-            <button
-              type="button"
-              onClick={() => setShowUploadModal(true)}
-              className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-            >
-              <svg className="w-5 h-5 mr-2 -ml-1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
-              </svg>
-              Subir documento
-            </button>
-          </div>
-        </div>
-      ) : (
-        <>
+      {/* Búsqueda y resultados */}
+      {contentSearchResults && (
+        <div className="mb-6">
           <div className="overflow-hidden bg-white shadow sm:rounded-md">
-            {/* Table Header */}
-            <div className="hidden px-4 py-3 text-sm font-medium text-gray-500 border-b border-gray-200 md:flex bg-gray-50">
-              <div className="w-12"></div>
-              <div className="w-1/3 px-2">
-                <button 
-                  onClick={() => handleSort('title')}
-                  className="flex items-center hover:text-gray-700"
+            <div className="px-4 py-5 border-b border-gray-200 sm:px-6">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-medium leading-6 text-gray-900">Resultados de búsqueda</h3>
+                <button
+                  type="button"
+                  onClick={() => setContentSearchResults(null)}
+                  className="text-gray-400 hover:text-gray-500"
                 >
-                  Título
-                  {sortField === 'title' && (
-                    <span className="ml-1">
-                      {sortDirection === 'asc' ? '▲' : '▼'}
-                    </span>
-                  )}
+                  <span className="sr-only">Cerrar</span>
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                  </svg>
                 </button>
               </div>
-              <div className="w-1/6 px-2">
-                <button 
-                  onClick={() => handleSort('status')}
-                  className="flex items-center hover:text-gray-700"
-                >
-                  Estado
-                  {sortField === 'status' && (
-                    <span className="ml-1">
-                      {sortDirection === 'asc' ? '▲' : '▼'}
-                    </span>
-                  )}
-                </button>
-              </div>
-              <div className="w-1/6 px-2">
-                <button 
-                  onClick={() => handleSort('fileSize')}
-                  className="flex items-center hover:text-gray-700"
-                >
-                  Tamaño
-                  {sortField === 'fileSize' && (
-                    <span className="ml-1">
-                      {sortDirection === 'asc' ? '▲' : '▼'}
-                    </span>
-                  )}
-                </button>
-              </div>
-              <div className="w-1/4 px-2">
-                <button 
-                  onClick={() => handleSort('createdAt')}
-                  className="flex items-center hover:text-gray-700"
-                >
-                  Fecha
-                  {sortField === 'createdAt' && (
-                    <span className="ml-1">
-                      {sortDirection === 'asc' ? '▲' : '▼'}
-                    </span>
-                  )}
-                </button>
-              </div>
-              <div className="w-1/6 px-2 text-right">Acciones</div>
+              <p className="max-w-2xl mt-1 text-sm text-gray-500">
+                {contentSearchResults.length} documentos encontrados
+              </p>
             </div>
-
             <ul className="divide-y divide-gray-200">
-              {currentDocs.map((document) => (
+              {contentSearchResults.map((document) => (
                 <li key={document.id}>
                   <div className="px-4 py-4">
                     <div className="md:flex md:items-center">
@@ -562,6 +438,35 @@ const Dashboard = () => {
         </>
       )}
 
+      {/* Modal de búsqueda por contenido */}
+      {showContentSearch && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-600 bg-opacity-50">
+          <div className="w-full max-w-md p-8 bg-white rounded-lg">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-lg font-medium text-gray-900">Búsqueda por contenido</h3>
+              <button
+                type="button"
+                onClick={() => setShowContentSearch(false)}
+                className="text-gray-400 hover:text-gray-500"
+              >
+                <span className="sr-only">Cerrar</span>
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            
+            <ContentSearch 
+              onResultsFound={(results) => {
+                setContentSearchResults(results);
+                setShowContentSearch(false);
+              }} 
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Modal de subida de documentos */}
       {showUploadModal && (
         <FileUpload
           onUploadSuccess={() => {

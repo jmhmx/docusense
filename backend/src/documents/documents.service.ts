@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, Like, ILike } from 'typeorm';
 import { Document, DocumentStatus } from './entities/document.entity';
 import { CreateDocumentDto } from './dto/create-document.dto';
 import { UpdateDocumentDto } from './dto/update-document.dto';
@@ -25,14 +25,24 @@ export class DocumentsService {
     return this.documentsRepository.save(document);
   }
 
-  async findAll(userId?: string): Promise<Document[]> {
+  async findAll(userId?: string, searchQuery?: string): Promise<Document[]> {
+    let whereCondition: any = {};
+
     if (userId) {
-      return this.documentsRepository.find({
-        where: { userId },
-        order: { createdAt: 'DESC' },
-      });
+      whereCondition.userId = userId;
     }
+
+    // Añadir búsqueda si hay una consulta
+    if (searchQuery && searchQuery.trim().length > 0) {
+      whereCondition = [
+        { ...whereCondition, title: ILike(`%${searchQuery}%`) },
+        { ...whereCondition, filename: ILike(`%${searchQuery}%`) },
+        { ...whereCondition, description: ILike(`%${searchQuery}%`) },
+      ];
+    }
+
     return this.documentsRepository.find({
+      where: whereCondition,
       order: { createdAt: 'DESC' },
     });
   }
@@ -85,5 +95,29 @@ export class DocumentsService {
     }
 
     await this.documentsRepository.remove(document);
+  }
+
+  /**
+   * Busca documentos por contenido extraído
+   */
+  async searchByContent(query: string, userId?: string): Promise<Document[]> {
+    // Consulta SQL directa para buscar en el contenido JSON
+    const queryBuilder = this.documentsRepository
+      .createQueryBuilder('document')
+      .where('document.status = :status', { status: DocumentStatus.COMPLETED });
+
+    // Restricción por usuario si se proporciona
+    if (userId) {
+      queryBuilder.andWhere('document.userId = :userId', { userId });
+    }
+
+    // Búsqueda en el contenido extraído (esto varía según la base de datos)
+    // Esta implementación es para PostgreSQL con columnas JSONB
+    queryBuilder.andWhere(
+      "CAST(document.extractedContent ->> 'text' AS TEXT) ILIKE :query",
+      { query: `%${query}%` },
+    );
+
+    return queryBuilder.orderBy('document.createdAt', 'DESC').getMany();
   }
 }

@@ -13,10 +13,12 @@ import {
   BadRequestException,
   Res,
   StreamableFile,
+  Query,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { DocumentsService } from './documents.service';
 import { DocumentProcessorService } from './processors/document-processor.service';
+import { DocumentAnalyzerService } from 'src/analyzers/document-analyzer.service';
 import { CreateDocumentDto } from './dto/create-document.dto';
 import { UpdateDocumentDto } from './dto/update-document.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -48,6 +50,7 @@ export class DocumentsController {
   constructor(
     private readonly documentsService: DocumentsService,
     private readonly documentProcessorService: DocumentProcessorService,
+    private readonly documentAnalyzerService: DocumentAnalyzerService,
   ) {}
 
   @UseGuards(JwtAuthGuard)
@@ -75,8 +78,10 @@ export class DocumentsController {
 
   @UseGuards(JwtAuthGuard)
   @Get()
-  findAll(@Request() req) {
-    return this.documentsService.findAll(req.user.id);
+  findAll(@Request() req, @Query() query) {
+    // Soporte para búsqueda por texto
+    const searchQuery = query.search;
+    return this.documentsService.findAll(req.user.id, searchQuery);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -161,5 +166,45 @@ export class DocumentsController {
     const document = await this.documentsService.findOne(id, req.user.id);
     await this.documentProcessorService.processDocument(document);
     return { message: 'Documento enviado a procesamiento' };
+  }
+
+  // NUEVOS ENDPOINTS PARA ANÁLISIS
+
+  @UseGuards(JwtAuthGuard)
+  @Get(':id/analyze')
+  async analyzeDocument(@Param('id') id: string, @Request() req) {
+    const document = await this.documentsService.findOne(id, req.user.id);
+
+    // Verificar que el documento ya ha sido procesado
+    if (document.status !== 'completed') {
+      throw new BadRequestException(
+        'El documento debe estar procesado para poder analizarlo',
+      );
+    }
+
+    // Realizar análisis
+    const analysisResult =
+      await this.documentAnalyzerService.analyzeDocument(document);
+
+    // Guardar resultado del análisis en el documento
+    document.metadata = {
+      ...document.metadata,
+      analysis: analysisResult,
+      analyzedAt: new Date().toISOString(),
+    };
+
+    await this.documentsService.update(id, document, req.user.id);
+
+    return analysisResult;
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('search/content')
+  async searchByContent(@Query('q') query: string, @Request() req) {
+    if (!query || query.trim().length === 0) {
+      throw new BadRequestException('La consulta de búsqueda es requerida');
+    }
+
+    return this.documentsService.searchByContent(query, req.user.id);
   }
 }

@@ -6,13 +6,14 @@ import Navbar from './components/Navbar'
 import ProtectedRoute from './components/ProtectedRoute'
 import AuthProvider from './context/AuthContext'
 import Dashboard from './pages/Dashboard'
+import DocumentViewer from './pages/DocumentViewer'
 import Home from './pages/Home'
 
 function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <div className="min-h-screen flex flex-col bg-gray-50">
+        <div className="flex flex-col min-h-screen bg-gray-50">
           <Navbar />
           <div className="flex-grow">
             <Routes>
@@ -24,6 +25,14 @@ function App() {
                 element={
                   <ProtectedRoute>
                     <Dashboard />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/documents/:id" 
+                element={
+                  <ProtectedRoute>
+                    <DocumentViewer />
                   </ProtectedRoute>
                 } 
               />

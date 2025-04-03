@@ -10,7 +10,7 @@ const Home = () => {
       <section className="pt-20 pb-16 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
         <div className="text-center">
           <h1 className="text-5xl md:text-6xl font-extrabold text-gray-900 mb-6">
-            <span className="text-blue-600">Docu</span>Sense
+            <span className="text-blue-600">Docu</span>Sense <br/> <span className="text-xs text-blue-600">by Engine Core</span>
           </h1>
           <p className="text-xl md:text-2xl text-gray-600 max-w-3xl mx-auto mb-10">
             Gestiona y analiza tus documentos de forma inteligente con tecnología de última generación

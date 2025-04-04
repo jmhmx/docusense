@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 
 interface DocumentType {
@@ -22,7 +21,6 @@ const ContentSearch = ({ onResultsFound }: ContentSearchProps) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const navigate = useNavigate();
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();

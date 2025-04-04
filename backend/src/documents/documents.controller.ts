@@ -18,7 +18,10 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { DocumentsService } from './documents.service';
 import { DocumentProcessorService } from './processors/document-processor.service';
-import { DocumentAnalyzerService } from 'src/analyzers/document-analyzer.service';
+import {
+  DocumentAnalyzerService,
+  AnalysisResult,
+} from 'src/analyzers/document-analyzer.service';
 import { CreateDocumentDto } from './dto/create-document.dto';
 import { UpdateDocumentDto } from './dto/update-document.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -172,7 +175,10 @@ export class DocumentsController {
 
   @UseGuards(JwtAuthGuard)
   @Get(':id/analyze')
-  async analyzeDocument(@Param('id') id: string, @Request() req) {
+  async analyzeDocument(
+    @Param('id') id: string,
+    @Request() req,
+  ): Promise<AnalysisResult> {
     const document = await this.documentsService.findOne(id, req.user.id);
 
     // Verificar que el documento ya ha sido procesado

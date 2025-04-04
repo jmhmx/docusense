@@ -31,8 +31,8 @@ const Dashboard = () => {
   // Estados para documentos
   const [documents, setDocuments] = useState<DocumentType[]>([]);
   const [filteredDocuments, setFilteredDocuments] = useState<DocumentType[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState('');
   
   // Estados para modales
   const [showUploadModal, setShowUploadModal] = useState(false);
@@ -54,16 +54,16 @@ const Dashboard = () => {
 
   // Cargar documentos al iniciar
   const fetchDocuments = async () => {
-    setLoading(true);
+    setIsLoading(true);
     try {
       const response = await api.get('/api/documents');
       setDocuments(response.data);
-      setError('');
+      setErrorMessage('');
     } catch (err: any) {
       console.error('Error al cargar documentos:', err);
-      setError('No se pudieron cargar los documentos. Intente nuevamente más tarde.');
+      setErrorMessage('No se pudieron cargar los documentos. Intente nuevamente más tarde.');
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   };
 
@@ -176,11 +176,10 @@ const Dashboard = () => {
   // Paginación
   const indexOfLastDoc = currentPage * docsPerPage;
   const indexOfFirstDoc = indexOfLastDoc - docsPerPage;
-  const currentDocs = filteredDocuments.slice(indexOfFirstDoc, indexOfLastDoc);
+  const paginatedDocs = filteredDocuments.slice(indexOfFirstDoc, indexOfLastDoc);
   const totalPages = Math.ceil(filteredDocuments.length / docsPerPage);
   
   const paginate = (pageNumber: number) => setCurrentPage(pageNumber);
-  
   // Utilidades
   const formatFileSize = (bytes: number) => {
     if (bytes === 0) return '0 Bytes';
@@ -296,6 +295,236 @@ const Dashboard = () => {
         </div>
       </div>
 
+      {/* Estados de carga y error */}
+      {isLoading ? (
+        <div className="flex items-center justify-center p-12">
+          <svg className="w-12 h-12 text-blue-500 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+        </div>
+      ) : errorMessage ? (
+        <div className="p-4 rounded-md bg-red-50">
+          <div className="flex">
+            <div className="flex-shrink-0">
+              <svg className="w-5 h-5 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-red-800">{errorMessage}</h3>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <>
+          {/* Filtros */}
+          <div className="p-4 mb-6 bg-white rounded-lg shadow">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Estado</label>
+                <select 
+                  className="block w-full mt-1 border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                  value={filters.status}
+                  onChange={(e) => handleFilterChange('status', e.target.value)}
+                >
+                  <option value="all">Todos</option>
+                  <option value="pending">Pendiente</option>
+                  <option value="processing">Procesando</option>
+                  <option value="completed">Completado</option>
+                  <option value="error">Error</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Fecha</label>
+                <select 
+                  className="block w-full mt-1 border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                  value={filters.dateRange}
+                  onChange={(e) => handleFilterChange('dateRange', e.target.value)}
+                >
+                  <option value="all">Todos</option>
+                  <option value="today">Hoy</option>
+                  <option value="week">Última semana</option>
+                  <option value="month">Último mes</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Ordenar por</label>
+                <div className="flex mt-1">
+                  <select 
+                    className="block w-full border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                    value={sortField}
+                    onChange={(e) => handleSort(e.target.value)}
+                  >
+                    <option value="createdAt">Fecha</option>
+                    <option value="title">Título</option>
+                    <option value="fileSize">Tamaño</option>
+                  </select>
+                  <button 
+                    className="p-2 ml-2 bg-gray-200 rounded-md"
+                    onClick={() => setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')}
+                  >
+                    {sortDirection === 'asc' ? (
+                      <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M5.293 7.707a1 1 0 010-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 01-1.414 1.414L11 5.414V17a1 1 0 11-2 0V5.414L6.707 7.707a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                      </svg>
+                    ) : (
+                      <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M14.707 12.293a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 111.414-1.414L9 14.586V3a1 1 0 012 0v11.586l2.293-2.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Lista de documentos */}
+          <div className="overflow-hidden bg-white shadow sm:rounded-md">
+            <ul className="divide-y divide-gray-200">
+              {paginatedDocs.length === 0 ? (
+                <li className="px-4 py-12 text-center">
+                  <svg className="w-12 h-12 mx-auto text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  <h3 className="mt-2 text-sm font-medium text-gray-900">No hay documentos</h3>
+                  <p className="mt-1 text-sm text-gray-500">
+                    Comienza subiendo tu primer documento.
+                  </p>
+                  <div className="mt-6">
+                    <button
+                      type="button"
+                      onClick={() => setShowUploadModal(true)}
+                      className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 mr-2 -ml-1" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
+                      </svg>
+                      Nuevo documento
+                    </button>
+                  </div>
+                </li>
+              ) : (
+                paginatedDocs.map((document) => (
+                  <li key={document.id}>
+                    <div className="px-4 py-4">
+                      <div className="md:flex md:items-center">
+                        <div className="flex justify-center flex-shrink-0 w-12">
+                          {getDocumentTypeIcon(document.mimeType)}
+                        </div>
+                        <div className="px-2 md:w-1/3">
+                          <h4 className="text-lg font-medium text-gray-900">{document.title}</h4>
+                          {document.description && (
+                            <p className="mt-1 text-sm text-gray-500 line-clamp-1">{document.description}</p>
+                          )}
+                          <p className="mt-1 text-xs text-gray-500 md:hidden">{document.filename}</p>
+                        </div>
+                        <div className="px-2 mt-2 md:w-1/6 md:mt-0">
+                          <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusBadgeClass(document.status)}`}>
+                            {document.status}
+                          </span>
+                        </div>
+                        <div className="px-2 mt-2 text-sm text-gray-500 md:w-1/6 md:mt-0">
+                          {formatFileSize(document.fileSize)}
+                        </div>
+                        <div className="px-2 mt-2 text-sm text-gray-500 md:w-1/4 md:mt-0">
+                          {new Date(document.createdAt).toLocaleDateString('es-ES', {
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric',
+                          })}
+                        </div>
+                        <div className="flex px-2 mt-4 space-x-2 md:w-1/6 md:mt-0 md:justify-end">
+                          <button
+                            type="button"
+                            className="inline-flex items-center px-2.5 py-1.5 border border-transparent text-xs font-medium rounded text-blue-700 bg-blue-100 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                            onClick={() => navigate(`/documents/${document.id}`)}
+                          >
+                            Ver
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteDocument(document.id)}
+                            className="inline-flex items-center px-2.5 py-1.5 border border-transparent text-xs font-medium rounded text-red-700 bg-red-100 hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                          >
+                            Eliminar
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </li>
+                ))
+              )}
+            </ul>
+          </div>
+
+          {/* Paginación */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-4 py-3 mt-4 bg-white border-t border-gray-200 rounded-md shadow sm:px-6">
+              <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-sm text-gray-700">
+                    Mostrando <span className="font-medium">{indexOfFirstDoc + 1}</span> a{' '}
+                    <span className="font-medium">
+                      {Math.min(indexOfLastDoc, filteredDocuments.length)}
+                    </span>{' '}
+                    de <span className="font-medium">{filteredDocuments.length}</span> resultados
+                  </p>
+                </div>
+                <div>
+                  <nav className="relative z-0 inline-flex -space-x-px rounded-md shadow-sm" aria-label="Pagination">
+                    <button
+                      onClick={() => paginate(currentPage > 1 ? currentPage - 1 : 1)}
+                      disabled={currentPage === 1}
+                      className={`relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium ${
+                        currentPage === 1 
+                          ? 'text-gray-300 cursor-not-allowed' 
+                          : 'text-gray-500 hover:bg-gray-50'
+                      }`}
+                    >
+                      <span className="sr-only">Anterior</span>
+                      <svg className="w-5 h-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                        <path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                    </button>
+                    
+                    {/* Page Numbers */}
+                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNumber) => (
+                      <button
+                        key={pageNumber}
+                        onClick={() => paginate(pageNumber)}
+                        className={`relative inline-flex items-center px-4 py-2 border ${
+                          currentPage === pageNumber
+                            ? 'bg-blue-50 border-blue-500 text-blue-600 z-10'
+                            : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
+                        } text-sm font-medium`}
+                      >
+                        {pageNumber}
+                      </button>
+                    ))}
+                    
+                    <button
+                      onClick={() => paginate(currentPage < totalPages ? currentPage + 1 : totalPages)}
+                      disabled={currentPage === totalPages}
+                      className={`relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium ${
+                        currentPage === totalPages 
+                          ? 'text-gray-300 cursor-not-allowed' 
+                          : 'text-gray-500 hover:bg-gray-50'
+                      }`}
+                    >
+                      <span className="sr-only">Siguiente</span>
+                      <svg className="w-5 h-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                        <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                      </svg>
+                    </button>
+                  </nav>
+                </div>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
       {/* Búsqueda y resultados */}
       {contentSearchResults && (
         <div className="mb-6">
@@ -370,72 +599,7 @@ const Dashboard = () => {
               ))}
             </ul>
           </div>
-
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between px-4 py-3 mt-4 bg-white border-t border-gray-200 rounded-md shadow sm:px-6">
-              <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
-                <div>
-                  <p className="text-sm text-gray-700">
-                    Mostrando <span className="font-medium">{indexOfFirstDoc + 1}</span> a{' '}
-                    <span className="font-medium">
-                      {Math.min(indexOfLastDoc, filteredDocuments.length)}
-                    </span>{' '}
-                    de <span className="font-medium">{filteredDocuments.length}</span> resultados
-                  </p>
-                </div>
-                <div>
-                  <nav className="relative z-0 inline-flex -space-x-px rounded-md shadow-sm" aria-label="Pagination">
-                    <button
-                      onClick={() => paginate(currentPage > 1 ? currentPage - 1 : 1)}
-                      disabled={currentPage === 1}
-                      className={`relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium ${
-                        currentPage === 1 
-                          ? 'text-gray-300 cursor-not-allowed' 
-                          : 'text-gray-500 hover:bg-gray-50'
-                      }`}
-                    >
-                      <span className="sr-only">Anterior</span>
-                      <svg className="w-5 h-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                        <path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" />
-                      </svg>
-                    </button>
-                    
-                    {/* Page Numbers */}
-                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNumber) => (
-                      <button
-                        key={pageNumber}
-                        onClick={() => paginate(pageNumber)}
-                        className={`relative inline-flex items-center px-4 py-2 border ${
-                          currentPage === pageNumber
-                            ? 'bg-blue-50 border-blue-500 text-blue-600 z-10'
-                            : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
-                        } text-sm font-medium`}
-                      >
-                        {pageNumber}
-                      </button>
-                    ))}
-                    
-                    <button
-                      onClick={() => paginate(currentPage < totalPages ? currentPage + 1 : totalPages)}
-                      disabled={currentPage === totalPages}
-                      className={`relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium ${
-                        currentPage === totalPages 
-                          ? 'text-gray-300 cursor-not-allowed' 
-                          : 'text-gray-500 hover:bg-gray-50'
-                      }`}
-                    >
-                      <span className="sr-only">Siguiente</span>
-                      <svg className="w-5 h-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                        <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
-                      </svg>
-                    </button>
-                  </nav>
-                </div>
-              </div>
-            </div>
-          )}
-        </>
+        </div>
       )}
 
       {/* Modal de búsqueda por contenido */}

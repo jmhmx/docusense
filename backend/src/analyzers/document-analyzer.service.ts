@@ -1,7 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Document } from '../documents/entities/document.entity';
 
-interface AnalysisResult {
+// Exportar la interfaz para que pueda ser usada en otros archivos
+export interface AnalysisResult {
   summary: string;
   keyPhrases: string[];
   entities: Array<{ text: string; type: string }>;

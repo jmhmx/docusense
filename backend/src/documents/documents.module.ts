@@ -5,10 +5,17 @@ import { DocumentsService } from './documents.service';
 import { DocumentsController } from './documents.controller';
 import { Document } from './entities/document.entity';
 import { DocumentProcessorService } from './processors/document-processor.service';
-import { DocumentAnalyzerService } from 'src/analyzers/document-analyzer.service';
+import { DocumentAnalyzerService } from '../analyzers/document-analyzer.service';
+import { CryptoModule } from '../crypto/crypto.module';
+import { AuditModule } from '../audit/audit.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Document]), ScheduleModule.forRoot()],
+  imports: [
+    TypeOrmModule.forFeature([Document]),
+    ScheduleModule.forRoot(),
+    CryptoModule,
+    AuditModule,
+  ],
   controllers: [DocumentsController],
   providers: [
     DocumentsService,

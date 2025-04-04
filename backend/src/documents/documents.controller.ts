@@ -14,6 +14,10 @@ import {
   Res,
   StreamableFile,
   Query,
+  Header,
+  Headers,
+  Ip,
+  NotFoundException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { DocumentsService } from './documents.service';
@@ -22,6 +26,8 @@ import {
   DocumentAnalyzerService,
   AnalysisResult,
 } from 'src/analyzers/document-analyzer.service';
+import { CryptoService } from '../crypto/crypto.service';
+import { AuditLogService, AuditAction } from '../audit/audit-log.service';
 import { CreateDocumentDto } from './dto/create-document.dto';
 import { UpdateDocumentDto } from './dto/update-document.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -31,6 +37,7 @@ import * as fs from 'fs';
 import { v4 as uuidv4 } from 'uuid';
 import { Response } from 'express';
 import { createReadStream } from 'fs';
+import { Readable } from 'stream';
 
 const UPLOAD_DIR = 'uploads';
 
@@ -54,7 +61,16 @@ export class DocumentsController {
     private readonly documentsService: DocumentsService,
     private readonly documentProcessorService: DocumentProcessorService,
     private readonly documentAnalyzerService: DocumentAnalyzerService,
-  ) {}
+    private readonly cryptoService: CryptoService,
+    private readonly auditLogService: AuditLogService,
+  ) {
+    // Verificar que el servicio se está inyectando correctamente
+    console.log(
+      'DocumentsService:',
+      typeof this.documentsService,
+      this.documentsService,
+    );
+  }
 
   @UseGuards(JwtAuthGuard)
   @Post()
@@ -63,6 +79,9 @@ export class DocumentsController {
     @UploadedFile() file: Express.Multer.File,
     @Body() createDocumentDto: CreateDocumentDto,
     @Request() req,
+    @Headers() headers,
+    @Ip() ip: string,
+    @Query('encrypt') encrypt?: string,
   ) {
     if (!file) {
       throw new BadRequestException('No se ha subido ningún archivo');
@@ -76,7 +95,17 @@ export class DocumentsController {
       mimeType: file.mimetype,
     };
 
-    return this.documentsService.create(document, req.user.id);
+    // Determinar si se debe cifrar el documento
+    const shouldEncrypt = encrypt === 'true' || encrypt === '1';
+    const userAgent = headers['user-agent'] || 'Unknown';
+
+    return this.documentsService.create(
+      document,
+      req.user.id,
+      shouldEncrypt,
+      ip,
+      userAgent,
+    );
   }
 
   @UseGuards(JwtAuthGuard)
@@ -89,8 +118,14 @@ export class DocumentsController {
 
   @UseGuards(JwtAuthGuard)
   @Get(':id')
-  findOne(@Param('id') id: string, @Request() req) {
-    return this.documentsService.findOne(id, req.user.id);
+  findOne(
+    @Param('id') id: string,
+    @Request() req,
+    @Headers() headers,
+    @Ip() ip: string,
+  ) {
+    const userAgent = headers['user-agent'] || 'Unknown';
+    return this.documentsService.findOne(id, req.user.id, ip, userAgent);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -129,22 +164,57 @@ export class DocumentsController {
   async downloadDocument(
     @Param('id') id: string,
     @Request() req,
+    @Headers() headers,
+    @Ip() ip: string,
     @Res({ passthrough: true }) res: Response,
   ): Promise<StreamableFile> {
-    const document = await this.documentsService.findOne(id, req.user.id);
+    const userAgent = headers['user-agent'] || 'Unknown';
+    const document = await this.documentsService.findOne(
+      id,
+      req.user.id,
+      ip,
+      userAgent,
+    );
 
-    // Verificar que el archivo existe
-    if (!fs.existsSync(document.filePath)) {
-      throw new BadRequestException('El archivo no se encuentra disponible');
+    // Registrar la descarga en el log de auditoría
+    await this.auditLogService.log(
+      AuditAction.DOCUMENT_DOWNLOAD,
+      req.user.id,
+      document.id,
+      {
+        title: document.title,
+        filename: document.filename,
+      },
+      ip,
+      userAgent,
+    );
+
+    // Verificar si el documento está cifrado y obtener el contenido
+    let fileData: Buffer;
+    if (document.metadata?.isEncrypted) {
+      fileData = await this.documentsService.getDocumentContent(
+        document,
+        req.user.id,
+      );
+    } else {
+      // Verificar que el archivo existe
+      if (!fs.existsSync(document.filePath)) {
+        throw new BadRequestException('El archivo no se encuentra disponible');
+      }
+      fileData = fs.readFileSync(document.filePath);
     }
 
-    const file = createReadStream(document.filePath);
     res.set({
       'Content-Type': document.mimeType || 'application/octet-stream',
       'Content-Disposition': `attachment; filename="${document.filename}"`,
     });
 
-    return new StreamableFile(file);
+    // Crear un stream a partir del buffer
+    const readableStream = new Readable();
+    readableStream.push(fileData);
+    readableStream.push(null);
+
+    return new StreamableFile(readableStream);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -212,5 +282,92 @@ export class DocumentsController {
     }
 
     return this.documentsService.searchByContent(query, req.user.id);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post(':id/encrypt')
+  async encryptDocument(
+    @Param('id') id: string,
+    @Request() req,
+    @Headers() headers,
+    @Ip() ip: string,
+  ) {
+    try {
+      const userAgent = headers['user-agent'] || 'Unknown';
+
+      // Obtener documento
+      const document = await this.documentsService.findOne(
+        id,
+        req.user.id,
+        ip,
+        userAgent,
+      );
+
+      // Verificar que no esté ya cifrado
+      if (document.metadata?.isEncrypted) {
+        throw new BadRequestException('El documento ya está cifrado');
+      }
+
+      // Leer archivo original
+      const fileData = await this.documentsService.getDocumentContent(
+        document,
+        req.user.id,
+      );
+
+      // Cifrar el documento
+      const { encryptedData, key, iv } =
+        this.cryptoService.encryptDocument(fileData);
+
+      // Guardar versión cifrada
+      const encryptedFilePath = `${document.filePath}.encrypted`;
+      fs.writeFileSync(encryptedFilePath, encryptedData);
+
+      // Actualizar metadata del documento
+      const updatedDoc = await this.documentsService.update(
+        id,
+        {
+          filePath: encryptedFilePath,
+          metadata: {
+            ...document.metadata,
+            isEncrypted: true,
+            encryptionDetails: {
+              keyBase64: key.toString('base64'),
+              ivBase64: iv.toString('base64'),
+              encryptedAt: new Date().toISOString(),
+            },
+            originalFilePath: document.filePath,
+          },
+        },
+        req.user.id,
+      );
+
+      // Registrar acción en log de auditoría
+      await this.auditLogService.log(
+        AuditAction.DOCUMENT_ENCRYPT,
+        req.user.id,
+        document.id,
+        {
+          title: document.title,
+          filename: document.filename,
+        },
+        ip,
+        userAgent,
+      );
+
+      return {
+        message: 'Documento cifrado correctamente',
+        documentId: updatedDoc.id,
+      };
+    } catch (error) {
+      if (
+        error instanceof NotFoundException ||
+        error instanceof BadRequestException
+      ) {
+        throw error;
+      }
+      throw new BadRequestException(
+        `Error al cifrar documento: ${error.message}`,
+      );
+    }
   }
 }

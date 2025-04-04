@@ -32,24 +32,23 @@ const DocumentViewer = () => {
   const [processingDocument, setProcessingDocument] = useState<boolean>(false);
 
   useEffect(() => {
-    const fetchDocument = async () => {
-      setLoading(true);
-      try {
-        const response = await api.get(`/api/documents/${id}`);
-        setDocument(response.data);
-        setError(null);
-      } catch (err: any) {
-        console.error('Error al cargar el documento:', err);
-        setError(err?.response?.data?.message || 'Error al cargar el documento');
-      } finally {
-        setLoading(false);
-      }
-    };
-
     if (id) {
       fetchDocument();
     }
-  }, [id]);
+  }, [id]);  // Cargar documentos al iniciar
+  const fetchDocument = async () => {
+    setLoading(true);
+    try {
+      const response = await api.get(`/api/documents/${id}`);
+      setDocument(response.data);
+      setError('');
+    } catch (err: any) {
+      console.error('Error al cargar documento:', err);
+      setError(err?.response?.data?.message || 'Error al cargar el documento. Intente nuevamente más tarde.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleProcessDocument = async () => {
     if (!id) return;

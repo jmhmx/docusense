@@ -6,6 +6,9 @@ import { HealthController } from './health/health.controller';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { DocumentsModule } from './documents/documents.module';
+import { CryptoModule } from './crypto/crypto.module';
+import { AuditModule } from './audit/audit.module';
+import { SignaturesModule } from './signatures/signatures.module';
 
 @Module({
   controllers: [HealthController],
@@ -36,6 +39,9 @@ import { DocumentsModule } from './documents/documents.module';
     AuthModule,
     UsersModule,
     DocumentsModule,
+    CryptoModule,
+    AuditModule,
+    SignaturesModule,
   ],
 })
 export class AppModule {}

@@ -7,8 +7,7 @@ export class AuditLog {
   id: string;
 
   @Column({
-    type: 'enum',
-    enum: AuditAction,
+    type: 'varchar',
   })
   @Index()
   action: AuditAction;

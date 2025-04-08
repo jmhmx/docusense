@@ -7,6 +7,7 @@ import ProtectedRoute from './components/ProtectedRoute'
 import AuthProvider from './context/AuthContext'
 import Dashboard from './pages/Dashboard'
 import DocumentViewer from './pages/DocumentViewer'
+import SharedDocumentView from './pages/SharedDocumentView'
 import Home from './pages/Home'
 
 function App() {
@@ -36,6 +37,7 @@ function App() {
                   </ProtectedRoute>
                 } 
               />
+              <Route path="/share/:token" element={<SharedDocumentView />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </div>

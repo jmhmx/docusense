@@ -6,6 +6,7 @@ import { CreateDocumentDto } from './dto/create-document.dto';
 import { UpdateDocumentDto } from './dto/update-document.dto';
 import { CryptoService } from '../crypto/crypto.service';
 import { AuditLogService, AuditAction } from '../audit/audit-log.service';
+import { SharingService } from '../sharing/sharing.service';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -16,10 +17,12 @@ export class DocumentsService {
     private readonly documentsRepository: Repository<Document>,
     private readonly cryptoService: CryptoService,
     private readonly auditLogService: AuditLogService,
+    private readonly sharingService?: SharingService,
   ) {
     // Verificar servicios
     console.log('CryptoService disponible:', !!this.cryptoService);
     console.log('AuditLogService disponible:', !!this.auditLogService);
+    console.log('SharingService disponible:', !!this.sharingService);
   }
 
   async create(
@@ -108,9 +111,21 @@ export class DocumentsService {
 
   async findAll(userId?: string, searchQuery?: string): Promise<Document[]> {
     let whereCondition: any = {};
+    let sharedDocuments: Document[] = [];
 
     if (userId) {
       whereCondition.userId = userId;
+
+      // Si el servicio de compartición está disponible, obtener también documentos compartidos
+      if (this.sharingService) {
+        try {
+          sharedDocuments =
+            await this.sharingService.getSharedWithMeDocuments(userId);
+        } catch (error) {
+          console.error('Error al obtener documentos compartidos:', error);
+          // No fallamos la búsqueda si esto falla
+        }
+      }
     }
 
     // Añadir búsqueda si hay una consulta
@@ -122,10 +137,33 @@ export class DocumentsService {
       ];
     }
 
-    return this.documentsRepository.find({
+    // Obtener documentos del usuario
+    const userDocuments = await this.documentsRepository.find({
       where: whereCondition,
       order: { createdAt: 'DESC' },
     });
+
+    // Si no hay documentos compartidos, retornar solo los documentos del usuario
+    if (sharedDocuments.length === 0) {
+      return userDocuments;
+    }
+
+    // Combinar documentos propios y compartidos
+    // Eliminar duplicados (podría ocurrir si un documento fue compartido por el propietario)
+    const allDocuments = [...userDocuments];
+
+    // Añadir documentos compartidos que no estén ya incluidos
+    for (const sharedDoc of sharedDocuments) {
+      if (!allDocuments.find((doc) => doc.id === sharedDoc.id)) {
+        allDocuments.push(sharedDoc);
+      }
+    }
+
+    // Ordenar por fecha de creación
+    return allDocuments.sort(
+      (a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    );
   }
 
   async findOne(
@@ -136,32 +174,43 @@ export class DocumentsService {
   ): Promise<Document> {
     const queryOptions: any = { where: { id } };
 
-    if (userId) {
-      queryOptions.where.userId = userId;
-    }
-
     const document = await this.documentsRepository.findOne(queryOptions);
 
     if (!document) {
       throw new NotFoundException(`Documento con ID ${id} no encontrado`);
     }
 
-    // Si se proporciona userId, registrar acceso en log de auditoría
-    if (userId && this.auditLogService) {
-      try {
-        await this.auditLogService.log(
-          AuditAction.DOCUMENT_VIEW,
-          userId,
-          document.id,
-          {
-            title: document.title,
-            filename: document.filename,
-          },
-          ipAddress,
-          userAgent,
-        );
-      } catch (error) {
-        console.error('Error al registrar acción en log de auditoría:', error);
+    // Si se proporciona el userId, verificar permisos
+    if (userId && this.sharingService) {
+      // Verificar si el usuario tiene acceso al documento
+      const hasAccess = await this.sharingService.canUserAccessDocument(
+        userId,
+        id,
+      );
+      if (!hasAccess && document.userId !== userId) {
+        throw new NotFoundException(`Documento con ID ${id} no encontrado`);
+      }
+
+      // Si se proporciona userId, registrar acceso en log de auditoría
+      if (this.auditLogService) {
+        try {
+          await this.auditLogService.log(
+            AuditAction.DOCUMENT_VIEW,
+            userId,
+            document.id,
+            {
+              title: document.title,
+              filename: document.filename,
+            },
+            ipAddress,
+            userAgent,
+          );
+        } catch (error) {
+          console.error(
+            'Error al registrar acción en log de auditoría:',
+            error,
+          );
+        }
       }
     }
 
@@ -186,6 +235,21 @@ export class DocumentsService {
 
   async remove(id: string, userId?: string): Promise<void> {
     const document = await this.findOne(id, userId);
+
+    // Si hay servicio de compartición y userId, verificar permisos de eliminación
+    // Solo el propietario puede eliminar el documento
+    if (this.sharingService && userId && document.userId !== userId) {
+      // Verificar si es propietario a nivel de permisos (podría ser diferente del creador)
+      const permission = await this.sharingService.getUserPermissionForDocument(
+        userId,
+        id,
+      );
+      if (!permission || permission.permissionLevel !== 'owner') {
+        throw new NotFoundException(
+          `Documento con ID ${id} no encontrado o no tienes permisos para eliminarlo`,
+        );
+      }
+    }
 
     // Eliminar archivo físico si existe
     if (document.filePath) {

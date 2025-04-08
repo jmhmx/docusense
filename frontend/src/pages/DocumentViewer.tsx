@@ -4,6 +4,8 @@ import { api } from '../api/client';
 import DocumentAnalysis from '../components/DocumentAnalysis';
 import DocumentSignature from '../components/DocumentSignature';
 import DocumentEncrypt from '../components/DocumentEncrypt';
+import DocumentSharing from '../components/DocumentSharing';
+import DocumentComments from '../components/DocumentComments';
 
 interface DocumentType {
   id: string;
@@ -27,7 +29,7 @@ const DocumentViewer = () => {
   const [document, setDocument] = useState<DocumentType | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'preview' | 'metadata' | 'content' | 'analysis' | 'signatures'>('preview');
+  const [activeTab, setActiveTab] = useState<'preview' | 'metadata' | 'content' | 'analysis' | 'signatures' | 'sharing' | 'comments'>('preview');
   const [processingDocument, setProcessingDocument] = useState<boolean>(false);
 
   useEffect(() => {
@@ -417,6 +419,7 @@ const DocumentViewer = () => {
       </div>
 
       {/* Tabs */}
+      {/* Tabs */}
       <div className="mb-6 border-b border-gray-200">
         <nav className="flex -mb-px space-x-8" aria-label="Tabs">
           <button
@@ -460,6 +463,26 @@ const DocumentViewer = () => {
             Analysis
           </button>
           <button
+            onClick={() => setActiveTab('comments')}
+            className={`${
+              activeTab === 'comments'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
+          >
+            Comments
+          </button>
+          <button
+            onClick={() => setActiveTab('sharing')}
+            className={`${
+              activeTab === 'sharing'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
+          >
+            Sharing
+          </button>
+          <button
             onClick={() => setActiveTab('signatures')}
             className={`${
               activeTab === 'signatures'
@@ -467,7 +490,7 @@ const DocumentViewer = () => {
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
             } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
           >
-            Signatures & Security
+            Signatures
           </button>
         </nav>
       </div>
@@ -478,6 +501,22 @@ const DocumentViewer = () => {
       {activeTab === 'content' && renderContentTab()}
       {activeTab === 'analysis' && id && <DocumentAnalysis documentId={id} />}
       {activeTab === 'signatures' && renderSignaturesTab()}
+      {activeTab === 'sharing' && id && (
+        <DocumentSharing 
+          documentId={id} 
+          documentTitle={document?.title || ''}
+          onPermissionsUpdated={() => fetchDocument()}
+        />
+      )}
+      {activeTab === 'comments' && id && (
+        <DocumentComments 
+          documentId={id}
+          currentPage={1}
+          onCommentsUpdated={(count) => {
+            // Actualizar badge o contador de comentarios si es necesario
+          }}
+        />
+      )}
     </div>
   );
 };

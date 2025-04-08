@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ScheduleModule } from '@nestjs/schedule';
 import { DocumentsService } from './documents.service';
@@ -9,6 +9,7 @@ import { DocumentProcessorService } from './processors/document-processor.servic
 import { DocumentAnalyzerService } from '../analyzers/document-analyzer.service';
 import { CryptoModule } from '../crypto/crypto.module';
 import { AuditModule } from '../audit/audit.module';
+import { SharingModule } from '../sharing/sharing.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { AuditModule } from '../audit/audit.module';
     ScheduleModule.forRoot(),
     CryptoModule,
     AuditModule,
+    forwardRef(() => SharingModule), // Usar forwardRef para evitar dependencia circular
   ],
   controllers: [DocumentsController, DocumentEncryptionController],
   providers: [

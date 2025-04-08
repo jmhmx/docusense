@@ -21,6 +21,17 @@ export enum AuditAction {
   USER_UPDATE = 'user_update',
   AUTH_2FA_REQUEST = 'auth_2fa_request',
   AUTH_2FA_VERIFY = 'auth_2fa_verify',
+  AUTH_2FA_SETUP = 'auth_2fa_setup',
+  AUTH_2FA_DISABLE = 'auth_2fa_disable',
+  AUTH_2FA_RECOVERY = 'auth_2fa_recovery',
+  PERMISSION_UPDATE = 'permission_update',
+  PERMISSION_REVOKE = 'permission_revoke',
+  SHARE_LINK_CREATE = 'share_link_create',
+  SHARE_LINK_ACCESS = 'share_link_access',
+  SHARE_LINK_DEACTIVATE = 'share_link_deactivate',
+  COMMENT_CREATE = 'comment_create',
+  COMMENT_UPDATE = 'comment_update',
+  COMMENT_DELETE = 'comment_delete',
 }
 
 @Injectable()

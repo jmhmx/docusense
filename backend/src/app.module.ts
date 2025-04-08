@@ -9,6 +9,7 @@ import { DocumentsModule } from './documents/documents.module';
 import { CryptoModule } from './crypto/crypto.module';
 import { AuditModule } from './audit/audit.module';
 import { SignaturesModule } from './signatures/signatures.module';
+import { SharingModule } from './sharing/sharing.module';
 
 @Module({
   controllers: [HealthController],
@@ -42,6 +43,7 @@ import { SignaturesModule } from './signatures/signatures.module';
     CryptoModule,
     AuditModule,
     SignaturesModule,
+    SharingModule,
   ],
 })
 export class AppModule {}

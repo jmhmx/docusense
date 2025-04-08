@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { ScheduleModule } from '@nestjs/schedule';
 import { DocumentsService } from './documents.service';
 import { DocumentsController } from './documents.controller';
+import { DocumentEncryptionController } from './document-encryption.controller';
 import { Document } from './entities/document.entity';
 import { DocumentProcessorService } from './processors/document-processor.service';
 import { DocumentAnalyzerService } from '../analyzers/document-analyzer.service';
@@ -16,7 +17,7 @@ import { AuditModule } from '../audit/audit.module';
     CryptoModule,
     AuditModule,
   ],
-  controllers: [DocumentsController],
+  controllers: [DocumentsController, DocumentEncryptionController],
   providers: [
     DocumentsService,
     DocumentProcessorService,

@@ -6,6 +6,7 @@ import { Signature } from './entities/signature.entity';
 import { CryptoModule } from '../crypto/crypto.module';
 import { DocumentsModule } from '../documents/documents.module';
 import { UsersModule } from '../users/users.module';
+import { AuditModule } from '../audit/audit.module';
 
 @Module({
   imports: [
@@ -13,6 +14,7 @@ import { UsersModule } from '../users/users.module';
     CryptoModule,
     DocumentsModule,
     UsersModule,
+    AuditModule, // Añadido el módulo de auditoría
   ],
   controllers: [SignaturesController],
   providers: [SignaturesService],

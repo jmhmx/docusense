@@ -14,8 +14,8 @@ interface TOTPSetup {
 }
 
 @Injectable()
-export class TwoFactorAuthService {
-  private readonly logger = new Logger(TwoFactorAuthService.name);
+export class TwoFactorService {
+  private readonly logger = new Logger(TwoFactorService.name);
 
   constructor(
     @InjectRepository(User)

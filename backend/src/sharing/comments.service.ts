@@ -428,12 +428,17 @@ export class CommentsService {
     }
 
     // Buscar todos los comentarios no leídos del documento
-    const unreadComments = await this.commentsRepository.find({
-      where: {
-        documentId,
-        'metadata->readBy': null, // Comentarios que no tienen al usuario en readBy
-      },
-    });
+    const unreadComments = await this.commentsRepository
+      .createQueryBuilder('comment')
+      .where('comment.documentId = :documentId', { documentId })
+      .andWhere(
+        'comment.metadata ->> :field IS NULL OR NOT(comment.metadata->>:field @> :userId)',
+        {
+          field: 'readBy',
+          userId: JSON.stringify(userId),
+        },
+      )
+      .getMany();
 
     // Actualizar el arreglo de lectores de cada comentario
     for (const comment of unreadComments) {
@@ -474,9 +479,12 @@ export class CommentsService {
       .andWhere('comment.userId != :userId', { userId }); // No contar comentarios propios
 
     // Esta parte depende de cómo almacenes los lectores, ajustar según implementación
-    queryBuilder.andWhere(`NOT(comment.metadata->>'readBy' @> :userIdJson)`, {
-      userIdJson: JSON.stringify([userId]),
-    });
+    queryBuilder.andWhere(
+      `comment.metadata->>'readBy' IS NULL OR comment.metadata->>'readBy' NOT LIKE :userPattern`,
+      {
+        userPattern: `%${userId}%`,
+      },
+    );
 
     return queryBuilder.getCount();
   }

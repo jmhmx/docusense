@@ -69,10 +69,32 @@ const DocumentComments = ({
   const [showResolved, setShowResolved] = useState(false);
   const [addingComment, setAddingComment] = useState(false);
   const [permission, setPermission] = useState<string | null>(null);
+  const [newCommentsAvailable, setNewCommentsAvailable] = useState(false);
+
+  // Para simular nuevos comentarios (en producción usarías websockets o polling)
+const checkForNewComments = () => {
+  const interval = setInterval(async () => {
+    if (documentId) {
+      try {
+        const response = await api.get(`/api/comments/document/${documentId}/unread-count`);
+        if (response.data > 0) {
+          setNewCommentsAvailable(true);
+        }
+      } catch (err) {
+        console.error('Error al verificar nuevos comentarios:', err);
+      }
+    }
+  }, 30000); // Verificar cada 30 segundos
+
+  return () => clearInterval(interval);
+};
+
 
   useEffect(() => {
     fetchComments();
     checkPermission();
+    const cleanup = checkForNewComments();
+    return cleanup;
   }, [documentId]);
 
   useEffect(() => {
@@ -446,6 +468,23 @@ const DocumentComments = ({
               {filteredComments.map(comment => renderComment(comment))}
             </div>
           )}
+        </div>
+      )}
+      {/* Notificación de nuevos comentarios */}
+      {newCommentsAvailable && (
+        <div className="fixed z-50 p-4 text-white bg-blue-500 rounded-md shadow-lg bottom-4 right-4 animate-bounce">
+          <div className="flex items-center">
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M18 13V5a2 2 0 00-2-2H4a2 2 0 00-2 2v8a2 2 0 002 2h3l3 3 3-3h3a2 2 0 002-2zM5 7a1 1 0 011-1h8a1 1 0 110 2H6a1 1 0 01-1-1zm1 3a1 1 0 100 2h3a1 1 0 100-2H6z" clipRule="evenodd" />
+            </svg>
+            <span>Nuevos comentarios disponibles</span>
+            <button 
+              onClick={fetchComments}
+              className="p-1 ml-2 bg-blue-600 rounded hover:bg-blue-700"
+            >
+              Refrescar
+            </button>
+          </div>
         </div>
       )}
     </div>

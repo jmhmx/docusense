@@ -52,6 +52,10 @@ const Dashboard = () => {
   const [sortField, setSortField] = useState<string>('createdAt');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
 
+  const [sharedDocuments, setSharedDocuments] = useState<DocumentType[]>([]);
+
+
+
   // Cargar documentos al iniciar
   const fetchDocuments = async () => {
     setIsLoading(true);
@@ -67,8 +71,20 @@ const Dashboard = () => {
     }
   };
 
+  // Añadir esta función para cargar documentos compartidos
+const fetchSharedDocuments = async () => {
+  try {
+    const response = await api.get('/api/sharing/shared-with-me');
+    setSharedDocuments(response.data);
+  } catch (err) {
+    console.error('Error al cargar documentos compartidos:', err);
+  }
+};
+
+
   useEffect(() => {
     fetchDocuments();
+    fetchSharedDocuments();
   }, []);
   
   // Aplicar filtros y ordenamiento
@@ -524,6 +540,42 @@ const Dashboard = () => {
           )}
         </>
       )}
+
+      {/* Documentos Compartidos Recientemente */}
+{sharedDocuments && sharedDocuments.length > 0 && (
+  <div className="mt-8 overflow-hidden bg-white shadow sm:rounded-md">
+    <div className="px-4 py-5 border-b border-gray-200 sm:px-6">
+      <h3 className="text-lg font-medium leading-6 text-gray-900">
+        Documentos compartidos recientemente
+      </h3>
+    </div>
+    <ul className="divide-y divide-gray-200">
+      {sharedDocuments.slice(0, 3).map((doc) => (
+        <li key={doc.id} className="px-4 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center">
+              <div className="flex-shrink-0">
+                <svg className="w-8 h-8 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+              </div>
+              <div className="ml-4">
+                <h4 className="text-sm font-medium text-gray-900">{doc.title}</h4>
+                <p className="text-xs text-gray-500">{formatDate(doc.createdAt)}</p>
+              </div>
+            </div>
+            <button
+              onClick={() => navigate(`/documents/${doc.id}`)}
+              className="px-3 py-1 text-xs font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
+            >
+              Ver
+            </button>
+          </div>
+        </li>
+      ))}
+    </ul>
+  </div>
+)}
 
       {/* Búsqueda y resultados */}
       {contentSearchResults && (

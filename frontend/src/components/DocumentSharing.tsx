@@ -234,7 +234,17 @@ const DocumentSharing = ({ documentId, documentTitle, onPermissionsUpdated }: Do
   const copyLinkToClipboard = () => {
     if (shareLink) {
       navigator.clipboard.writeText(shareLink)
-        .then(() => setSuccess('Enlace copiado al portapapeles'))
+        .then(() => {
+          // Mostrar notificación visual temporal
+          const linkInput = document.getElementById('share-link-input');
+          if (linkInput) {
+            linkInput.classList.add('bg-green-50', 'border-green-500');
+            setTimeout(() => {
+              linkInput.classList.remove('bg-green-50', 'border-green-500');
+            }, 2000);
+          }
+          setSuccess('Enlace copiado al portapapeles');
+        })
         .catch(err => console.error('Error copying text: ', err));
     }
   };
@@ -575,9 +585,10 @@ const DocumentSharing = ({ documentId, documentTitle, onPermissionsUpdated }: Do
                   </label>
                   <div className="flex mt-1">
                     <input
+                      id="share-link-input"
                       readOnly
                       value={shareLink}
-                      className="block w-full border-gray-300 rounded-md rounded-r-none shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                      className="block w-full transition-colors duration-200 border-gray-300 rounded-md rounded-r-none shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                     />
                     <button
                       type="button"

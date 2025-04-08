@@ -12,13 +12,13 @@ import {
   Headers,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
-import { TwoFactorAuthService } from '../two-factor/two-factor.service';
+import { TwoFactorService } from '../two-factor/two-factor.service';
 import { AuditLogService, AuditAction } from '../../audit/audit-log.service';
 
 @Controller('api/auth/2fa')
-export class TwoFactorAuthController {
+export class TwoFactorController {
   constructor(
-    private readonly twoFactorAuthService: TwoFactorAuthService,
+    private readonly twoFactorAuthService: TwoFactorService,
     private readonly auditLogService: AuditLogService,
   ) {}
 

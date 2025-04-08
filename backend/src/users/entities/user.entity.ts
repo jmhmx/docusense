@@ -31,4 +31,19 @@ export class User {
 
   @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
+
+  @Column({ nullable: true })
+  twoFactorSecret: string;
+
+  @Column({ nullable: true })
+  twoFactorTempSecret: string;
+
+  @Column({ nullable: true })
+  twoFactorTempSecretExpires: Date;
+
+  @Column({ default: false })
+  twoFactorEnabled: boolean;
+
+  @Column({ type: 'simple-array', nullable: true })
+  twoFactorRecoveryCodes: string[];
 }

@@ -14,7 +14,10 @@ import { v4 as uuidv4 } from 'uuid';
 import * as crypto from 'crypto';
 import { ConfigService } from '@nestjs/config';
 
-import { DocumentPermission, PermissionLevel } from './entities/document-permission.entity';
+import {
+  DocumentPermission,
+  PermissionLevel,
+} from './entities/document-permission.entity';
 import { ShareLink } from './entities/share-link.entity';
 import { Document } from '../documents/entities/document.entity';
 import { User } from '../users/entities/user.entity';
@@ -57,7 +60,13 @@ export class SharingService {
     ipAddress?: string,
     userAgent?: string,
   ): Promise<DocumentPermission> {
-    const { documentId, email, permissionLevel, expiresAt, notifyUser = true } = shareDocumentDto;
+    const {
+      documentId,
+      email,
+      permissionLevel,
+      expiresAt,
+      notifyUser = true,
+    } = shareDocumentDto;
 
     // Verificar si el documento existe
     const document = await this.documentsRepository.findOne({
@@ -65,17 +74,20 @@ export class SharingService {
     });
 
     if (!document) {
-      throw new NotFoundException(`Documento con ID ${documentId} no encontrado`);
+      throw new NotFoundException(
+        `Documento con ID ${documentId} no encontrado`,
+      );
     }
 
     // Verificar si el usuario que comparte tiene permiso de editor u owner
     const sharerPermission = await this.permissionsRepository.findOne({
-      where: { 
-        documentId, 
+      where: {
+        documentId,
         userId: sharerUserId,
-        permissionLevel: permissionLevel === PermissionLevel.OWNER 
-          ? PermissionLevel.OWNER 
-          : In([PermissionLevel.OWNER, PermissionLevel.EDITOR]),
+        permissionLevel:
+          permissionLevel === PermissionLevel.OWNER
+            ? PermissionLevel.OWNER
+            : In([PermissionLevel.OWNER, PermissionLevel.EDITOR]),
       },
     });
 
@@ -90,25 +102,29 @@ export class SharingService {
     let targetUser: User;
     try {
       targetUser = await this.usersService.findByEmail(email);
-      
+
       if (!targetUser) {
         // Si estamos en modo desarrollo, podemos crear usuarios automáticamente
         // En producción probablemente querrías enviar una invitación por email
         if (this.configService.get('NODE_ENV') === 'development') {
           // Generar contraseña temporal
           const tempPassword = crypto.randomBytes(8).toString('hex');
-          
+
           // Crear usuario con contraseña temporal
           targetUser = await this.usersService.create({
             email,
             name: email.split('@')[0],
             password: tempPassword,
           });
-          
-          this.logger.log(`Usuario creado automáticamente: ${email} con contraseña: ${tempPassword}`);
+
+          this.logger.log(
+            `Usuario creado automáticamente: ${email} con contraseña: ${tempPassword}`,
+          );
         } else {
           // En producción, enviar invitación por email
-          throw new BadRequestException(`El usuario con email ${email} no existe. Se debe enviar una invitación primero.`);
+          throw new BadRequestException(
+            `El usuario con email ${email} no existe. Se debe enviar una invitación primero.`,
+          );
         }
       }
     } catch (error) {
@@ -142,14 +158,15 @@ export class SharingService {
       // Actualizar el permiso existente
       existingPermission.permissionLevel = permissionLevel;
       existingPermission.isActive = true;
-      
+
       if (expiresAt) {
         existingPermission.expiresAt = new Date(expiresAt);
       } else {
         existingPermission.expiresAt = null;
       }
 
-      const updatedPermission = await this.permissionsRepository.save(existingPermission);
+      const updatedPermission =
+        await this.permissionsRepository.save(existingPermission);
 
       // Registrar en log de auditoría
       await this.auditLogService.log(
@@ -169,7 +186,9 @@ export class SharingService {
       // Notificar al usuario si se solicitó
       if (notifyUser) {
         // Aquí iría la lógica para enviar una notificación por email
-        this.logger.log(`Notificación enviada a ${email} por actualización de permisos`);
+        this.logger.log(
+          `Notificación enviada a ${email} por actualización de permisos`,
+        );
       }
 
       return updatedPermission;
@@ -189,7 +208,8 @@ export class SharingService {
       },
     });
 
-    const savedPermission = await this.permissionsRepository.save(newPermission);
+    const savedPermission =
+      await this.permissionsRepository.save(newPermission);
 
     // Registrar en log de auditoría
     await this.auditLogService.log(
@@ -219,18 +239,18 @@ export class SharingService {
    * Crea un enlace de compartición para un documento
    */
   async createShareLink(
-    userId: string, 
+    userId: string,
     createShareLinkDto: CreateShareLinkDto,
     ipAddress?: string,
     userAgent?: string,
   ): Promise<ShareLink> {
-    const { 
-      documentId, 
-      permissionLevel, 
-      expiresAt, 
-      requiresPassword = false, 
-      password, 
-      maxUses 
+    const {
+      documentId,
+      permissionLevel,
+      expiresAt,
+      requiresPassword = false,
+      password,
+      maxUses,
     } = createShareLinkDto;
 
     // Verificar si el documento existe
@@ -239,12 +259,14 @@ export class SharingService {
     });
 
     if (!document) {
-      throw new NotFoundException(`Documento con ID ${documentId} no encontrado`);
+      throw new NotFoundException(
+        `Documento con ID ${documentId} no encontrado`,
+      );
     }
 
     // Verificar si el usuario tiene permiso para compartir
     const hasPermission = await this.canUserShareDocument(userId, documentId);
-    
+
     if (!hasPermission) {
       throw new ForbiddenException(
         'No tiene permiso para compartir este documento',
@@ -317,7 +339,9 @@ export class SharingService {
     });
 
     if (!shareLink || !shareLink.isActive) {
-      throw new NotFoundException('Enlace de compartición no válido o inactivo');
+      throw new NotFoundException(
+        'Enlace de compartición no válido o inactivo',
+      );
     }
 
     // Verificar si el enlace ha expirado
@@ -325,7 +349,7 @@ export class SharingService {
       // Desactivar el enlace
       shareLink.isActive = false;
       await this.shareLinksRepository.save(shareLink);
-      
+
       throw new BadRequestException('El enlace de compartición ha expirado');
     }
 
@@ -334,8 +358,10 @@ export class SharingService {
       // Desactivar el enlace
       shareLink.isActive = false;
       await this.shareLinksRepository.save(shareLink);
-      
-      throw new BadRequestException('El enlace ha alcanzado su número máximo de usos');
+
+      throw new BadRequestException(
+        'El enlace ha alcanzado su número máximo de usos',
+      );
     }
 
     // Verificar la contraseña si es necesario
@@ -344,7 +370,10 @@ export class SharingService {
         throw new UnauthorizedException('Este enlace requiere contraseña');
       }
 
-      const passwordMatches = await this.verifyPassword(password, shareLink.passwordHash);
+      const passwordMatches = await this.verifyPassword(
+        password,
+        shareLink.passwordHash,
+      );
       if (!passwordMatches) {
         throw new UnauthorizedException('Contraseña incorrecta');
       }
@@ -359,7 +388,9 @@ export class SharingService {
       if (existingPermission) {
         // Solo actualizar si el nuevo nivel es mayor
         const permissionLevels = Object.values(PermissionLevel);
-        const currentIndex = permissionLevels.indexOf(existingPermission.permissionLevel);
+        const currentIndex = permissionLevels.indexOf(
+          existingPermission.permissionLevel,
+        );
         const newIndex = permissionLevels.indexOf(shareLink.permissionLevel);
 
         if (newIndex > currentIndex) {
@@ -420,7 +451,9 @@ export class SharingService {
     });
 
     if (!document) {
-      throw new NotFoundException(`Documento con ID ${documentId} no encontrado`);
+      throw new NotFoundException(
+        `Documento con ID ${documentId} no encontrado`,
+      );
     }
 
     // Verificar si el usuario tiene permiso para ver los permisos
@@ -463,7 +496,9 @@ export class SharingService {
     });
 
     if (!permission) {
-      throw new NotFoundException(`Permiso con ID ${permissionId} no encontrado`);
+      throw new NotFoundException(
+        `Permiso con ID ${permissionId} no encontrado`,
+      );
     }
 
     // Verificar si el usuario tiene permiso para actualizar permisos
@@ -527,7 +562,9 @@ export class SharingService {
     });
 
     if (!permission) {
-      throw new NotFoundException(`Permiso con ID ${permissionId} no encontrado`);
+      throw new NotFoundException(
+        `Permiso con ID ${permissionId} no encontrado`,
+      );
     }
 
     // No se puede revocar el permiso al propietario del documento
@@ -577,7 +614,7 @@ export class SharingService {
   async getSharedWithMeDocuments(userId: string): Promise<Document[]> {
     // Buscar todos los permisos activos del usuario
     const permissions = await this.permissionsRepository.find({
-      where: { 
+      where: {
         userId,
         isActive: true,
       },
@@ -586,8 +623,8 @@ export class SharingService {
 
     // Filtrar documentos válidos y activos
     return permissions
-      .filter(p => p.document && p.document.id)
-      .map(p => p.document);
+      .filter((p) => p.document && p.document.id)
+      .map((p) => p.document);
   }
 
   /**
@@ -605,7 +642,9 @@ export class SharingService {
     });
 
     if (!shareLink) {
-      throw new NotFoundException(`Enlace de compartición con ID ${linkId} no encontrado`);
+      throw new NotFoundException(
+        `Enlace de compartición con ID ${linkId} no encontrado`,
+      );
     }
 
     // Verificar si el usuario tiene permiso para desactivar el enlace
@@ -651,7 +690,9 @@ export class SharingService {
     });
 
     if (!document) {
-      throw new NotFoundException(`Documento con ID ${documentId} no encontrado`);
+      throw new NotFoundException(
+        `Documento con ID ${documentId} no encontrado`,
+      );
     }
 
     // Verificar si el usuario tiene permiso para ver los enlaces
@@ -675,7 +716,7 @@ export class SharingService {
     });
 
     // Eliminar los hashes de contraseña por seguridad
-    return shareLinks.map(link => {
+    return shareLinks.map((link) => {
       const { passwordHash, ...linkWithoutPasswordHash } = link;
       return linkWithoutPasswordHash as ShareLink;
     });
@@ -703,15 +744,19 @@ export class SharingService {
 
     // Verificar si el usuario tiene permiso explícito
     const permission = await this.permissionsRepository.findOne({
-      where: { 
-        documentId, 
+      where: {
+        documentId,
         userId,
         isActive: true,
       },
     });
 
     // Verificar si el permiso ha expirado
-    if (permission && permission.expiresAt && new Date() > permission.expiresAt) {
+    if (
+      permission &&
+      permission.expiresAt &&
+      new Date() > permission.expiresAt
+    ) {
       // Desactivar el permiso expirado
       permission.isActive = false;
       await this.permissionsRepository.save(permission);
@@ -743,8 +788,8 @@ export class SharingService {
 
     // Verificar si el usuario tiene permiso de editor o propietario
     const permission = await this.permissionsRepository.findOne({
-      where: { 
-        documentId, 
+      where: {
+        documentId,
         userId,
         isActive: true,
         permissionLevel: In([PermissionLevel.EDITOR, PermissionLevel.OWNER]),
@@ -752,7 +797,11 @@ export class SharingService {
     });
 
     // Verificar si el permiso ha expirado
-    if (permission && permission.expiresAt && new Date() > permission.expiresAt) {
+    if (
+      permission &&
+      permission.expiresAt &&
+      new Date() > permission.expiresAt
+    ) {
       // Desactivar el permiso expirado
       permission.isActive = false;
       await this.permissionsRepository.save(permission);
@@ -784,20 +833,24 @@ export class SharingService {
 
     // Verificar si el usuario tiene permiso de comentarista, editor o propietario
     const permission = await this.permissionsRepository.findOne({
-      where: { 
-        documentId, 
+      where: {
+        documentId,
         userId,
         isActive: true,
         permissionLevel: In([
           PermissionLevel.COMMENTER,
-          PermissionLevel.EDITOR, 
-          PermissionLevel.OWNER
+          PermissionLevel.EDITOR,
+          PermissionLevel.OWNER,
         ]),
       },
     });
 
     // Verificar si el permiso ha expirado
-    if (permission && permission.expiresAt && new Date() > permission.expiresAt) {
+    if (
+      permission &&
+      permission.expiresAt &&
+      new Date() > permission.expiresAt
+    ) {
       // Desactivar el permiso expirado
       permission.isActive = false;
       await this.permissionsRepository.save(permission);
@@ -829,8 +882,8 @@ export class SharingService {
 
     // Verificar si el usuario tiene permiso de propietario
     const permission = await this.permissionsRepository.findOne({
-      where: { 
-        documentId, 
+      where: {
+        documentId,
         userId,
         isActive: true,
         permissionLevel: PermissionLevel.OWNER,
@@ -838,7 +891,11 @@ export class SharingService {
     });
 
     // Verificar si el permiso ha expirado
-    if (permission && permission.expiresAt && new Date() > permission.expiresAt) {
+    if (
+      permission &&
+      permission.expiresAt &&
+      new Date() > permission.expiresAt
+    ) {
       // Desactivar el permiso expirado
       permission.isActive = false;
       await this.permissionsRepository.save(permission);
@@ -888,7 +945,7 @@ export class SharingService {
     const hash = crypto
       .pbkdf2Sync(password, salt, 1000, 64, 'sha512')
       .toString('hex');
-    
+
     return `${salt}:${hash}`;
   }
 
@@ -903,14 +960,17 @@ export class SharingService {
     const calculatedHash = crypto
       .pbkdf2Sync(password, salt, 1000, 64, 'sha512')
       .toString('hex');
-    
+
     return hash === calculatedHash;
   }
 
   /**
    * Crear permiso de propietario para el creador del documento
    */
-  async createOwnerPermission(documentId: string, userId: string): Promise<void> {
+  async createOwnerPermission(
+    documentId: string,
+    userId: string,
+  ): Promise<void> {
     // Verificar si ya existe un permiso de propietario
     const existingPermission = await this.permissionsRepository.findOne({
       where: {
@@ -944,8 +1004,8 @@ export class SharingService {
       select: ['id'],
     });
 
-    const documentIds = userDocuments.map(doc => doc.id);
-    
+    const documentIds = userDocuments.map((doc) => doc.id);
+
     if (documentIds.length === 0) {
       return [];
     }
@@ -965,12 +1025,12 @@ export class SharingService {
 
     // Agrupar por usuario
     const userMap = new Map();
-    
+
     for (const permission of permissions) {
       if (!permission.user) continue;
-      
+
       const userId = permission.user.id;
-      
+
       if (!userMap.has(userId)) {
         userMap.set(userId, {
           userId: userId,
@@ -979,7 +1039,7 @@ export class SharingService {
           sharedDocuments: [],
         });
       }
-      
+
       userMap.get(userId).sharedDocuments.push({
         documentId: permission.documentId,
         title: permission.document?.title || 'Documento sin título',
@@ -987,7 +1047,7 @@ export class SharingService {
         sharedAt: permission.createdAt,
       });
     }
-    
+
     return Array.from(userMap.values());
   }
 
@@ -1001,7 +1061,9 @@ export class SharingService {
     });
 
     if (!shareLink) {
-      throw new NotFoundException('Enlace de compartición no encontrado o inactivo');
+      throw new NotFoundException(
+        'Enlace de compartición no encontrado o inactivo',
+      );
     }
 
     // Verificar si el enlace ha expirado
@@ -1009,7 +1071,7 @@ export class SharingService {
       // Desactivar el enlace
       shareLink.isActive = false;
       await this.shareLinksRepository.save(shareLink);
-      
+
       throw new BadRequestException('El enlace de compartición ha expirado');
     }
 
@@ -1018,8 +1080,10 @@ export class SharingService {
       // Desactivar el enlace
       shareLink.isActive = false;
       await this.shareLinksRepository.save(shareLink);
-      
-      throw new BadRequestException('El enlace ha alcanzado su número máximo de usos');
+
+      throw new BadRequestException(
+        'El enlace ha alcanzado su número máximo de usos',
+      );
     }
 
     // Eliminar el hash de la contraseña por seguridad
@@ -1055,15 +1119,19 @@ export class SharingService {
 
     // Buscar permiso explícito
     const permission = await this.permissionsRepository.findOne({
-      where: { 
-        documentId, 
+      where: {
+        documentId,
         userId,
         isActive: true,
       },
     });
 
     // Verificar si el permiso ha expirado
-    if (permission && permission.expiresAt && new Date() > permission.expiresAt) {
+    if (
+      permission &&
+      permission.expiresAt &&
+      new Date() > permission.expiresAt
+    ) {
       // Desactivar el permiso expirado
       permission.isActive = false;
       await this.permissionsRepository.save(permission);
@@ -1087,7 +1155,9 @@ export class SharingService {
     });
 
     if (!document) {
-      throw new NotFoundException(`Documento con ID ${documentId} no encontrado`);
+      throw new NotFoundException(
+        `Documento con ID ${documentId} no encontrado`,
+      );
     }
 
     // Verificar si el usuario tiene permiso para ver los colaboradores
@@ -1113,7 +1183,7 @@ export class SharingService {
     });
 
     // Incluir al propietario del documento si no está ya en la lista
-    const users = permissions.map(permission => ({
+    const users = permissions.map((permission) => ({
       id: permission.userId,
       name: permission.user?.name || 'Usuario desconocido',
       email: permission.user?.email || 'correo@desconocido.com',
@@ -1124,8 +1194,8 @@ export class SharingService {
     }));
 
     // Verificar si el propietario ya está en la lista
-    const ownerIncluded = users.some(user => user.id === document.userId);
-    
+    const ownerIncluded = users.some((user) => user.id === document.userId);
+
     // Si no está, agregarlo al principio
     if (!ownerIncluded && document.user) {
       users.unshift({
@@ -1141,18 +1211,4 @@ export class SharingService {
 
     return users;
   }
-
-  /**
-   * Importa el módulo TypeORM necesario
-   */
-  private get In() {
-    return this.dataSource.driver.buildColumnAlias ? 
-      this.dataSource.driver.buildColumnAlias("IN") : 
-      "IN";
-  }
-
-  private get Not() {
-    return this.dataSource.driver.buildColumnAlias ? 
-      this.dataSource.driver.buildColumnAlias("NOT") : 
-      "NOT";
-  }
+}

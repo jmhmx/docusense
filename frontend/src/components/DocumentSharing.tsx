@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { api } from '../api/client';
 import Button from './Button';
-import Input from './Input';
+//import Input from './Input';
 
 interface User {
   id: string;
@@ -158,7 +158,7 @@ const DocumentSharing = ({ documentId, documentTitle, onPermissionsUpdated }: Do
       // Primero necesitamos obtener el ID del permiso
       const response = await api.get(`/api/sharing/document/${documentId}/permissions`);
       const permissions = response.data;
-      const permission = permissions.find(p => p.userId === userId);
+      const permission = permissions.find((p: { userId: string }) => p.userId === userId)
 
       if (!permission) {
         setError('No se encontró el permiso para este usuario');
@@ -198,7 +198,7 @@ const DocumentSharing = ({ documentId, documentTitle, onPermissionsUpdated }: Do
       // Primero necesitamos obtener el ID del permiso
       const response = await api.get(`/api/sharing/document/${documentId}/permissions`);
       const permissions = response.data;
-      const permission = permissions.find(p => p.userId === userId);
+      const permission = permissions.find((p: { userId: string }) => p.userId === userId)
 
       if (!permission) {
         setError('No se encontró el permiso para este usuario');

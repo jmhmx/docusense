@@ -22,7 +22,7 @@ interface DocumentInfo {
 
 const SharedDocumentView = () => {
   const { token } = useParams<{ token: string }>();
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated } = useAuth();
   const navigate = useNavigate();
 
   const [linkInfo, setLinkInfo] = useState<ShareLink | null>(null);

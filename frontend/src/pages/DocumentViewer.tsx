@@ -534,6 +534,7 @@ const fetchUnreadComments = async () => {
           currentPage={1}
           onCommentsUpdated={(count) => {
             // Actualizar badge o contador de comentarios si es necesario
+            setUnreadComments(count);
           }}
         />
       )}

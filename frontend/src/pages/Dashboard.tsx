@@ -54,7 +54,14 @@ const Dashboard = () => {
 
   const [sharedDocuments, setSharedDocuments] = useState<DocumentType[]>([]);
 
-
+  // Función para formatear fechas
+  const formatDate = (dateStr: string) => {
+    return new Date(dateStr).toLocaleDateString('es-ES', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
+  };
 
   // Cargar documentos al iniciar
   const fetchDocuments = async () => {

@@ -6,6 +6,8 @@ import DocumentSignature from '../components/DocumentSignature';
 import DocumentEncrypt from '../components/DocumentEncrypt';
 import DocumentSharing from '../components/DocumentSharing';
 import DocumentComments from '../components/DocumentComments';
+import PDFViewer from '../components/PDFViewer';
+
 
 interface DocumentType {
   id: string;
@@ -133,47 +135,48 @@ const fetchUnreadComments = async () => {
   };
 
   const renderDocumentPreview = () => {
-    if (!document) return null;
+  if (!document) return null;
 
-    if (document.mimeType?.includes('pdf')) {
-      // Render PDF viewer (endpoint needs implementation in backend)
-      return (
-        <div className="flex items-center justify-center p-4 bg-gray-100 rounded-lg">
-          <iframe 
-            src={`/api/documents/${id}/view`} 
-            title={document.title}
-            className="w-full border-0 h-96"
-          />
-        </div>
-      );
-    } else if (document.mimeType?.includes('image')) {
-      return (
-        <div className="flex items-center justify-center p-4 bg-gray-100 rounded-lg">
-          <img 
-            src={`/api/documents/${id}/view`} 
-            alt={document.title}
-            className="object-contain max-w-full max-h-96"
-          />
-        </div>
-      );
-    } else {
-      // For other document types show a message
-      return (
-        <div className="flex flex-col items-center justify-center p-4 bg-gray-100 rounded-lg h-96">
-          <svg xmlns="http://www.w3.org/2000/svg" className="w-20 h-20 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-          </svg>
-          <p className="mt-4 text-gray-600">Preview not available for this document type.</p>
-          <button 
-            onClick={handleDownloadDocument}
-            className="inline-flex items-center px-4 py-2 mt-4 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-          >
-            Download to view
-          </button>
-        </div>
-      );
-    }
-  };
+  if (document.mimeType?.includes('pdf')) {
+    // Use the new PDF viewer component for PDFs
+    return (
+      <PDFViewer 
+        documentId={id || ''} 
+        onPageChange={(page) => console.log(`Page changed to ${page}`)}
+        onSelectionChange={(selection) => {
+          console.log('Text selected:', selection);
+          // You could use this selection for creating comments or annotations
+        }}
+      />
+    );
+  } else if (document.mimeType?.includes('image')) {
+    return (
+      <div className="flex items-center justify-center p-4 bg-gray-100 rounded-lg">
+        <img 
+          src={`/api/documents/${id}/view`} 
+          alt={document.title}
+          className="object-contain max-w-full max-h-96"
+        />
+      </div>
+    );
+  } else {
+    // For other document types show a message
+    return (
+      <div className="flex flex-col items-center justify-center p-4 bg-gray-100 rounded-lg h-96">
+        <svg xmlns="http://www.w3.org/2000/svg" className="w-20 h-20 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        </svg>
+        <p className="mt-4 text-gray-600">Preview not available for this document type.</p>
+        <button 
+          onClick={handleDownloadDocument}
+          className="inline-flex items-center px-4 py-2 mt-4 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+        >
+          Download to view
+        </button>
+      </div>
+    );
+  }
+};
 
   const renderMetadataTab = () => {
     if (!document) return null;

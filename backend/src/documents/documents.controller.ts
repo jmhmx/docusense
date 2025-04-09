@@ -40,6 +40,10 @@ import { createReadStream } from 'fs';
 import { Readable } from 'stream';
 
 const UPLOAD_DIR = 'uploads';
+// Asegurar que el directorio de carga existe
+if (!fs.existsSync(UPLOAD_DIR)) {
+  fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+}
 
 // Asegurar que el directorio de carga existe
 if (!fs.existsSync(UPLOAD_DIR)) {
@@ -47,7 +51,11 @@ if (!fs.existsSync(UPLOAD_DIR)) {
 }
 
 const storage = diskStorage({
-  destination: UPLOAD_DIR,
+  destination: (req, file, callback) => {
+    const uploadPath = path.resolve(process.cwd(), 'uploads');
+    fs.mkdirSync(uploadPath, { recursive: true });
+    callback(null, uploadPath);
+  },
   filename: (req, file, callback) => {
     const uniqueSuffix = uuidv4();
     const extension = path.extname(file.originalname);
@@ -98,7 +106,8 @@ export class DocumentsController {
     // Determinar si se debe cifrar el documento
     const shouldEncrypt = encrypt === 'true' || encrypt === '1';
     const userAgent = headers['user-agent'] || 'Unknown';
-
+    console.log('Upload directory:', process.cwd());
+    console.log('File uploaded:', file);
     return this.documentsService.create(
       document,
       req.user.id,
@@ -128,7 +137,7 @@ export class DocumentsController {
     return this.documentsService.findOne(id, req.user.id, ip, userAgent);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard) // Esta línea es crucial - asegura que la ruta requiere autenticación
   @Get(':id/view')
   async viewDocument(
     @Param('id') id: string,
@@ -159,7 +168,7 @@ export class DocumentsController {
     }
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard) // Asegúrate de que esta línea esté presente
   @Get(':id/download')
   async downloadDocument(
     @Param('id') id: string,

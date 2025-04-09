@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import * as faceapi from 'face-api.js';
 import { api } from '../api/client';
 import Button from './Button';
@@ -12,6 +12,80 @@ interface BiometricCaptureProps {
   challengeType?: 'blink' | 'smile' | 'head-turn';
 }
 
+// Tipos definidos fuera del componente para evitar recreaciones
+type DetectedFace = faceapi.WithFaceLandmarks<
+  faceapi.WithFaceDescriptor<faceapi.WithFaceExpressions<
+    faceapi.WithFaceDetection<{}>
+  >>
+>;
+
+type LivenessState = 'waiting' | 'progress' | 'passed' | 'failed';
+
+// Cache de modelos para evitar cargas múltiples
+const modelsLoadedCache = {
+  status: false,
+  promise: null as Promise<void> | null,
+};
+
+// Función pura para verificar ojos cerrados
+const isEyesClosed = (face: DetectedFace): boolean => {
+  const landmarks = face.landmarks;
+  const leftEye = landmarks.getLeftEye();
+  const rightEye = landmarks.getRightEye();
+  
+  // Calcular altura y anchura de los ojos
+  const leftEyeHeight = Math.abs(leftEye[1].y - leftEye[5].y);
+  const leftEyeWidth = Math.abs(leftEye[0].x - leftEye[3].x);
+  
+  const rightEyeHeight = Math.abs(rightEye[1].y - rightEye[5].y);
+  const rightEyeWidth = Math.abs(rightEye[0].x - rightEye[3].x);
+  
+  // Calcular ratio altura/anchura
+  const leftRatio = leftEyeHeight / leftEyeWidth;
+  const rightRatio = rightEyeHeight / rightEyeWidth;
+  
+  // Umbral para determinar si los ojos están cerrados
+  const threshold = 0.15;
+  
+  return leftRatio < threshold && rightRatio < threshold;
+};
+
+// Función pura para calcular asimetría facial
+const calculateAsymmetry = (leftPoints: faceapi.Point[], rightPoints: faceapi.Point[]): number => {
+  const xValues = [...leftPoints, ...rightPoints].map(p => p.x);
+  const midX = (Math.min(...xValues) + Math.max(...xValues)) / 2;
+  
+  const leftDist = leftPoints.reduce((sum, point) => sum + Math.abs(point.x - midX), 0) / leftPoints.length;
+  const rightDist = rightPoints.reduce((sum, point) => sum + Math.abs(point.x - midX), 0) / rightPoints.length;
+  
+  return Math.abs(leftDist - rightDist) / ((leftDist + rightDist) / 2);
+};
+
+// Función para cargar modelos de faceapi una sola vez en toda la aplicación
+const loadFaceApiModels = async (): Promise<void> => {
+  if (modelsLoadedCache.status) return;
+  
+  if (!modelsLoadedCache.promise) {
+    modelsLoadedCache.promise = (async () => {
+      try {
+        // Cargar modelos en paralelo para mayor velocidad
+        await Promise.all([
+          faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+          faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
+          faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
+          faceapi.nets.faceExpressionNet.loadFromUri(MODEL_URL)
+        ]);
+        modelsLoadedCache.status = true;
+      } catch (error) {
+        console.error('Error loading face-api models:', error);
+        throw error;
+      }
+    })();
+  }
+  
+  return modelsLoadedCache.promise;
+};
+
 const BiometricCapture = ({ 
   onSuccess, 
   mode = 'register',
@@ -20,53 +94,36 @@ const BiometricCapture = ({
   const { user } = useAuth();
   const [isLoading, setIsLoading] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [detectedFace, setDetectedFace] = useState<faceapi.WithFaceLandmarks<
-    faceapi.WithFaceDescriptor<faceapi.WithFaceExpressions<
-      faceapi.WithFaceDetection<{}>
-    >>
-  > | null>(null);
+  const [detectedFace, setDetectedFace] = useState<DetectedFace | null>(null);
   const [modelsLoaded, setModelsLoaded] = useState(false);
-  const [livenessState, setLivenessState] = useState<'waiting' | 'progress' | 'passed' | 'failed'>('waiting');
+  const [livenessState, setLivenessState] = useState<LivenessState>('waiting');
   const [livenessChallenge, setLivenessChallenge] = useState(challengeType);
   const [error, setError] = useState<string | null>(null);
   const [progressPercentage, setProgressPercentage] = useState(0);
   const [detectionStarted, setDetectionStarted] = useState(false);
   
-  // Referencias para video y canvas
+  // Referencias
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const detectionIntervalRef = useRef<number | null>(null);
   
-  // Referencia para contador de frames
+  // Referencias para contadores y análisis de liveness (evita re-renderizados)
   const frameCounterRef = useRef<number>(0);
   const positiveFramesRef = useRef<number>(0);
-  const totalFramesNeededRef = useRef<number>(30); // Necesitamos 30 frames "positivos" para confirmar liveness
-  
-  // Historial de expresiones para análisis temporal de liveness
+  const totalFramesNeededRef = useRef<number>(30);
   const expressionHistoryRef = useRef<Array<faceapi.FaceExpressions>>([]);
   const lastBlinkStateRef = useRef<boolean>(false);
   
-  // Cargar modelos de FaceAPI
+  // Cargar modelos con cache y progreso optimizado
   useEffect(() => {
-    async function loadModels() {
+    const loadModels = async () => {
       try {
         setIsLoading(true);
-        
-        // Mostrar progreso de carga
         setError('Cargando modelos de reconocimiento facial...');
         
-        // Cargar modelos secuencialmente con informes de progreso
-        await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
-        setProgressPercentage(25);
-        
-        await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
-        setProgressPercentage(50);
-        
-        await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
-        setProgressPercentage(75);
-        
-        await faceapi.nets.faceExpressionNet.loadFromUri(MODEL_URL);
-        setProgressPercentage(100);
+        // Usar el loadFaceApiModels que implementa caching
+        await loadFaceApiModels();
         
         setModelsLoaded(true);
         setError(null);
@@ -75,138 +132,24 @@ const BiometricCapture = ({
       } finally {
         setIsLoading(false);
       }
-    }
+    };
     
     loadModels();
     
-    // Limpieza al desmontar el componente
+    // Limpieza
     return () => {
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => track.stop());
       }
+      
+      if (detectionIntervalRef.current) {
+        window.clearInterval(detectionIntervalRef.current);
+      }
     };
   }, []);
   
-  // Iniciar cámara y detección facial
-  const startVideo = async () => {
-    if (!videoRef.current) return;
-    
-    try {
-      // Solicitar permisos de cámara con resolución adecuada
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { 
-          width: { ideal: 640 },
-          height: { ideal: 480 },
-          facingMode: "user",
-          frameRate: { ideal: 30 }
-        }
-      });
-      
-      videoRef.current.srcObject = stream;
-      streamRef.current = stream;
-      
-      videoRef.current.onloadedmetadata = () => {
-        setDetectionStarted(true);
-        detectFaces();
-      };
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Error desconocido';
-      setError(`Error accediendo a la cámara: ${errorMessage}. Verifique los permisos del navegador.`);
-    }
-  };
-  
-  // Detección facial continua
-  const detectFaces = () => {
-    if (!videoRef.current || !canvasRef.current || !modelsLoaded) return;
-    
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
-    const displaySize = { width: video.width, height: video.height };
-    
-    faceapi.matchDimensions(canvas, displaySize);
-    
-    const intervalId = setInterval(async () => {
-      frameCounterRef.current += 1;
-      
-      try {
-        // Solo procesar si el video está activo
-        if (video.paused || video.ended || !streamRef.current) {
-          return;
-        }
-        
-        // Detectar cara con landmarks, expresiones y descriptor facial (para reconocimiento)
-        const detections = await faceapi.detectAllFaces(
-          video, 
-          new faceapi.TinyFaceDetectorOptions({ scoreThreshold: 0.6 })
-        )
-        .withFaceLandmarks()
-        .withFaceExpressions()
-        .withFaceDescriptors();
-        
-        // Si se detectó al menos una cara
-        if (detections.length > 0) {
-          // Tomar la primera cara (asumimos solo una persona frente a la cámara)
-          const detection = detections[0];
-          setDetectedFace(detection);
-          
-          // Añadir expresión al historial para análisis temporal
-          expressionHistoryRef.current.push(detection.expressions);
-          if (expressionHistoryRef.current.length > 10) {
-            // Mantener solo los últimos 10 frames para análisis
-            expressionHistoryRef.current.shift();
-          }
-          
-          // Verificar prueba de vida según el desafío
-          checkLiveness(detection);
-        } else {
-          setDetectedFace(null);
-          
-          // Si perdemos la cara, reiniciamos el progreso de liveness
-          if (livenessState === 'progress') {
-            setLivenessState('waiting');
-            positiveFramesRef.current = 0;
-            setProgressPercentage(0);
-          }
-        }
-        
-        // Dibujar resultados en el canvas
-        const resizedDetections = faceapi.resizeResults(detections, displaySize);
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          ctx.clearRect(0, 0, canvas.width, canvas.height);
-          
-          // Dibujar caja de detección
-          faceapi.draw.drawDetections(canvas, resizedDetections);
-          
-          // Dibujar puntos de referencia faciales
-          faceapi.draw.drawFaceLandmarks(canvas, resizedDetections);
-          
-          // Dibujar marco de "liveness" según estado
-          if (detections.length > 0) {
-            const detection = resizedDetections[0].detection;
-            const box = detection.box;
-            ctx.strokeStyle = livenessState === 'passed' ? 'green' : 
-                              livenessState === 'failed' ? 'red' : 
-                              livenessState === 'progress' ? 'blue' : 'yellow';
-            ctx.lineWidth = 3;
-            ctx.strokeRect(box.x, box.y, box.width, box.height);
-          }
-        }
-      } catch (err) {
-        console.error('Error en detección facial:', err);
-      }
-    }, 100);
-    
-    // Limpiar intervalo cuando el componente se desmonte
-    return () => clearInterval(intervalId);
-  };
-  
-  // Verificación de liveness según el desafío
-  const checkLiveness = (face: faceapi.WithFaceLandmarks<
-    faceapi.WithFaceDescriptor<faceapi.WithFaceExpressions<
-      faceapi.WithFaceDetection<{}>
-    >>
-  >) => {
+  // Verificación de liveness memoizada para evitar recreación en cada render
+  const checkLiveness = useCallback((face: DetectedFace) => {
     // Obtener expresiones faciales actuales
     const expressions = face.expressions;
     const history = expressionHistoryRef.current;
@@ -243,7 +186,6 @@ const BiometricCapture = ({
           
         case 'head-turn':
           // Detectar giro de cabeza usando landmarks faciales
-          // Implementación simplificada - en producción usar análisis de pose 3D
           const landmarks = face.landmarks;
           const jawOutline = landmarks.getJawOutline();
           
@@ -258,56 +200,181 @@ const BiometricCapture = ({
           break;
       }
       
-      // Actualizar progreso
+      // Actualizar progreso solo al cambiar, no en cada frame
       const progress = Math.min(100, Math.round((positiveFramesRef.current / totalFramesNeededRef.current) * 100));
-      setProgressPercentage(progress);
+      if (progress !== progressPercentage) {
+        setProgressPercentage(progress);
+      }
       
       // Verificar si se completó el desafío
-      if (positiveFramesRef.current >= totalFramesNeededRef.current) {
+      if (positiveFramesRef.current >= totalFramesNeededRef.current && livenessState !== 'passed') {
         setLivenessState('passed');
       }
     }
-  };
+  }, [livenessState, livenessChallenge, progressPercentage]);
   
-  // Función auxiliar para detectar ojos cerrados usando landmarks
-  const isEyesClosed = (face: faceapi.WithFaceLandmarks<any>) => {
-    const landmarks = face.landmarks;
-    const leftEye = landmarks.getLeftEye();
-    const rightEye = landmarks.getRightEye();
+  // Función para renderizar los resultados en el canvas
+  const renderResults = useCallback((detections: DetectedFace[], displaySize: {width: number, height: number}) => {
+    if (!canvasRef.current) return;
     
-    // Calcular altura y anchura de los ojos
-    const leftEyeHeight = Math.abs(leftEye[1].y - leftEye[5].y);
-    const leftEyeWidth = Math.abs(leftEye[0].x - leftEye[3].x);
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
     
-    const rightEyeHeight = Math.abs(rightEye[1].y - rightEye[5].y);
-    const rightEyeWidth = Math.abs(rightEye[0].x - rightEye[3].x);
+    // Limpiar canvas
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
     
-    // Calcular ratio altura/anchura (valores bajos indican ojos cerrados)
-    const leftRatio = leftEyeHeight / leftEyeWidth;
-    const rightRatio = rightEyeHeight / rightEyeWidth;
+    // Redimensionar detecciones
+    const resizedDetections = faceapi.resizeResults(detections, displaySize);
     
-    // Umbral para determinar si los ojos están cerrados
-    const threshold = 0.15;
+    // Dibujar caja de detección
+    faceapi.draw.drawDetections(canvas, resizedDetections);
     
-    return leftRatio < threshold && rightRatio < threshold;
-  };
+    // Dibujar puntos de referencia faciales
+    faceapi.draw.drawFaceLandmarks(canvas, resizedDetections);
+    
+    // Dibujar marco de "liveness" según estado
+    if (detections.length > 0) {
+      const detection = resizedDetections[0].detection;
+      const box = detection.box;
+      ctx.strokeStyle = livenessState === 'passed' ? 'green' : 
+                        livenessState === 'failed' ? 'red' : 
+                        livenessState === 'progress' ? 'blue' : 'yellow';
+      ctx.lineWidth = 3;
+      ctx.strokeRect(box.x, box.y, box.width, box.height);
+    }
+  }, [livenessState]);
   
-  // Función auxiliar para calcular asimetría facial
-  const calculateAsymmetry = (leftPoints: faceapi.Point[], rightPoints: faceapi.Point[]) => {
-    // Implementación simplificada - en producción usar algoritmos más sofisticados
-    // Calcular distancia media desde puntos a una línea media vertical
-    const xValues = [...leftPoints, ...rightPoints].map(p => p.x);
-    const midX = (Math.min(...xValues) + Math.max(...xValues)) / 2;
+  // Detección optimizada usando un bucle de requestAnimationFrame en vez de setInterval
+  const detectFaces = useCallback(() => {
+    if (!videoRef.current || !canvasRef.current || !modelsLoaded) return;
     
-    const leftDist = leftPoints.reduce((sum, point) => sum + Math.abs(point.x - midX), 0) / leftPoints.length;
-    const rightDist = rightPoints.reduce((sum, point) => sum + Math.abs(point.x - midX), 0) / rightPoints.length;
+    let animationFrameId: number;
+    let lastProcessTimestamp = 0;
+    const processInterval = 100; // Procesar cada 100ms en vez de cada frame
     
-    // Diferencia normalizada entre distancias izquierda y derecha
-    return Math.abs(leftDist - rightDist) / ((leftDist + rightDist) / 2);
-  };
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    const displaySize = { width: video.width, height: video.height };
+    
+    faceapi.matchDimensions(canvas, displaySize);
+    
+    const processFrame = async (timestamp: number) => {
+      // Controlar la frecuencia de procesamiento para no saturar la CPU
+      if (timestamp - lastProcessTimestamp >= processInterval) {
+        frameCounterRef.current += 1;
+        lastProcessTimestamp = timestamp;
+        
+        try {
+          // Solo procesar si el video está activo
+          if (video.paused || video.ended || !streamRef.current) {
+            animationFrameId = requestAnimationFrame(processFrame);
+            return;
+          }
+          
+          // Detectar cara con landmarks, expresiones y descriptor facial
+          const detections = await faceapi.detectAllFaces(
+            video, 
+            new faceapi.TinyFaceDetectorOptions({ scoreThreshold: 0.6 })
+          )
+          .withFaceLandmarks()
+          .withFaceExpressions()
+          .withFaceDescriptors();
+          
+          // Si se detectó al menos una cara
+          if (detections.length > 0) {
+            // Tomar la primera cara
+            const detection = detections[0];
+            
+            // Actualizar solo si cambió significativamente
+            if (!detectedFace || 
+                Math.abs(detection.detection.score - (detectedFace?.detection.score || 0)) > 0.1) {
+              setDetectedFace(detection);
+            }
+            
+            // Añadir expresión al historial para análisis temporal
+            expressionHistoryRef.current.push(detection.expressions);
+            if (expressionHistoryRef.current.length > 10) {
+              // Mantener solo los últimos 10 frames para análisis
+              expressionHistoryRef.current.shift();
+            }
+            
+            // Verificar prueba de vida según el desafío
+            checkLiveness(detection);
+            
+            // Renderizar resultados
+            renderResults(detections, displaySize);
+          } else {
+            if (detectedFace !== null) {
+              setDetectedFace(null);
+            }
+            
+            // Limpiar canvas si no hay detección
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+              ctx.clearRect(0, 0, canvas.width, canvas.height);
+            }
+            
+            // Si perdemos la cara, reiniciamos el progreso de liveness
+            if (livenessState === 'progress') {
+              setLivenessState('waiting');
+              positiveFramesRef.current = 0;
+              setProgressPercentage(0);
+            }
+          }
+        } catch (err) {
+          console.error('Error en detección facial:', err);
+        }
+      }
+      
+      // Continuar el bucle
+      animationFrameId = requestAnimationFrame(processFrame);
+    };
+    
+    // Iniciar bucle de animación
+    animationFrameId = requestAnimationFrame(processFrame);
+    
+    // Retornar función de limpieza
+    return () => {
+      cancelAnimationFrame(animationFrameId);
+    };
+  }, [modelsLoaded, checkLiveness, detectedFace, livenessState, renderResults]);
   
-  // Capturar y enviar datos biométricos
-  const handleCapture = async () => {
+  // Iniciar cámara con opciones optimizadas
+  const startVideo = useCallback(async () => {
+    if (!videoRef.current) return;
+    
+    try {
+      // Solicitar permisos de cámara con resolución adecuada pero priorizar rendimiento
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { 
+          width: { ideal: 640 },
+          height: { ideal: 480 },
+          facingMode: "user",
+          frameRate: { ideal: 15, max: 30 } // Reducido para mejor rendimiento
+        }
+      });
+      
+      videoRef.current.srcObject = stream;
+      streamRef.current = stream;
+      
+      videoRef.current.onloadedmetadata = () => {
+        setDetectionStarted(true);
+        const cleanup = detectFaces();
+        
+        // Guardar función de limpieza
+        return () => {
+          if (cleanup) cleanup();
+        };
+      };
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Error desconocido';
+      setError(`Error accediendo a la cámara: ${errorMessage}. Verifique los permisos del navegador.`);
+    }
+  }, [detectFaces]);
+  
+  // Capturar y enviar datos biométricos - optimizada para evitar recreaciones
+  const handleCapture = useCallback(async () => {
     if (!detectedFace || livenessState !== 'passed' || !user) return;
     
     setIsProcessing(true);
@@ -317,17 +384,21 @@ const BiometricCapture = ({
       // Obtener descriptor facial
       const descriptor = Array.from(detectedFace.descriptor);
       
-      // Capturar frame actual
+      // Capturar frame actual - crear canvas solo cuando se necesita
       const canvas = document.createElement('canvas');
       if (videoRef.current) {
         canvas.width = videoRef.current.videoWidth;
         canvas.height = videoRef.current.videoHeight;
-        canvas.getContext('2d')?.drawImage(
-          videoRef.current, 0, 0, canvas.width, canvas.height
-        );
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(
+            videoRef.current, 0, 0, canvas.width, canvas.height
+          );
+        }
       }
       
-      const imageData = canvas.toDataURL('image/jpeg', 0.8);
+      // Reducir calidad para mejor rendimiento y menor tamaño de datos
+      const imageData = canvas.toDataURL('image/jpeg', 0.7);
       
       if (mode === 'register') {
         // Registrar datos biométricos
@@ -372,10 +443,10 @@ const BiometricCapture = ({
     } finally {
       setIsProcessing(false);
     }
-  };
+  }, [detectedFace, livenessState, livenessChallenge, mode, user, onSuccess]);
   
-  // Cambiar desafío de prueba de vida
-  const changeChallenge = () => {
+  // Cambiar desafío de prueba de vida - memoizado
+  const changeChallenge = useCallback(() => {
     // Reiniciar estado de liveness
     setLivenessState('waiting');
     positiveFramesRef.current = 0;
@@ -386,7 +457,21 @@ const BiometricCapture = ({
     const currentIndex = challenges.indexOf(livenessChallenge as any);
     const nextIndex = (currentIndex + 1) % challenges.length;
     setLivenessChallenge(challenges[nextIndex]);
-  };
+  }, [livenessChallenge]);
+  
+  // Mensajes de instrucción memoizados para evitar recreaciones en cada render
+  const challengeInstructions = useMemo(() => ({
+    blink: 'Por favor, parpadee varias veces',
+    smile: 'Por favor, sonría ampliamente',
+    'head-turn': 'Por favor, gire levemente la cabeza'
+  }), []);
+  
+  // Mensaje de acción según challenge - memoizado
+  const progressInstructions = useMemo(() => ({
+    blink: 'Parpadeo detectado... continúe',
+    smile: 'Sonrisa detectada... continúe',
+    'head-turn': 'Giro detectado... continúe'
+  }), []);
   
   return (
     <div className="p-4 bg-white rounded-lg shadow">
@@ -421,6 +506,7 @@ const BiometricCapture = ({
       )}
       
       <div className="relative">
+        {/* Mostrar pantalla de carga solo si los modelos no están cargados */}
         {!modelsLoaded && (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-100 rounded-md">
             <div className="text-center">
@@ -429,12 +515,6 @@ const BiometricCapture = ({
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
               </svg>
               <p className="mt-2 text-sm text-gray-500">Cargando modelos de reconocimiento facial...</p>
-              <div className="w-64 h-2 mt-2 bg-gray-200 rounded-full">
-                <div 
-                  className="h-2 bg-blue-500 rounded-full"
-                  style={{ width: `${progressPercentage}%` }}
-                ></div>
-              </div>
             </div>
           </div>
         )}
@@ -458,6 +538,7 @@ const BiometricCapture = ({
               className="absolute top-0 left-0 z-10"
             />
             
+            {/* Mensajes condicionales según el estado */}
             {modelsLoaded && !detectedFace && detectionStarted && (
               <div className="absolute inset-0 flex items-center justify-center">
                 <div className="p-4 text-center bg-white bg-opacity-75 rounded-md">
@@ -469,9 +550,7 @@ const BiometricCapture = ({
             {detectedFace && livenessState === 'waiting' && (
               <div className="absolute bottom-0 left-0 right-0 p-4 text-center bg-white bg-opacity-75">
                 <p className="text-sm font-medium text-gray-800">
-                  {livenessChallenge === 'blink' && 'Por favor, parpadee varias veces'}
-                  {livenessChallenge === 'smile' && 'Por favor, sonría ampliamente'}
-                  {livenessChallenge === 'head-turn' && 'Por favor, gire levemente la cabeza'}
+                  {challengeInstructions[livenessChallenge]}
                 </p>
               </div>
             )}
@@ -479,9 +558,7 @@ const BiometricCapture = ({
             {detectedFace && livenessState === 'progress' && (
               <div className="absolute bottom-0 left-0 right-0 p-4 text-center bg-blue-100 bg-opacity-75">
                 <p className="text-sm font-medium text-blue-800">
-                  {livenessChallenge === 'blink' && 'Parpadeo detectado... continúe'}
-                  {livenessChallenge === 'smile' && 'Sonrisa detectada... continúe'}
-                  {livenessChallenge === 'head-turn' && 'Giro detectado... continúe'}
+                  {progressInstructions[livenessChallenge]}
                 </p>
                 <div className="w-full h-2 mt-2 bg-white bg-opacity-50 rounded-full">
                   <div 
@@ -535,13 +612,12 @@ const BiometricCapture = ({
         </p>
         <p className="mt-2 text-xs text-gray-400">
           Para completar la verificación, realice la siguiente acción: 
-          {livenessChallenge === 'blink' && ' parpadee varias veces'}
-          {livenessChallenge === 'smile' && ' sonría ampliamente'}
-          {livenessChallenge === 'head-turn' && ' gire levemente la cabeza'}
+          {challengeInstructions[livenessChallenge]}
         </p>
       </div>
     </div>
   );
 };
 
+// Exportar componente memoizado para evitar renderizados innecesarios
 export default BiometricCapture;

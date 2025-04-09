@@ -6,6 +6,7 @@ import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { UsersModule } from '../users/users.module';
 import { JwtStrategy } from './strategies/jwt.strategy';
+import { TwoFactorModule } from './two-factor/two-factor.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { JwtStrategy } from './strategies/jwt.strategy';
         signOptions: { expiresIn: configService.get('JWT_EXPIRES_IN', '4h') },
       }),
     }),
+    TwoFactorModule,
   ],
   controllers: [AuthController],
   providers: [AuthService, JwtStrategy],

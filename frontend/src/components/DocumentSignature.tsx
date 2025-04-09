@@ -73,15 +73,26 @@ const DocumentSignature = ({
       if (!documentId || !currentUser) return;
       
       try {
+        console.log("Checking if user can sign document:", documentId);
+        // Make sure this URL matches the endpoint in your backend controller
         const response = await api.get(`/api/signatures/can-sign/${documentId}`);
+        console.log("Can sign response:", response.data);
+        
         setCanSign(response.data.canSign);
         if (!response.data.canSign) {
           setCannotSignReason(response.data.reason);
         }
-      } catch (err) {
+      } catch (err:any) {
         console.error('Error checking if user can sign:', err);
+        // Show more detailed error
+        let errorMsg = 'Error checking signature permissions';
+        if (err.response) {
+          errorMsg += `: ${err.response.status} - ${err.response.data?.message || 'Unknown error'}`;
+        } else if (err.message) {
+          errorMsg += `: ${err.message}`;
+        }
         setCanSign(false);
-        setCannotSignReason('Error checking signature permissions');
+        setCannotSignReason(errorMsg);
       }
     };
     

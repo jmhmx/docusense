@@ -118,4 +118,23 @@ export class SignaturesController {
       );
     }
   }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('can-sign/:documentId')
+  async canSignDocument(
+    @Param('documentId') documentId: string,
+    @Request() req,
+  ) {
+    try {
+      const result = await this.signaturesService.canUserSignDocument(
+        documentId,
+        req.user.id,
+      );
+      return result;
+    } catch (error) {
+      throw new BadRequestException(
+        `Error checking signature permissions: ${error.message}`,
+      );
+    }
+  }
 }

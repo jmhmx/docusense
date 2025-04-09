@@ -112,6 +112,7 @@ export class BiometryService {
       userId: registerDto.userId,
       descriptorData: encryptedData,
       iv,
+      authTag, // Añadir el authTag aquí
       type: registerDto.type,
       metadata: {
         ...registerDto.metadata,
@@ -257,9 +258,10 @@ export class BiometryService {
     // Descifrar datos biométricos almacenados
     let storedDescriptorData: Buffer;
     try {
-      storedDescriptorData = this.cryptoService.decryptDocument(
+      storedDescriptorData = this.cryptoService.decryptBiometricData(
         storedBiometricData.descriptorData,
         storedBiometricData.iv,
+        storedBiometricData.authTag,
       );
     } catch (error) {
       this.logger.error(

@@ -27,6 +27,9 @@ export class BiometricData {
   @Column({ name: 'iv', type: 'bytea' })
   iv: Buffer;
 
+  @Column({ name: 'auth_tag', type: 'bytea' })
+  authTag: Buffer;
+
   @Column({ type: 'enum', enum: ['face', 'fingerprint'], default: 'face' })
   type: string;
 

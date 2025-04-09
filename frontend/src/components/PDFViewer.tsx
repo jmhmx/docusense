@@ -22,6 +22,8 @@ const PDFViewer = ({ documentId, onSelectionChange, onPageChange }: PDFViewerPro
 
   useEffect(() => {
     // Set the PDF URL
+    // SOLUCIÓN: En lugar de establecer una URL directa, vamos a usar un objeto options
+    // para que react-pdf sepa cómo autenticar la petición
     setPdfUrl(`/api/documents/${documentId}/view`);
     setLoading(true);
   }, [documentId]);
@@ -73,6 +75,9 @@ const PDFViewer = ({ documentId, onSelectionChange, onPageChange }: PDFViewerPro
       });
     }
   };
+
+  // Obtener el token de auth
+  const token = localStorage.getItem('token');
 
   return (
     <div className="flex flex-col p-4 bg-white rounded-lg shadow">
@@ -159,8 +164,14 @@ const PDFViewer = ({ documentId, onSelectionChange, onPageChange }: PDFViewerPro
           </div>
         )}
 
+        {/* SOLUCIÓN: En lugar de pasar directamente la URL, usamos un objeto options */}
         <Document
-          file={pdfUrl}
+          file={{
+            url: pdfUrl,
+            httpHeaders: {
+              'Authorization': `Bearer ${token}`
+            }
+          }}
           onLoadSuccess={onDocumentLoadSuccess}
           onLoadError={onDocumentLoadError}
           className="flex justify-center"

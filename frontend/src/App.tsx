@@ -9,8 +9,12 @@ import Dashboard from './pages/Dashboard'
 import DocumentViewer from './pages/DocumentViewer'
 import SharedDocumentView from './pages/SharedDocumentView'
 import Home from './pages/Home'
+import DebugHelper from './components/DebugHelper'
+
 
 function App() {
+   // Determinar si estamos en ambiente de desarrollo
+  const isDev = true;
   return (
     <BrowserRouter>
       <AuthProvider>
@@ -41,6 +45,8 @@ function App() {
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </div>
+          {/* Solo mostrar el depurador en desarrollo */}
+          {isDev && <DebugHelper />}
         </div>
       </AuthProvider>
     </BrowserRouter>

@@ -13,6 +13,7 @@ import { DocumentsService } from '../documents/documents.service';
 import { UsersService } from '../users/users.service';
 import { Signature } from './entities/signature.entity';
 import { AuditLogService, AuditAction } from '../audit/audit-log.service';
+import { Document } from '../documents/entities/document.entity';
 
 export interface SignatureVerificationResult {
   isValid: boolean;
@@ -27,6 +28,8 @@ export class SignaturesService {
   constructor(
     @InjectRepository(Signature)
     private signaturesRepository: Repository<Signature>,
+    @InjectRepository(Document) // Add this line
+    private documentsRepository: Repository<Document>, // Add this line
     private readonly cryptoService: CryptoService,
     private readonly documentsService: DocumentsService,
     private readonly usersService: UsersService,
@@ -49,165 +52,187 @@ export class SignaturesService {
       throw new BadRequestException('Document ID and User ID are required');
     }
 
-    // Verify document exists
-    const document = await this.documentsService.findOne(documentId);
-    if (!document) {
-      throw new NotFoundException(`Document with ID ${documentId} not found`);
-    }
+    // Problema 1: Las consultas a la BD pueden estar fallando
+    // Asegurarse de que la consulta está correcta
+    try {
+      // Verify document exists - ARREGLO: Comprobar que la consulta es correcta
+      // Imprimir el ID para depuración
+      console.log(`Buscando documento con ID: ${documentId}`);
 
-    // Verify user exists
-    const user = await this.usersService.findOne(userId);
-    if (!user) {
-      throw new NotFoundException(`User with ID ${userId} not found`);
-    }
+      const document = await this.documentsRepository.findOne({
+        where: { id: documentId },
+      });
 
-    // Check document status - only allow signing if processed
-    if (document.status !== 'completed' && document.status !== 'pending') {
-      throw new BadRequestException(
-        `Document is not ready for signing. Current status: ${document.status}`,
-      );
-    }
+      if (!document) {
+        console.error(`Documento no encontrado con ID: ${documentId}`);
+        throw new NotFoundException(`Document with ID ${documentId} not found`);
+      }
 
-    // Verify the user has permission to sign this document
-    if (document.userId !== userId) {
-      // Check if document is shared with this user (placeholder - implement based on your sharing model)
-      const hasAccess = true; // Replace with actual permission check
-      if (!hasAccess) {
-        throw new UnauthorizedException(
-          'You do not have permission to sign this document',
+      // Verify user exists - ARREGLO: Comprobar que la consulta es correcta
+      console.log(`Buscando usuario con ID: ${userId}`);
+
+      const user = await this.usersService.findOne(userId);
+      if (!user) {
+        console.error(`Usuario no encontrado con ID: ${userId}`);
+        throw new NotFoundException(`User with ID ${userId} not found`);
+      }
+
+      // Check document status - only allow signing if processed
+      if (document.status !== 'completed' && document.status !== 'pending') {
+        throw new BadRequestException(
+          `Document is not ready for signing. Current status: ${document.status}`,
         );
       }
-    }
 
-    // Check if the document already has signatures from this user
-    const existingSignatures = await this.signaturesRepository.find({
-      where: { documentId, userId },
-    });
+      // Verify the user has permission to sign this document
+      if (document.userId !== userId) {
+        // Check if document is shared with this user (placeholder - implement based on your sharing model)
+        const hasAccess = true; // Replace with actual permission check
+        if (!hasAccess) {
+          throw new UnauthorizedException(
+            'You do not have permission to sign this document',
+          );
+        }
+      }
 
-    if (existingSignatures.length > 0) {
-      this.logger.warn(
-        `User ${userId} already has ${existingSignatures.length} signatures on document ${documentId}`,
-      );
-      // Optional: decide if multiple signatures are allowed
-    }
+      // Check if the document already has signatures from this user
+      const existingSignatures = await this.signaturesRepository.find({
+        where: { documentId, userId },
+      });
 
-    // Generate document hash for integrity checking
-    let documentHash: string;
-    try {
-      documentHash = this.cryptoService.generateHash(document.filePath);
-    } catch (error) {
-      throw new BadRequestException(
-        `Failed to hash document: ${error.message}`,
-      );
-    }
+      if (existingSignatures.length > 0) {
+        this.logger.warn(
+          `User ${userId} already has ${existingSignatures.length} signatures on document ${documentId}`,
+        );
+        // Optional: decide if multiple signatures are allowed
+      }
 
-    // Prepare data to sign (includes all relevant metadata)
-    const timestamp = new Date().toISOString();
-    const dataToSign = JSON.stringify({
-      documentId,
-      documentHash,
-      userId,
-      timestamp,
-      reason,
-      position,
-    });
-
-    // Check if the user has a key pair, generate if not
-    let keyPair = await this.cryptoService.getUserKeyPair(userId);
-    if (!keyPair) {
-      this.logger.log(
-        `Generating new key pair for user ${user.name} (${userId})`,
-      );
+      // Generate document hash for integrity checking
+      let documentHash: string;
       try {
-        keyPair = await this.cryptoService.generateKeyPair(userId);
+        documentHash = this.cryptoService.generateHash(document.filePath);
       } catch (error) {
         throw new BadRequestException(
-          `Failed to generate key pair: ${error.message}`,
+          `Failed to hash document: ${error.message}`,
         );
       }
-    }
 
-    // Sign the data
-    let signatureData: string;
-    try {
-      const signResult = await this.cryptoService.signData(userId, dataToSign);
-      if (!signResult) {
-        throw new BadRequestException('Failed to generate digital signature');
+      // Prepare data to sign (includes all relevant metadata)
+      const timestamp = new Date().toISOString();
+      const dataToSign = JSON.stringify({
+        documentId,
+        documentHash,
+        userId,
+        timestamp,
+        reason,
+        position,
+      });
+
+      // Check if the user has a key pair, generate if not
+      let keyPair = await this.cryptoService.getUserKeyPair(userId);
+      if (!keyPair) {
+        this.logger.log(
+          `Generating new key pair for user ${user.name} (${userId})`,
+        );
+        try {
+          keyPair = await this.cryptoService.generateKeyPair(userId);
+        } catch (error) {
+          throw new BadRequestException(
+            `Failed to generate key pair: ${error.message}`,
+          );
+        }
       }
-      signatureData = signResult;
-    } catch (error) {
-      throw new BadRequestException(`Error signing document: ${error.message}`);
-    }
 
-    // Create signature record
-    const signatureEntity = this.signaturesRepository.create({
-      id: uuidv4(),
-      documentId: document.id,
-      userId,
-      signatureData,
-      documentHash,
-      signedAt: new Date(),
-      reason: reason || 'Document signature',
-      position: position ? JSON.stringify(position) : null,
-      valid: true, // Initially valid
-      metadata: {
-        userAgent: userAgent || 'Unknown',
-        ipAddress: ipAddress || 'Unknown',
-        dataToSign,
-        documentMetadata: {
-          title: document.title,
-          fileSize: document.fileSize,
-          mimeType: document.mimeType,
-        },
-      },
-    });
-
-    // Save signature
-    try {
-      const savedSignature =
-        await this.signaturesRepository.save(signatureEntity);
-
-      // Update document metadata to mark as signed
-      document.metadata = {
-        ...document.metadata,
-        isSigned: true,
-        lastSignedAt: new Date().toISOString(),
-        signaturesCount: (document.metadata?.signaturesCount || 0) + 1,
-      };
-
-      await this.documentsService.update(documentId, document);
-
-      // Record audit log
+      // Sign the data
+      let signatureData: string;
       try {
-        await this.auditLogService.log(
-          AuditAction.DOCUMENT_SIGN,
+        const signResult = await this.cryptoService.signData(
           userId,
-          documentId,
-          {
-            title: document.title,
-            signatureId: savedSignature.id,
-          },
-          ipAddress,
-          userAgent,
+          dataToSign,
         );
+        if (!signResult) {
+          throw new BadRequestException('Failed to generate digital signature');
+        }
+        signatureData = signResult;
+      } catch (error) {
+        throw new BadRequestException(
+          `Error signing document: ${error.message}`,
+        );
+      }
+
+      // Create signature record
+      const signatureEntity = this.signaturesRepository.create({
+        id: uuidv4(),
+        documentId: document.id,
+        userId,
+        signatureData,
+        documentHash,
+        signedAt: new Date(),
+        reason: reason || 'Document signature',
+        position: position ? JSON.stringify(position) : null,
+        valid: true, // Initially valid
+        metadata: {
+          userAgent: userAgent || 'Unknown',
+          ipAddress: ipAddress || 'Unknown',
+          dataToSign,
+          documentMetadata: {
+            title: document.title,
+            fileSize: document.fileSize,
+            mimeType: document.mimeType,
+          },
+        },
+      });
+
+      // Save signature
+      try {
+        const savedSignature =
+          await this.signaturesRepository.save(signatureEntity);
+
+        // Update document metadata to mark as signed
+        document.metadata = {
+          ...document.metadata,
+          isSigned: true,
+          lastSignedAt: new Date().toISOString(),
+          signaturesCount: (document.metadata?.signaturesCount || 0) + 1,
+        };
+
+        await this.documentsService.update(documentId, document);
+
+        // Record audit log
+        try {
+          await this.auditLogService.log(
+            AuditAction.DOCUMENT_SIGN,
+            userId,
+            documentId,
+            {
+              title: document.title,
+              signatureId: savedSignature.id,
+            },
+            ipAddress,
+            userAgent,
+          );
+        } catch (error) {
+          this.logger.error(
+            `Failed to record audit log: ${error.message}`,
+            error.stack,
+          );
+          // Continue even if audit log fails
+        }
+
+        this.logger.log(`Document ${documentId} signed by user ${userId}`);
+        return savedSignature;
       } catch (error) {
         this.logger.error(
-          `Failed to record audit log: ${error.message}`,
+          `Error saving signature: ${error.message}`,
           error.stack,
         );
-        // Continue even if audit log fails
+        throw new BadRequestException(
+          `Failed to save signature: ${error.message}`,
+        );
       }
-
-      this.logger.log(`Document ${documentId} signed by user ${userId}`);
-      return savedSignature;
     } catch (error) {
-      this.logger.error(
-        `Error saving signature: ${error.message}`,
-        error.stack,
-      );
-      throw new BadRequestException(
-        `Failed to save signature: ${error.message}`,
-      );
+      console.error(`Error en proceso de firma: ${error.message}`, error.stack);
+      throw error; // Re-lanzamos el error para que se maneje en el controlador
     }
   }
 

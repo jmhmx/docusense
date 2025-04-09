@@ -223,44 +223,58 @@ const DocumentSignature = ({
 
   // Sign document
   const signDocument = async () => {
-    if (!documentId || !signaturePosition) {
-      setError('Please select a signature position');
-      return;
-    }
+  if (!documentId || !signaturePosition) {
+    setError('Por favor seleccione una posición para la firma');
+    return;
+  }
+  
+  setIsLoading(true);
+  setError(null);
+  
+  try {
+    // Formato correcto de payload, asegúrate de que coincide con lo que el backend espera
+    const payload = {
+      position: signaturePosition,
+      reason: reason.trim() || 'Document signature',
+    };
     
-    setIsLoading(true);
-    setError(null);
+    // Añadir logs para depuración
+    console.log(`Intentando firmar documento: ${documentId}`);
+    console.log('Payload:', payload);
     
-    try {
-      const payload = {
-        reason: reason.trim() || 'Document signature',
-        position: signaturePosition,
-      };
-      
-      await api.post(`/api/signatures/${documentId}`, payload);
-      
-      // Reload signatures
-      const response = await api.get(`/api/signatures/document/${documentId}`);
-      setSignatures(response.data);
-      
-      // Reset state and close modal
-      setShowSignModal(false);
-      setShowVerification(false);
-      setVerificationCode('');
-      setSignaturePosition(null);
-      setReason('');
-      setDrawSignature(false);
-      
-      if (onSignSuccess) {
-        onSignSuccess();
-      }
-    } catch (err: any) {
-      console.error('Error signing document:', err);
-      setError(err?.response?.data?.message || 'Error signing document');
-    } finally {
-      setIsLoading(false);
+    // Asegúrate de que la URL coincide exactamente con la definida en el backend
+    const response = await api.post(`/api/signatures/${documentId}`, payload);
+    console.log('Respuesta de firma:', response.data);
+    
+    // Recargar firmas
+    const signaturesResponse = await api.get(`/api/signatures/document/${documentId}`);
+    setSignatures(signaturesResponse.data);
+    
+    // Resetear estado y cerrar modal
+    setShowSignModal(false);
+    setShowVerification(false);
+    setVerificationCode('');
+    setSignaturePosition(null);
+    setReason('');
+    setDrawSignature(false);
+    
+    if (onSignSuccess) {
+      onSignSuccess();
     }
-  };
+  } catch (err: any) {
+    console.error('Error al firmar el documento:', err);
+    
+    // Mostrar información más detallada del error para depuración
+    if (err.response) {
+      console.error('Respuesta de error:', err.response.status, err.response.data);
+      setError(`Error al firmar (${err.response.status}): ${err.response.data.message || JSON.stringify(err.response.data)}`);
+    } else {
+      setError(err?.message || 'Error desconocido al firmar el documento');
+    }
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   // Handle signature position selection
   const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {

@@ -137,34 +137,48 @@ export class DocumentsController {
     return this.documentsService.findOne(id, req.user.id, ip, userAgent);
   }
 
-  @UseGuards(JwtAuthGuard) // Esta línea es crucial - asegura que la ruta requiere autenticación
+  @UseGuards(JwtAuthGuard)
   @Get(':id/view')
   async viewDocument(
     @Param('id') id: string,
     @Request() req,
     @Res() res: Response,
   ) {
+    console.log('Usuario autenticado:', req.user);
     const document = await this.documentsService.findOne(id, req.user.id);
 
-    // Verificar que el archivo existe
-    if (!fs.existsSync(document.filePath)) {
-      throw new BadRequestException('El archivo no se encuentra disponible');
-    }
+    // Verificar si el documento está cifrado
+    if (document.metadata?.isEncrypted) {
+      console.log('Documento cifrado, descifrando...');
+      try {
+        // Obtener el contenido descifrado
+        const fileData = await this.documentsService.getDocumentContent(
+          document,
+          req.user.id,
+        );
 
-    // Para imágenes y PDFs, servir directamente el archivo
-    if (
-      document.mimeType.includes('image') ||
-      document.mimeType.includes('pdf')
-    ) {
+        // Crear stream desde el buffer descifrado
+        const file = new Readable();
+        file.push(fileData);
+        file.push(null);
+
+        res.set({
+          'Content-Type': document.mimeType,
+          'Content-Disposition': `inline; filename="${document.filename}"`,
+        });
+        file.pipe(res);
+      } catch (error) {
+        console.error('Error al descifrar documento:', error);
+        throw new BadRequestException('No se pudo descifrar el documento');
+      }
+    } else {
+      // Lógica original para documentos no cifrados
       const file = createReadStream(document.filePath);
       res.set({
         'Content-Type': document.mimeType,
         'Content-Disposition': `inline; filename="${document.filename}"`,
       });
       file.pipe(res);
-    } else {
-      // Para otros tipos de archivos, redirigir a la descarga
-      res.redirect(`/api/documents/${id}/download`);
     }
   }
 

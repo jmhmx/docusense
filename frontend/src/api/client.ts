@@ -12,8 +12,12 @@ export const api = axios.create({
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token');
+    console.log('Token enviado:', token); // Añade este log
+    console.log('URL de solicitud:', config.url);
+
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
+      console.log('Encabezado de autorización:', config.headers.Authorization);
     }
     return config;
   },

@@ -171,50 +171,41 @@ export class DocumentsService {
     userId?: string,
     ipAddress?: string,
     userAgent?: string,
-  ): Promise<Document> {
+  ) {
+    console.log('Buscando documento con ID:', id);
+    console.log('ID de usuario:', userId);
+
     const queryOptions: any = { where: { id } };
 
-    const document = await this.documentsRepository.findOne(queryOptions);
+    try {
+      const document = await this.documentsRepository.findOne(queryOptions);
 
-    if (!document) {
-      throw new NotFoundException(`Documento con ID ${id} no encontrado`);
-    }
+      console.log('Documento encontrado:', document);
 
-    // Si se proporciona el userId, verificar permisos
-    if (userId && this.sharingService) {
-      // Verificar si el usuario tiene acceso al documento
-      const hasAccess = await this.sharingService.canUserAccessDocument(
-        userId,
-        id,
-      );
-      if (!hasAccess && document.userId !== userId) {
+      if (!document) {
+        console.error('Documento no encontrado');
         throw new NotFoundException(`Documento con ID ${id} no encontrado`);
       }
 
-      // Si se proporciona userId, registrar acceso en log de auditoría
-      if (this.auditLogService) {
-        try {
-          await this.auditLogService.log(
-            AuditAction.DOCUMENT_VIEW,
-            userId,
-            document.id,
-            {
-              title: document.title,
-              filename: document.filename,
-            },
-            ipAddress,
-            userAgent,
-          );
-        } catch (error) {
-          console.error(
-            'Error al registrar acción en log de auditoría:',
-            error,
-          );
+      // Verificar permisos si se proporciona userId
+      if (userId && this.sharingService) {
+        const hasAccess = await this.sharingService.canUserAccessDocument(
+          userId,
+          id,
+        );
+        console.log('¿Usuario tiene acceso?:', hasAccess);
+
+        if (!hasAccess && document.userId !== userId) {
+          console.error('Acceso denegado');
+          throw new NotFoundException(`Documento con ID ${id} no encontrado`);
         }
       }
-    }
 
-    return document;
+      return document;
+    } catch (error) {
+      console.error('Error al buscar documento:', error);
+      throw error;
+    }
   }
 
   async update(

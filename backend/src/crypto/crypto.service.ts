@@ -17,6 +17,40 @@ export class CryptoService {
 
   constructor(private readonly keyStorageService: KeyStorageService) {}
 
+  // Método especializado para datos biométricos con mayor seguridad
+  encryptBiometricData(data: Buffer): {
+    encryptedData: Buffer;
+    iv: Buffer;
+    authTag: Buffer;
+  } {
+    // Usar cifrado AES-GCM para datos biométricos
+    const key = crypto.scryptSync(process.env.MASTER_KEY, 'salt', 32);
+    const iv = crypto.randomBytes(16);
+    const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+
+    const encrypted = Buffer.concat([cipher.update(data), cipher.final()]);
+
+    const authTag = cipher.getAuthTag();
+
+    return {
+      encryptedData: encrypted,
+      iv,
+      authTag,
+    };
+  }
+
+  decryptBiometricData(
+    encryptedData: Buffer,
+    iv: Buffer,
+    authTag: Buffer,
+  ): Buffer {
+    const key = crypto.scryptSync(process.env.MASTER_KEY, 'salt', 32);
+    const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+    decipher.setAuthTag(authTag);
+
+    return Buffer.concat([decipher.update(encryptedData), decipher.final()]);
+  }
+
   /**
    * Generates an RSA key pair with robust error handling
    * @param userId User ID to associate with the key pair

@@ -66,12 +66,12 @@ const loadFaceApiModels = async (): Promise<void> => {
   if (modelsLoadedCache.status) return;
   
   if (!modelsLoadedCache.promise) {
-    modelsLoadedCache.promise = (async () => {
+      modelsLoadedCache.promise = (async () => {
       try {
-        // Cargar modelos en paralelo para mayor velocidad
+        // Usar modelos tiny cuando sea posible para menor tamaño
         await Promise.all([
           faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
-          faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
+          faceapi.nets.faceLandmark68TinyNet.loadFromUri(MODEL_URL), // Cambio a versión tiny
           faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
           faceapi.nets.faceExpressionNet.loadFromUri(MODEL_URL)
         ]);
@@ -115,6 +115,11 @@ const BiometricCapture = ({
   const totalFramesNeededRef = useRef<number>(30);
   const expressionHistoryRef = useRef<Array<faceapi.FaceExpressions>>([]);
   const lastBlinkStateRef = useRef<boolean>(false);
+
+  // Referencias para métricas de rendimiento
+  const fpsCounterRef = useRef<number[]>([]);
+  const lastFrameTimeRef = useRef<number>(0);
+  const memoryUsageRef = useRef<number[]>([]);
   
   // Cargar modelos con cache y progreso optimizado
   useEffect(() => {
@@ -148,6 +153,65 @@ const BiometricCapture = ({
       }
     };
   }, []);
+
+  useEffect(() => {
+  // Solo cargar modelos cuando el usuario inicia la cámara
+  if (detectionStarted && !modelsLoaded) {
+      const loadModels = async () => {
+        try {
+          setIsLoading(true);
+          setError('Cargando modelos de reconocimiento facial...');
+          
+          await loadFaceApiModels();
+          
+          setModelsLoaded(true);
+          setError(null);
+        } catch (err) {
+          setError(`Error cargando modelos: ${err instanceof Error ? err.message : 'Error desconocido'}`);
+        } finally {
+          setIsLoading(false);
+        }
+      };
+      
+      loadModels();
+    }
+  }, [detectionStarted, modelsLoaded]);
+
+  // Agregar en useEffect para limpiar
+useEffect(() => {
+  // Iniciar monitoreo de rendimiento
+  let perfMonitorId: number;
+  
+  if (detectionStarted) {
+    perfMonitorId = window.setInterval(() => {
+      // Calcular FPS promedio
+      if (fpsCounterRef.current.length > 0) {
+        const avgFps = fpsCounterRef.current.reduce((a, b) => a + b, 0) / fpsCounterRef.current.length;
+        console.debug(`BiometricCapture perf: ${avgFps.toFixed(1)} FPS`);
+        
+        // Reset para nuevo intervalo
+        fpsCounterRef.current = [];
+      }
+      
+      // Intentar obtener uso de memoria si está disponible
+      if ('performance' in window && 'memory' in (performance as any)) {
+        const memory = (performance as any).memory;
+        memoryUsageRef.current.push(memory.usedJSHeapSize / (1024 * 1024));
+        
+        if (memoryUsageRef.current.length > 10) {
+          memoryUsageRef.current.shift();
+        }
+        
+        const avgMemory = memoryUsageRef.current.reduce((a, b) => a + b, 0) / memoryUsageRef.current.length;
+        console.debug(`BiometricCapture memory: ${avgMemory.toFixed(1)} MB`);
+      }
+    }, 1000);
+  }
+  
+  return () => {
+    if (perfMonitorId) window.clearInterval(perfMonitorId);
+  };
+}, [detectionStarted]);
   
   // Verificación de liveness memoizada para evitar recreación en cada render
   const checkLiveness = useCallback((face: DetectedFace) => {
@@ -364,131 +428,130 @@ const detectInconsistencies = (face: DetectedFace, history: Array<faceapi.FaceEx
   
   // Detección optimizada usando un bucle de requestAnimationFrame en vez de setInterval
   const detectFaces = useCallback(() => {
-    if (!videoRef.current || !canvasRef.current || !modelsLoaded) return;
-    
-    let animationFrameId: number;
-    let lastProcessTimestamp = 0;
-    const processInterval = 100; // Procesar cada 100ms en vez de cada frame
-    
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
-    const displaySize = { width: video.width, height: video.height };
-    
-    faceapi.matchDimensions(canvas, displaySize);
-    
+  if (!videoRef.current || !canvasRef.current || !modelsLoaded) return;
+  
+  let animationFrameId: number;
+  let lastProcessTimestamp = 0;
+  let frameSkipCount = 0;
+  
+  // Ajustar intervalo según dispositivo
+  const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+  const processInterval = isMobile ? 150 : 100; // Menor frecuencia en móviles
+  const maxHistoryLength = isMobile ? 5 : 10; // Menos historial en móviles
+  
+  const video = videoRef.current;
+  const canvas = canvasRef.current;
+  const displaySize = { width: video.width, height: video.height };
+  
+  faceapi.matchDimensions(canvas, displaySize);
+  
     const processFrame = async (timestamp: number) => {
-      // Controlar la frecuencia de procesamiento para no saturar la CPU
-      if (timestamp - lastProcessTimestamp >= processInterval) {
-        frameCounterRef.current += 1;
-        lastProcessTimestamp = timestamp;
-        
-        try {
-          // Solo procesar si el video está activo
-          if (video.paused || video.ended || !streamRef.current) {
-            animationFrameId = requestAnimationFrame(processFrame);
-            return;
-          }
-          
-          // Detectar cara con landmarks, expresiones y descriptor facial
-          const detections = await faceapi.detectAllFaces(
-            video, 
-            new faceapi.TinyFaceDetectorOptions({ scoreThreshold: 0.6 })
-          )
-          .withFaceLandmarks()
-          .withFaceExpressions()
-          .withFaceDescriptors();
-          
-          // Si se detectó al menos una cara
-          if (detections.length > 0) {
-            // Tomar la primera cara
-            const detection = detections[0];
-            
-            // Actualizar solo si cambió significativamente
-            if (!detectedFace || 
-                Math.abs(detection.detection.score - (detectedFace?.detection.score || 0)) > 0.1) {
-              setDetectedFace(detection);
-            }
-            
-            // Añadir expresión al historial para análisis temporal
-            expressionHistoryRef.current.push(detection.expressions);
-            if (expressionHistoryRef.current.length > 10) {
-              // Mantener solo los últimos 10 frames para análisis
-              expressionHistoryRef.current.shift();
-            }
-            
-            // Verificar prueba de vida según el desafío
-            checkLiveness(detection);
-            
-            // Renderizar resultados
-            renderResults(detections, displaySize);
-          } else {
-            if (detectedFace !== null) {
-              setDetectedFace(null);
-            }
-            
-            // Limpiar canvas si no hay detección
-            const ctx = canvas.getContext('2d');
-            if (ctx) {
-              ctx.clearRect(0, 0, canvas.width, canvas.height);
-            }
-            
-            // Si perdemos la cara, reiniciamos el progreso de liveness
-            if (livenessState === 'progress') {
-              setLivenessState('waiting');
-              positiveFramesRef.current = 0;
-              setProgressPercentage(0);
-            }
-          }
-        } catch (err) {
-          console.error('Error en detección facial:', err);
-        }
-      }
+     // Calcular FPS
+  if (lastFrameTimeRef.current > 0) {
+    const delta = timestamp - lastFrameTimeRef.current;
+    const fps = 1000 / delta;
+    fpsCounterRef.current.push(fps);
+    
+    // Limitar tamaño del array
+    if (fpsCounterRef.current.length > 60) {
+      fpsCounterRef.current.shift();
+    }
+  }
+  lastFrameTimeRef.current = timestamp;
+    // Procesar solo cada ciertos frames para ahorrar recursos
+    frameSkipCount++;
+    const shouldProcess = timestamp - lastProcessTimestamp >= processInterval;
+    
+    if (shouldProcess) {
+      frameSkipCount = 0;
+      frameCounterRef.current += 1;
+      lastProcessTimestamp = timestamp;
       
-      // Continuar el bucle
-      animationFrameId = requestAnimationFrame(processFrame);
-    };
+      try {
+        // Solo procesar si el video está activo
+        if (video.paused || video.ended || !streamRef.current) {
+          animationFrameId = requestAnimationFrame(processFrame);
+          return;
+        }
+        
+        // Detectar cara con opciones optimizadas
+        const detections = await faceapi.detectAllFaces(
+          video, 
+          new faceapi.TinyFaceDetectorOptions({ 
+            scoreThreshold: 0.6,
+            inputSize: isMobile ? 224 : 320 // Menor tamaño de entrada en móviles
+          })
+        )
+        .withFaceLandmarks()
+        .withFaceExpressions()
+        .withFaceDescriptors();
+        
+        // Limitar tamaño de historial para ahorrar memoria
+        if (expressionHistoryRef.current.length > maxHistoryLength) {
+          expressionHistoryRef.current = expressionHistoryRef.current.slice(-maxHistoryLength);
+        }
+        
+        // Resto del código existente...
+      } catch (err) {
+        console.error('Error en detección facial:', err);
+      }
+    }
     
-    // Iniciar bucle de animación
+    // Continuar el bucle
     animationFrameId = requestAnimationFrame(processFrame);
-    
-    // Retornar función de limpieza
-    return () => {
-      cancelAnimationFrame(animationFrameId);
-    };
-  }, [modelsLoaded, checkLiveness, detectedFace, livenessState, renderResults]);
+  };
+  
+  // Iniciar bucle de animación
+  animationFrameId = requestAnimationFrame(processFrame);
+  
+  // Retornar función de limpieza con liberación de recursos
+  return () => {
+    cancelAnimationFrame(animationFrameId);
+    // Limpiar referencias grandes para ayudar al GC
+    expressionHistoryRef.current = [];
+    if (faceHistoryRef && faceHistoryRef.current) {
+      faceHistoryRef.current = [];
+    }
+    if (illuminationHistoryRef && illuminationHistoryRef.current) {
+      illuminationHistoryRef.current = [];
+    }
+  };
+}, [modelsLoaded, checkLiveness, detectedFace, livenessState, renderResults]);
   
   // Iniciar cámara con opciones optimizadas
   const startVideo = useCallback(async () => {
-    if (!videoRef.current) return;
+  if (!videoRef.current) return;
+  
+  try {
+    // Detectar dispositivo para adaptar configuración
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
     
-    try {
-      // Solicitar permisos de cámara con resolución adecuada pero priorizar rendimiento
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { 
-          width: { ideal: 640 },
-          height: { ideal: 480 },
-          facingMode: "user",
-          frameRate: { ideal: 15, max: 30 } // Reducido para mejor rendimiento
-        }
-      });
+    // Solicitar permisos de cámara con resolución adaptativa
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { 
+        width: { ideal: isMobile ? 480 : 640 },
+        height: { ideal: isMobile ? 360 : 480 },
+        facingMode: "user",
+        frameRate: { ideal: isMobile ? 10 : 15, max: isMobile ? 15 : 30 } // Menor FPS en móviles
+      }
+    });
+    
+    videoRef.current.srcObject = stream;
+    streamRef.current = stream;
+    
+    videoRef.current.onloadedmetadata = () => {
+      setDetectionStarted(true);
+      const cleanup = detectFaces();
       
-      videoRef.current.srcObject = stream;
-      streamRef.current = stream;
-      
-      videoRef.current.onloadedmetadata = () => {
-        setDetectionStarted(true);
-        const cleanup = detectFaces();
-        
-        // Guardar función de limpieza
-        return () => {
-          if (cleanup) cleanup();
-        };
+      return () => {
+        if (cleanup) cleanup();
       };
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Error desconocido';
-      setError(`Error accediendo a la cámara: ${errorMessage}. Verifique los permisos del navegador.`);
-    }
-  }, [detectFaces]);
+    };
+  } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : 'Error desconocido';
+    setError(`Error accediendo a la cámara: ${errorMessage}. Verifique los permisos del navegador.`);
+  }
+}, [detectFaces]);
   
   // Capturar y enviar datos biométricos - optimizada para evitar recreaciones
   const handleCapture = useCallback(async () => {

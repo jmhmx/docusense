@@ -14,6 +14,10 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<void>;
   register: (name: string, email: string, password: string) => Promise<void>;
   logout: () => void;
+  loginWithBiometrics: (userId: string, biometricData: string) => Promise<void>;
+  setupBiometrics: () => Promise<void>;
+  hasBiometrics: boolean;
+  isBiometricsVerifying: boolean;
 }
 
 export const AuthContext = createContext<AuthContextType>({
@@ -32,6 +36,8 @@ interface AuthProviderProps {
 export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [hasBiometrics, setHasBiometrics] = useState<boolean>(false);
+  const [isBiometricsVerifying, setIsBiometricsVerifying] = useState<boolean>(false);
 
   useEffect(() => {
     // Verificar si hay un token y cargar datos del usuario
@@ -92,6 +98,65 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     setUser(null);
   };
 
+  useEffect(() => {
+  // Verificar si el usuario tiene biometría registrada
+  const checkBiometrics = async () => {
+    if (user) {
+      try {
+        const response = await api.get('/api/biometry/status');
+        setHasBiometrics(response.data.registered);
+      } catch (error) {
+        console.error('Error verificando estado biométrico:', error);
+        setHasBiometrics(false);
+      }
+    } else {
+      setHasBiometrics(false);
+    }
+  };
+  
+  checkBiometrics();
+}, [user]);
+
+const loginWithBiometrics = async (userId: string, biometricData: string) => {
+  setIsBiometricsVerifying(true);
+  
+  try {
+    // Paso 1: Verificar biometría
+    const bioResponse = await api.post('/api/biometry/verify', {
+      userId,
+      descriptorData: biometricData,
+      livenessProof: {
+        challenge: 'blink',
+        timestamp: Date.now()
+      }
+    });
+    
+    if (!bioResponse.data.verified) {
+      throw new Error('Verificación biométrica fallida');
+    }
+    
+    // Paso 2: Obtener token de sesión
+    const authResponse = await api.post('/api/auth/login/biometric', { userId });
+    const { token, user } = authResponse.data;
+    
+    localStorage.setItem('token', token);
+    localStorage.setItem('user', JSON.stringify(user));
+    setUser(user);
+  } catch (error) {
+    console.error('Error en autenticación biométrica:', error);
+    throw error;
+  } finally {
+    setIsBiometricsVerifying(false);
+  }
+};
+
+const setupBiometrics = async () => {
+  if (!user) throw new Error('Usuario no autenticado');
+  
+  // Redireccionar a página de registro biométrico
+  window.location.href = '/biometric-registration';
+};
+
   return (
     <AuthContext.Provider
       value={{
@@ -101,6 +166,10 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         login,
         register,
         logout,
+        loginWithBiometrics,
+  setupBiometrics,
+  hasBiometrics,
+  isBiometricsVerifying
       }}
     >
       {children}

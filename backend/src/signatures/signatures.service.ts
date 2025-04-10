@@ -28,8 +28,8 @@ export class SignaturesService {
   constructor(
     @InjectRepository(Signature)
     private signaturesRepository: Repository<Signature>,
-    @InjectRepository(Document) // Add this line
-    private documentsRepository: Repository<Document>, // Add this line
+    @InjectRepository(Document) // Añadimos esto
+    private documentsRepository: Repository<Document>, // Y esto
     private readonly cryptoService: CryptoService,
     private readonly documentsService: DocumentsService,
     private readonly usersService: UsersService,
@@ -472,47 +472,60 @@ export class SignaturesService {
       isValid: boolean;
       signedAt: Date;
       userId: string;
+      userName?: string; // Añadimos nombre de usuario para mejor display
     }[];
     verifiedAt: Date;
+    hashAlgorithm: string; // Añadimos información sobre el algoritmo
   }> {
-    // Input validation
+    // Validación de entrada
     if (!documentId) {
       throw new BadRequestException('Document ID is required');
     }
 
-    // Find document
+    // Encontrar documento
     const document = await this.documentsService.findOne(documentId);
     if (!document) {
       throw new NotFoundException(`Document with ID ${documentId} not found`);
     }
 
-    // Get signatures
+    // Obtener firmas
     const signatures = await this.getDocumentSignatures(documentId);
     if (signatures.length === 0) {
       return {
-        intact: true, // No signatures to verify against
+        intact: true, // No hay firmas para verificar
         signatures: [],
         verifiedAt: new Date(),
+        hashAlgorithm: 'SHA-256',
       };
     }
 
-    // Calculate current hash
+    // Calcular hash actual
     const currentHash = this.cryptoService.generateHash(document.filePath);
     let intact = true;
 
-    // Check each signature
+    // Verificar cada firma con información de usuario
     const verifiedSignatures = await Promise.all(
       signatures.map(async (signature) => {
+        // Verificar hash del documento
         const isHashValid = signature.documentHash === currentHash;
 
-        // If hash doesn't match, document has been modified
+        // Si el hash no coincide, el documento ha sido modificado
         if (!isHashValid) {
           intact = false;
         }
 
-        // Also verify the signature itself
+        // Verificar también la firma digital
         let isSignatureValid = false;
+        let userName = 'Usuario desconocido';
+
         try {
+          // Obtener datos del usuario
+          const user = await this.usersService.findOne(signature.userId);
+          if (user) {
+            userName = user.name;
+          }
+
+          // Verificar firma criptográfica
           const dataToSign = signature.metadata?.dataToSign;
           if (dataToSign) {
             isSignatureValid = await this.cryptoService.verifySignature(
@@ -523,12 +536,12 @@ export class SignaturesService {
           }
         } catch (error) {
           this.logger.error(
-            `Error verifying signature ${signature.id}: ${error.message}`,
+            `Error verificando firma ${signature.id}: ${error.message}`,
             error.stack,
           );
         }
 
-        // Update signature validity if needed
+        // Actualizar estado de validez si es necesario
         if (signature.valid !== (isHashValid && isSignatureValid)) {
           await this.updateSignatureValidity(
             signature,
@@ -544,14 +557,28 @@ export class SignaturesService {
           isValid: isHashValid && isSignatureValid,
           signedAt: signature.signedAt,
           userId: signature.userId,
+          userName, // Incluir nombre del usuario
         };
       }),
+    );
+
+    // Registrar verificación de integridad en auditoría
+    await this.auditLogService.log(
+      AuditAction.DOCUMENT_SIGN,
+      'system',
+      documentId,
+      {
+        action: 'integrity_verification',
+        status: intact ? 'intact' : 'modified',
+        signatures: verifiedSignatures.length,
+      },
     );
 
     return {
       intact,
       signatures: verifiedSignatures,
       verifiedAt: new Date(),
+      hashAlgorithm: 'SHA-256',
     };
   }
 

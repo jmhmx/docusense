@@ -177,22 +177,38 @@ const DocumentSignature = ({
 
   // Verify document integrity
   const verifyDocumentIntegrity = async () => {
-    if (!documentId) return;
+  if (!documentId) return;
+  
+  setIsVerifyingIntegrity(true);
+  
+  try {
+    const response = await api.get(`/api/signatures/document/${documentId}/integrity`);
+    setIntegrityStatus({
+      intact: response.data.intact,
+      verifiedAt: response.data.verifiedAt,
+      signatures: response.data.signatures, // Añadimos array de firmas verificadas
+      hashAlgorithm: response.data.hashAlgorithm // Y algoritmo usado
+    });
     
-    setIsVerifyingIntegrity(true);
-    
-    try {
-      const response = await api.get(`/api/signatures/document/${documentId}/integrity`);
-      setIntegrityStatus({
-        intact: response.data.intact,
-        verifiedAt: response.data.verifiedAt,
+    // Si el documento fue modificado, mostrar alerta
+    if (!response.data.intact) {
+      // Guardar en auditoría este evento de seguridad
+      await api.post('/api/audit', {
+        action: 'integrity_alert',
+        resourceId: documentId,
+        details: {
+          verifiedAt: response.data.verifiedAt,
+          signatureCount: response.data.signatures.length
+        }
       });
-    } catch (err) {
-      console.error('Error verifying document integrity:', err);
-    } finally {
-      setIsVerifyingIntegrity(false);
     }
-  };
+  } catch (err) {
+    console.error('Error verificando integridad del documento:', err);
+    setError('No se pudo verificar la integridad del documento');
+  } finally {
+    setIsVerifyingIntegrity(false);
+  }
+};
 
   // Request 2FA verification code
   const requestVerificationCode = async () => {
@@ -346,6 +362,34 @@ const DocumentSignature = ({
     }
   };
 
+  const handleDownloadIntegrityReport = () => {
+    if (!integrityStatus) return;
+    
+    // Crear reporte JSON bonito
+    const report = {
+      documento: documentTitle,
+      fechaVerificacion: formatDate(integrityStatus.verifiedAt),
+      integridad: integrityStatus.intact ? "Verificada" : "Documento modificado",
+      algoritmo: integrityStatus.hashAlgorithm,
+      firmas: integrityStatus.signatures?.map(sig => ({
+        firmante: sig.userName || sig.userId,
+        fechaFirma: formatDate(sig.signedAt),
+        valida: sig.isValid ? "Válida" : "Inválida"
+      }))
+    };
+    
+    // Generar archivo
+    const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `reporte-integridad-${documentId}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="mt-6">
       <div className="p-6 bg-white rounded-lg shadow">
@@ -373,7 +417,7 @@ const DocumentSignature = ({
           </div>
         </div>
         
-        {/* Integrity verification result */}
+        {/* Visualización mejorada de integridad */}
         {integrityStatus && (
           <div className={`mb-4 p-4 rounded-md ${integrityStatus.intact ? 'bg-green-50' : 'bg-red-50'}`}>
             <div className="flex">
@@ -390,13 +434,37 @@ const DocumentSignature = ({
               </div>
               <div className="ml-3">
                 <h3 className={`text-sm font-medium ${integrityStatus.intact ? 'text-green-800' : 'text-red-800'}`}>
-                  {integrityStatus.intact ? 'Document integrity verified' : 'Document has been modified since signing'}
+                  {integrityStatus.intact ? 'Integridad del documento verificada' : 'El documento ha sido modificado después de la firma'}
                 </h3>
-                <div className="mt-2 text-sm text-gray-500">
-                  <p>Verified: {formatDate(integrityStatus.verifiedAt)}</p>
+                <div className="mt-2 text-sm text-gray-600">
+                  <p>Verificado: {formatDate(integrityStatus.verifiedAt)}</p>
+                  <p>Método: {integrityStatus.hashAlgorithm}</p>
+                  {integrityStatus.signatures && (
+                    <p>Firmas verificadas: {integrityStatus.signatures.length}</p>
+                  )}
                 </div>
+                
+                {/* Mostrar alerta importante si está modificado */}
+                {!integrityStatus.intact && (
+                  <div className="p-2 mt-2 text-xs font-medium text-red-800 bg-red-100 rounded-md">
+                    ⚠️ La modificación del documento después de la firma podría invalidar su valor legal.
+                    Contacte al firmante para una nueva versión firmada.
+                  </div>
+                )}
               </div>
             </div>
+          </div>
+        )}
+        {/* Botón de descarga de reporte de integridad */}
+        
+        {integrityStatus && (
+          <div className="mt-2 text-right">
+            <button
+              onClick={handleDownloadIntegrityReport}
+              className="px-3 py-1 text-xs text-blue-700 bg-blue-100 rounded-md hover:bg-blue-200"
+            >
+              Descargar reporte de verificación
+            </button>
           </div>
         )}
         

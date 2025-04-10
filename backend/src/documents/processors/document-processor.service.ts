@@ -151,17 +151,26 @@ export class DocumentProcessorService {
     filePath: string,
   ): Promise<Record<string, any>> {
     try {
-      // Nota: En un entorno real, usaríamos una librería como pdf-parse
-      // Para este ejemplo, simulamos la extracción
+      // Utilizar la biblioteca pdf-parse
+      const pdfParse = require('pdf-parse');
+      const dataBuffer = fs.readFileSync(filePath);
 
-      // Simulación de extracción (en producción, usar pdf-parse o similar)
-      const content = {
-        text: `Texto extraído simulado de PDF: ${path.basename(filePath)}`,
-        pageCount: Math.floor(Math.random() * 10) + 1,
-      };
+      const data = await pdfParse(dataBuffer);
+
+      // Detectar idioma del texto
+      const langDetector = new LanguageDetector();
+      const detectedLang = langDetector.detect(data.text);
+
+      // Análisis adicional para detectar tipo de documento
+      const documentType = this.detectDocumentType(data.text);
 
       return {
-        content,
+        content: data.text,
+        pageCount: data.numpages,
+        metadata: {
+          language: detectedLang,
+          documentType: documentType,
+        },
         success: true,
       };
     } catch (error) {
@@ -171,6 +180,30 @@ export class DocumentProcessorService {
         success: false,
       };
     }
+  }
+
+  private detectDocumentType(text: string): string {
+    // Detectar patrones específicos para diferentes tipos de documentos
+    if (
+      text.includes('CONTRATO DE ARRENDAMIENTO') ||
+      text.includes('LEASING AGREEMENT')
+    ) {
+      return 'contract';
+    } else if (
+      text.includes('FACTURA') ||
+      text.includes('INVOICE') ||
+      /Total[\s]*:[\s]*\$[\d,.]+/.test(text)
+    ) {
+      return 'invoice';
+    } else if (
+      text.includes('CURRICULUM VITAE') ||
+      text.includes('RESUME') ||
+      text.includes('EXPERIENCIA PROFESIONAL')
+    ) {
+      return 'cv';
+    }
+
+    return 'unknown';
   }
 
   /**

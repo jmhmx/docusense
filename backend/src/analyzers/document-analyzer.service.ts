@@ -119,27 +119,34 @@ export class DocumentAnalyzerService {
    * Detecta entidades como nombres, organizaciones, etc. (simulado)
    */
   private extractEntities(text: string): Array<{ text: string; type: string }> {
-    // Simulación de extracción de entidades
-    // En producción se usaría una biblioteca como NER (Named Entity Recognition)
     const entities = [];
 
-    // Detectar posibles organizaciones (palabras que empiezan con mayúscula seguidas de "Inc", "LLC", etc)
+    // Detectar posibles organizaciones
     const orgRegex = /([A-Z][a-zA-Z]+\s)+(Inc|LLC|Corp|SA|SRL|Company)/g;
     let match;
     while ((match = orgRegex.exec(text)) !== null) {
       entities.push({ text: match[0], type: 'organization' });
     }
 
-    // Detectar posibles fechas (formato simple)
-    const dateRegex = /\d{1,2}\/\d{1,2}\/\d{2,4}/g;
+    // Detectar fechas en formato español e inglés
+    const dateRegex =
+      /\b(\d{1,2}[-\/]\d{1,2}[-\/]\d{2,4}|\d{1,2}\s+de\s+[a-zA-Zé]+\s+de\s+\d{2,4})\b/g;
     while ((match = dateRegex.exec(text)) !== null) {
       entities.push({ text: match[0], type: 'date' });
     }
 
-    // Detectar posibles cantidades monetarias
-    const moneyRegex = /\$\s?\d+([.,]\d+)?/g;
+    // Detectar cantidades monetarias
+    const moneyRegex =
+      /\$\s?\d+([.,]\d+)?|\d+([.,]\d+)?\s?€|\d+([.,]\d+)?\s?pesos/g;
     while ((match = moneyRegex.exec(text)) !== null) {
       entities.push({ text: match[0], type: 'money' });
+    }
+
+    // Detectar nombres de personas
+    const nameRegex =
+      /[A-Z][a-z]+\s[A-Z][a-z]+\s[A-Z][a-z]+|[A-Z][a-z]+\s[A-Z][a-z]+/g;
+    while ((match = nameRegex.exec(text)) !== null) {
+      entities.push({ text: match[0], type: 'person' });
     }
 
     return entities;

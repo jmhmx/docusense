@@ -1,0 +1,74 @@
+name: DocuSense CI/CD
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:13
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+          POSTGRES_DB: docusense_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install Backend Dependencies
+        run: |
+          cd backend
+          npm ci
+
+      - name: Backend Linting
+        run: |
+          cd backend
+          npm run lint
+
+      - name: Backend Tests
+        run: |
+          cd backend
+          npm test
+
+      - name: Install Frontend Dependencies
+        run: |
+          cd frontend
+          npm ci
+
+      - name: Frontend Linting
+        run: |
+          cd frontend
+          npm run lint
+
+      - name: Frontend Build Test
+        run: |
+          cd frontend
+          npm run build
+
+      - name: Setup E2E Environment
+        run: |
+          cp .env.example .env
+
+      - name: E2E Tests
+        run: |
+          cd backend
+          npm run test:e2e

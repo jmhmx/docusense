@@ -528,7 +528,7 @@ export class CryptoService {
         };
       }
 
-      // Detección avanzada en caso de PDF
+      // Detección avanzada para PDFs
       const fileSignature = currentFileData.slice(0, 4).toString('hex');
       const isPdf = fileSignature === '25504446'; // Signature de PDF (%PDF)
 

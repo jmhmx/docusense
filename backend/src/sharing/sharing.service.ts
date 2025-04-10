@@ -729,20 +729,15 @@ export class SharingService {
     userId: string,
     documentId: string,
   ): Promise<boolean> {
-    // Verificar si el usuario es el propietario del documento
+    // Verificar usuario propietario
     const document = await this.documentsRepository.findOne({
       where: { id: documentId },
     });
 
-    if (!document) {
-      return false;
-    }
+    if (!document) return false;
+    if (document.userId === userId) return true;
 
-    if (document.userId === userId) {
-      return true;
-    }
-
-    // Verificar si el usuario tiene permiso explícito
+    // Verificar permiso explícito
     const permission = await this.permissionsRepository.findOne({
       where: {
         documentId,
@@ -751,15 +746,26 @@ export class SharingService {
       },
     });
 
-    // Verificar si el permiso ha expirado
+    // Verificar expiración
     if (
       permission &&
       permission.expiresAt &&
       new Date() > permission.expiresAt
     ) {
-      // Desactivar el permiso expirado
       permission.isActive = false;
       await this.permissionsRepository.save(permission);
+
+      // Registrar en auditoría
+      await this.auditLogService.log(
+        AuditAction.PERMISSION_UPDATE,
+        userId,
+        documentId,
+        {
+          action: 'permission_expired',
+          permissionId: permission.id,
+        },
+      );
+
       return false;
     }
 

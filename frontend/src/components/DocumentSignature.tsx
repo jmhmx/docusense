@@ -185,38 +185,37 @@ const DocumentSignature = ({
 
   // Verify document integrity
   const verifyDocumentIntegrity = async () => {
-  if (!documentId) return;
-  
-  setIsVerifyingIntegrity(true);
-  
-  try {
-    const response = await api.get(`/api/signatures/document/${documentId}/integrity`);
-    setIntegrityStatus({
-      intact: response.data.intact,
-      verifiedAt: response.data.verifiedAt,
-      signatures: response.data.signatures, // Añadimos array de firmas verificadas
-      hashAlgorithm: response.data.hashAlgorithm // Y algoritmo usado
-    });
+    if (!documentId) return;
     
-    // Si el documento fue modificado, mostrar alerta
-    if (!response.data.intact) {
-      // Guardar en auditoría este evento de seguridad
-      await api.post('/api/audit', {
-        action: 'integrity_alert',
-        resourceId: documentId,
-        details: {
-          verifiedAt: response.data.verifiedAt,
-          signatureCount: response.data.signatures.length
-        }
+    setIsVerifyingIntegrity(true);
+    
+    try {
+      const response = await api.get(`/api/signatures/document/${documentId}/integrity`);
+      setIntegrityStatus({
+        intact: response.data.intact,
+        verifiedAt: response.data.verifiedAt,
+        signatures: response.data.signatures,
+        hashAlgorithm: response.data.hashAlgorithm
       });
+      
+      // Guardar alerta en auditoría si el documento fue modificado
+      if (!response.data.intact) {
+        await api.post('/api/audit', {
+          action: 'integrity_alert',
+          resourceId: documentId,
+          details: {
+            verifiedAt: response.data.verifiedAt,
+            signatureCount: response.data.signatures.length
+          }
+        });
+      }
+    } catch (err) {
+      console.error('Error verificando integridad:', err);
+      setError('No se pudo verificar la integridad');
+    } finally {
+      setIsVerifyingIntegrity(false);
     }
-  } catch (err) {
-    console.error('Error verificando integridad del documento:', err);
-    setError('No se pudo verificar la integridad del documento');
-  } finally {
-    setIsVerifyingIntegrity(false);
-  }
-};
+  };
 
   // Request 2FA verification code
   const requestVerificationCode = async () => {

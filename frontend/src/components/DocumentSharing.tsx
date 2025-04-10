@@ -737,6 +737,15 @@ const DocumentSharing = ({ documentId, documentTitle, onPermissionsUpdated }: Do
           </div>
         </div>
       )}
+        <div className="p-4 mt-4 rounded-lg bg-blue-50">
+          <h3 className="text-lg font-medium text-blue-800">Consejos de seguridad</h3>
+          <ul className="mt-2 ml-5 text-sm text-blue-700 list-disc">
+            <li>Limite el acceso a personas de confianza</li>
+            <li>Establezca fechas de expiración para enlaces compartidos</li>
+            <li>Use contraseñas para enlaces sensibles</li>
+            <li>Revise periódicamente quién tiene acceso a sus documentos</li>
+          </ul>
+      </div>
     </div>
   );
 };

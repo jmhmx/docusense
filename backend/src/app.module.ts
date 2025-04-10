@@ -10,6 +10,7 @@ import { CryptoModule } from './crypto/crypto.module';
 import { AuditModule } from './audit/audit.module';
 import { SignaturesModule } from './signatures/signatures.module';
 import { SharingModule } from './sharing/sharing.module';
+import { BiometryModule } from './biometry/biometry.module';
 
 @Module({
   controllers: [HealthController],
@@ -44,6 +45,7 @@ import { SharingModule } from './sharing/sharing.module';
     AuditModule,
     SignaturesModule,
     SharingModule,
+    BiometryModule,
   ],
 })
 export class AppModule {}

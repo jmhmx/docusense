@@ -352,9 +352,49 @@ useEffect(() => {
         }
         break;
     }
+
+    // Función para detectar inconsistencias entre frames (posible fraude)
+    const detectInconsistencies = (face: DetectedFace, history: Array<faceapi.FaceExpressions>) => {
+      // 1. Verificar cambios bruscos en landmarks faciales
+      if (faceHistoryRef.current.length > 0) {
+        const prevFace = faceHistoryRef.current[faceHistoryRef.current.length - 1];
+        const landmarkDistance = calculateLandmarkDistance(prevFace.landmarks, face.landmarks);
+        
+        // Movimiento demasiado brusco entre frames
+        if (landmarkDistance > LANDMARK_DISTANCE_THRESHOLD) {
+          return 0.8; // Alta probabilidad de inconsistencia
+        }
+      }
+      
+      // 2. Verificar transiciones no naturales en expresiones
+      if (history.length > 2) {
+        const prevExpressions = history[history.length - 2];
+        const currentExpressions = history[history.length - 1];
+        
+        // Cambio completamente brusco en todas las expresiones
+        let totalChange = 0;
+        Object.keys(currentExpressions).forEach(expr => {
+          totalChange += Math.abs(currentExpressions[expr] - prevExpressions[expr]);
+        });
+        
+        if (totalChange > 3.5) { // Umbral para cambio natural máximo entre frames
+          return 0.9; // Muy alta probabilidad de inconsistencia
+        }
+      }
+      
+      // 3. Verificar iluminación constante
+      if (illuminationHistoryRef.current.length > 5) {
+        const illuminationVariance = calculateVariance(illuminationHistoryRef.current);
+        if (illuminationVariance < 0.0001) { // Iluminación sospechosamente constante
+          return 0.7; // Probable video pregrabado
+        }
+      }
+      
+      return 0; // Sin inconsistencias detectadas
+    };
     
     // Sistema anti-fraude: Verificar consistencia entre frames
-    const inconsistencyScore = this.detectInconsistencies(face, history);
+    const inconsistencyScore = detectInconsistencies(face, history);
     if (inconsistencyScore > 0.7) {
       // Posible intento de fraude - reset o penalización
       inconsistencyCountRef.current += 1;
@@ -389,46 +429,6 @@ useEffect(() => {
   }
   }, [livenessState, livenessChallenge, progressPercentage]);
   
-  // Función para detectar inconsistencias entre frames (posible fraude)
-const detectInconsistencies = (face: DetectedFace, history: Array<faceapi.FaceExpressions>) => {
-  // 1. Verificar cambios bruscos en landmarks faciales
-  if (faceHistoryRef.current.length > 0) {
-    const prevFace = faceHistoryRef.current[faceHistoryRef.current.length - 1];
-    const landmarkDistance = calculateLandmarkDistance(prevFace.landmarks, face.landmarks);
-    
-    // Movimiento demasiado brusco entre frames
-    if (landmarkDistance > LANDMARK_DISTANCE_THRESHOLD) {
-      return 0.8; // Alta probabilidad de inconsistencia
-    }
-  }
-  
-  // 2. Verificar transiciones no naturales en expresiones
-  if (history.length > 2) {
-    const prevExpressions = history[history.length - 2];
-    const currentExpressions = history[history.length - 1];
-    
-    // Cambio completamente brusco en todas las expresiones
-    let totalChange = 0;
-    Object.keys(currentExpressions).forEach(expr => {
-      totalChange += Math.abs(currentExpressions[expr] - prevExpressions[expr]);
-    });
-    
-    if (totalChange > 3.5) { // Umbral para cambio natural máximo entre frames
-      return 0.9; // Muy alta probabilidad de inconsistencia
-    }
-  }
-  
-  // 3. Verificar iluminación constante
-  if (illuminationHistoryRef.current.length > 5) {
-    const illuminationVariance = calculateVariance(illuminationHistoryRef.current);
-    if (illuminationVariance < 0.0001) { // Iluminación sospechosamente constante
-      return 0.7; // Probable video pregrabado
-    }
-  }
-  
-  return 0; // Sin inconsistencias detectadas
-};
-  
   // Función para renderizar los resultados en el canvas
   const renderResults = useCallback((detections: DetectedFace[], displaySize: {width: number, height: number}) => {
     if (!canvasRef.current) return;
@@ -459,6 +459,12 @@ const detectInconsistencies = (face: DetectedFace, history: Array<faceapi.FaceEx
       ctx.lineWidth = 3;
       ctx.strokeRect(box.x, box.y, box.width, box.height);
     }
+
+    if (blinkFeedback && detections.length > 0) {
+      ctx.fillStyle = 'rgba(0, 255, 0, 0.3)';
+      ctx.font = '20px Arial';
+      ctx.fillText('¡Parpadeo detectado!', 10, 30);
+    }
   }, [livenessState]);
   
   // Detección optimizada usando un bucle de requestAnimationFrame en vez de setInterval
@@ -480,61 +486,72 @@ const detectInconsistencies = (face: DetectedFace, history: Array<faceapi.FaceEx
   
   faceapi.matchDimensions(canvas, displaySize);
   
-    const processFrame = async (timestamp: number) => {
-     // Calcular FPS
-  if (lastFrameTimeRef.current > 0) {
-    const delta = timestamp - lastFrameTimeRef.current;
-    const fps = 1000 / delta;
-    fpsCounterRef.current.push(fps);
-    
-    // Limitar tamaño del array
-    if (fpsCounterRef.current.length > 60) {
-      fpsCounterRef.current.shift();
-    }
-  }
-  lastFrameTimeRef.current = timestamp;
-    // Procesar solo cada ciertos frames para ahorrar recursos
-    frameSkipCount++;
-    const shouldProcess = timestamp - lastProcessTimestamp >= processInterval;
-    
-    if (shouldProcess) {
-      frameSkipCount = 0;
-      frameCounterRef.current += 1;
-      lastProcessTimestamp = timestamp;
-      
-      try {
-        // Solo procesar si el video está activo
-        if (video.paused || video.ended || !streamRef.current) {
-          animationFrameId = requestAnimationFrame(processFrame);
-          return;
+  const processFrame = async (timestamp: number) => {
+        // Calcular FPS
+      if (lastFrameTimeRef.current > 0) {
+        const delta = timestamp - lastFrameTimeRef.current;
+        const fps = 1000 / delta;
+        fpsCounterRef.current.push(fps);
+        
+        // Limitar tamaño del array
+        if (fpsCounterRef.current.length > 60) {
+          fpsCounterRef.current.shift();
         }
-        
-        // Detectar cara con opciones optimizadas
-        const detections = await faceapi.detectAllFaces(
-          video, 
-          new faceapi.TinyFaceDetectorOptions({ 
-            scoreThreshold: 0.6,
-            inputSize: isMobile ? 224 : 320 // Menor tamaño de entrada en móviles
-          })
-        )
-        .withFaceLandmarks()
-        .withFaceExpressions()
-        .withFaceDescriptors();
-        
-        // Limitar tamaño de historial para ahorrar memoria
-        if (expressionHistoryRef.current.length > maxHistoryLength) {
-          expressionHistoryRef.current = expressionHistoryRef.current.slice(-maxHistoryLength);
-        }
-        
-        // Resto del código existente...
-      } catch (err) {
-        console.error('Error en detección facial:', err);
       }
-    }
-    
-    // Continuar el bucle
-    animationFrameId = requestAnimationFrame(processFrame);
-  };
+      lastFrameTimeRef.current = timestamp;
+        // Procesar solo cada ciertos frames para ahorrar recursos
+        frameSkipCount++;
+    const shouldProcess = timestamp - lastProcessTimestamp >= processInterval;
+        
+        if (shouldProcess) {
+          frameSkipCount = 0;
+          frameCounterRef.current += 1;
+          lastProcessTimestamp = timestamp;
+          
+          try {
+            // Solo procesar si el video está activo
+            if (video.paused || video.ended || !streamRef.current) {
+              animationFrameId = requestAnimationFrame(processFrame);
+              return;
+            }
+            
+            // Detectar cara con opciones optimizadas
+            const detections = await faceapi.detectAllFaces(
+              video, 
+              new faceapi.TinyFaceDetectorOptions({ 
+                scoreThreshold: 0.6,
+                inputSize: isMobile ? 224 : 320 // Menor tamaño de entrada en móviles
+              })
+            )
+            .withFaceLandmarks()
+            .withFaceExpressions()
+            .withFaceDescriptors();
+
+            if (detections.length > 0) {
+              const bestDetection = detections[0];
+              setDetectedFace(bestDetection);
+              expressionHistoryRef.current.push(bestDetection.expressions);
+              faceHistoryRef.current.push(bestDetection);
+              renderResults(detections, displaySize);
+              checkLiveness(bestDetection);
+            } else {
+              setDetectedFace(null);
+            }
+            
+            // Limitar tamaño de historial para ahorrar memoria
+            if (expressionHistoryRef.current.length > maxHistoryLength) {
+              expressionHistoryRef.current = expressionHistoryRef.current.slice(-maxHistoryLength);
+            }
+            
+            // Resto del código existente...
+          } catch (err) {
+            console.error('Error en detección facial:', err);
+          }
+        }
+        
+        // Continuar el bucle
+        animationFrameId = requestAnimationFrame(processFrame);
+    };
   
   // Iniciar bucle de animación
   animationFrameId = requestAnimationFrame(processFrame);

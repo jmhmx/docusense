@@ -503,4 +503,83 @@ export class CryptoService {
       throw new BadRequestException(`Failed to rotate keys: ${error.message}`);
     }
   }
+
+  // Método para detección avanzada de manipulación
+  async detectDocumentManipulation(
+    originalHash: string,
+    currentFileData: Buffer,
+  ): Promise<{
+    manipulated: boolean;
+    manipulationScore: number;
+    detectedChanges?: string[];
+  }> {
+    try {
+      // Generar hash actual
+      const currentHash = crypto
+        .createHash('sha256')
+        .update(currentFileData)
+        .digest('hex');
+
+      // Verificación básica por hash
+      if (originalHash === currentHash) {
+        return {
+          manipulated: false,
+          manipulationScore: 0,
+        };
+      }
+
+      // Detección avanzada en caso de PDF
+      const fileSignature = currentFileData.slice(0, 4).toString('hex');
+      const isPdf = fileSignature === '25504446'; // Signature de PDF (%PDF)
+
+      const detectedChanges = [];
+      let manipulationScore = 0.5; // Puntuación inicial si los hashes son diferentes
+
+      if (isPdf) {
+        // Detectar firmas de manipulación común en PDFs
+        const fileStr = currentFileData.toString();
+
+        // Buscar herramientas de edición comunes
+        if (fileStr.includes('/Producer(Adobe PDF Library')) {
+          detectedChanges.push('Editado con Adobe');
+          manipulationScore += 0.1;
+        }
+
+        // Verificar timestamps inconsistentes
+        const modDateMatches = /\/ModDate\((D:[^)]+)\)/.exec(fileStr);
+        const createDateMatches = /\/CreationDate\((D:[^)]+)\)/.exec(fileStr);
+
+        if (modDateMatches && createDateMatches) {
+          const modDate = new Date(
+            modDateMatches[1].replace('D:', '').replace(/'/g, ''),
+          );
+          const createDate = new Date(
+            createDateMatches[1].replace('D:', '').replace(/'/g, ''),
+          );
+
+          // Si fecha de modificación es muy reciente
+          const now = new Date();
+          if (now.getTime() - modDate.getTime() < 24 * 60 * 60 * 1000) {
+            detectedChanges.push('Modificado recientemente');
+            manipulationScore += 0.2;
+          }
+        }
+      }
+
+      return {
+        manipulated: true,
+        manipulationScore: Math.min(manipulationScore, 1.0),
+        detectedChanges:
+          detectedChanges.length > 0 ? detectedChanges : undefined,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Error detectando manipulación: ${error.message}`,
+        error.stack,
+      );
+      throw new BadRequestException(
+        `Error en análisis de integridad: ${error.message}`,
+      );
+    }
+  }
 }

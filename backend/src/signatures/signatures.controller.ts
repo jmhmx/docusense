@@ -137,4 +137,10 @@ export class SignaturesController {
       );
     }
   }
+
+  @UseGuards(JwtAuthGuard)
+  @Get(':signatureId/risk')
+  async getSignatureRisk(@Param('signatureId') signatureId: string) {
+    return this.signaturesService.getSignatureRiskAssessment(signatureId);
+  }
 }

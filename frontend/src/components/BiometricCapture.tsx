@@ -374,7 +374,9 @@ useEffect(() => {
         // Cambio completamente brusco en todas las expresiones
         let totalChange = 0;
         Object.keys(currentExpressions).forEach(expr => {
-          totalChange += Math.abs(currentExpressions[expr] - prevExpressions[expr]);
+          totalChange += Math.abs(
+            (currentExpressions as any)[expr] - (prevExpressions as any)[expr]
+          );
         });
         
         if (totalChange > 3.5) { // Umbral para cambio natural máximo entre frames

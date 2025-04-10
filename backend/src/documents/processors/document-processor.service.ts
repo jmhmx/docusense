@@ -6,6 +6,7 @@ import { Document, DocumentStatus } from '../entities/document.entity';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as util from 'util';
+import * as langDetect from 'langdetect';
 import { exec as execCallback } from 'child_process';
 
 // Promisify exec
@@ -158,8 +159,7 @@ export class DocumentProcessorService {
       const data = await pdfParse(dataBuffer);
 
       // Detectar idioma del texto
-      const langDetector = new LanguageDetector();
-      const detectedLang = langDetector.detect(data.text);
+      const detectedLang = langDetect.detect(data.text);
 
       // Análisis adicional para detectar tipo de documento
       const documentType = this.detectDocumentType(data.text);

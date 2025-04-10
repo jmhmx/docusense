@@ -27,6 +27,10 @@ export const AuthContext = createContext<AuthContextType>({
   login: async () => {},
   register: async () => {},
   logout: () => {},
+  loginWithBiometrics: async () => {},
+  setupBiometrics: async () => {},
+  hasBiometrics: false,
+  isBiometricsVerifying: false
 });
 
 interface AuthProviderProps {

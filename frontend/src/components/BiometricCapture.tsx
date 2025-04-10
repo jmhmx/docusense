@@ -120,6 +120,41 @@ const BiometricCapture = ({
   const fpsCounterRef = useRef<number[]>([]);
   const lastFrameTimeRef = useRef<number>(0);
   const memoryUsageRef = useRef<number[]>([]);
+
+  const faceHistoryRef = useRef<Array<DetectedFace>>([]);
+  const illuminationHistoryRef = useRef<Array<number>>([]);
+  const asymmetryHistoryRef = useRef<Array<number>>([]);
+  const lastBlinkStartTimeRef = useRef<number | null>(null);
+  const blinkDetectedCountRef = useRef<number>(0);
+  const blinkFeedbackTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const inconsistencyCountRef = useRef<number>(0);
+  const smileDurationRef = useRef<number>(0);
+  const [blinkFeedback, setBlinkFeedback] = useState<boolean>(false);
+
+  const LANDMARK_DISTANCE_THRESHOLD = 0.5;
+
+  const calculateLandmarkDistance = (landmarks1: faceapi.FaceLandmarks68, landmarks2: faceapi.FaceLandmarks68): number => {
+    // Implementación simple para calcular distancia entre landmarks
+    const points1 = landmarks1.positions;
+    const points2 = landmarks2.positions;
+    
+    let totalDistance = 0;
+    for (let i = 0; i < points1.length; i++) {
+      const dx = points1[i].x - points2[i].x;
+      const dy = points1[i].y - points2[i].y;
+      totalDistance += Math.sqrt(dx*dx + dy*dy);
+    }
+    
+    return totalDistance / points1.length;
+  };
+
+  const calculateVariance = (array: number[]): number => {
+    if (array.length === 0) return 0;
+    
+    const mean = array.reduce((sum, val) => sum + val, 0) / array.length;
+    return array.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / array.length;
+  };
+
   
   // Cargar modelos con cache y progreso optimizado
   useEffect(() => {

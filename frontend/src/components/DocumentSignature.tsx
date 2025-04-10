@@ -47,9 +47,17 @@ const DocumentSignature = ({
   const [cannotSignReason, setCannotSignReason] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState<{id: string, name: string} | null>(null);
   const [integrityStatus, setIntegrityStatus] = useState<{
-    intact: boolean;
-    verifiedAt: string;
-  } | null>(null);
+  intact: boolean;
+  verifiedAt: string;
+  signatures?: Array<{
+    id: string;
+    userId: string;
+    userName?: string;
+    signedAt: string;
+    isValid: boolean;
+  }>;
+  hashAlgorithm?: string;
+} | null>(null);
   const [isLoadingSignatures, setIsLoadingSignatures] = useState(true);
   const [isVerifyingIntegrity, setIsVerifyingIntegrity] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);

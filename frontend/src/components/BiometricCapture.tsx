@@ -131,7 +131,7 @@ const BiometricCapture = ({
 
   // Referencias para métricas de rendimiento
   const fpsCounterRef = useRef<number[]>([]);
-  const lastFrameTimeRef = useRef<number>(0);
+  //const lastFrameTimeRef = useRef<number>(0);
   const memoryUsageRef = useRef<number[]>([]);
 
   const faceHistoryRef = useRef<Array<DetectedFace>>([]);
@@ -596,19 +596,7 @@ useEffect(() => {
   
   animationFrameId = requestAnimationFrame(processFrame);
 
-  const detectSpoofing = (face: DetectedFace): number => {
-  // 1. Analizar textura - fotos impresas tienen patrones diferentes
-  const textureScore = analyzeTextureVariance(face);
   
-  // 2. Verificar consistencia de movimiento - pequeños movimientos naturales
-  const movementScore = calculateMovementConsistency();
-  
-  // 3. Verificar respuesta de reflejo reflectivo
-  const reflectionScore = checkReflectionResponse();
-  
-  // Combinar scores - peso mayor para métricas más confiables
-  return (textureScore * 0.5) + (movementScore * 0.3) + (reflectionScore * 0.2);
-};
 
 // Verificar patrones de textura (simplificado)
 const analyzeTextureVariance = (face: DetectedFace): number => {
@@ -801,6 +789,33 @@ const calculateIllumination = (imageData: ImageData | null) => {
     smile: 'Sonrisa detectada... continúe',
     'head-turn': 'Giro detectado... continúe'
   }), []);
+
+  // Función para calcular consistencia de movimiento
+const calculateMovementConsistency = () => {
+  if (faceHistoryRef.current.length < 5) return 0;
+  
+  const movements = [];
+  for (let i = 1; i < faceHistoryRef.current.length; i++) {
+    const prev = faceHistoryRef.current[i-1];
+    const curr = faceHistoryRef.current[i];
+    movements.push(calculateLandmarkDistance(prev.landmarks, curr.landmarks));
+  }
+  
+  // Verificar si el movimiento es natural (no demasiado robótico o estático)
+  const movementVariance = calculateVariance(movements);
+  if (movementVariance < 0.001 || movementVariance > 10) {
+    return 0.8; // Posible spoofing
+  }
+  
+  return 0.1; // Movimiento natural
+};
+
+// Función para verificar respuesta a reflejos de luz
+const checkReflectionResponse = () => {
+  // En una implementación real, se analizarían cambios en iluminación
+  // y la respuesta natural del rostro ante estos cambios
+  return 0.1; // Valor bajo por defecto ya que es una simulación
+};
   
   return (
     <div className="p-4 bg-white rounded-lg shadow">

@@ -176,19 +176,16 @@ const updateUserBiometrics = (status: boolean) => {
     <AuthContext.Provider
       value={{
         user,
-        isAuthenticated: !!user,
-        isLoading,
-        login,
-        register,
-        logout,
-        loginWithBiometrics,
+  isAuthenticated: !!user,
+  isLoading,
+  login,
+  register,
+  logout,
+  loginWithBiometrics,
   setupBiometrics,
   hasBiometrics,
   isBiometricsVerifying,
-  updateUserBiometrics: (status: boolean) => {
-    setHasBiometrics(status);
-    localStorage.setItem('hasBiometrics', status ? 'true' : 'false');
-  }
+  updateUserBiometrics
       }}
     >
       {children}

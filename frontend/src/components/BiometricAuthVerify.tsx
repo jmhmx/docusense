@@ -13,6 +13,7 @@ const BiometricAuthVerify = ({ onSuccess, onCancel }: BiometricAuthVerifyProps) 
   const [isVerifying, setIsVerifying] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
+  // Modificar la función handleBiometricSuccess
   const handleBiometricSuccess = async (result: any) => {
     setIsVerifying(true);
     setError(null);
@@ -20,7 +21,26 @@ const BiometricAuthVerify = ({ onSuccess, onCancel }: BiometricAuthVerifyProps) 
     try {
       if (!user?.id) throw new Error('Usuario no identificado');
       
-      await loginWithBiometrics(user.id, result.descriptorData);
+      // Añadir más datos para análisis de seguridad
+      await loginWithBiometrics(
+        user.id, 
+        result.descriptorData,
+        {
+          challenge: result.challenge || 'blink',
+          timestamp: Date.now(),
+          motionData: result.motionData,
+          textureData: result.textureData,
+          confidenceScore: result.confidenceScore,
+          deviceInfo: {
+            screen: {
+              width: window.screen.width,
+              height: window.screen.height
+            },
+            userAgent: navigator.userAgent,
+            hardwareConcurrency: navigator.hardwareConcurrency || 'unknown'
+          }
+        }
+      );
       onSuccess();
     } catch (err: any) {
       setError(`Error de verificación: ${err.message}`);

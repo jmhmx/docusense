@@ -14,7 +14,11 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<void>;
   register: (name: string, email: string, password: string) => Promise<void>;
   logout: () => void;
-  loginWithBiometrics: (userId: string, biometricData: string) => Promise<void>;
+  loginWithBiometrics: (
+    userId: string, 
+    biometricData: string,
+    additionalData?: Record<string, any>
+  ) => Promise<void>;
   setupBiometrics: () => Promise<void>;
   hasBiometrics: boolean;
   isBiometricsVerifying: boolean;
@@ -127,17 +131,24 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     checkBiometrics();
   }, [user]);
 
-const loginWithBiometrics = async (userId: string, biometricData: string) => {
+const loginWithBiometrics = async (
+  userId: string, 
+  biometricData: string,
+  additionalData?: Record<string, any>
+) => {
   setIsBiometricsVerifying(true);
   
   try {
-    // Paso 1: Verificar biometría
+    // Paso 1: Verificar biometría con datos adicionales
     const bioResponse = await api.post('/api/biometry/verify', {
       userId,
       descriptorData: biometricData,
       livenessProof: {
-        challenge: 'blink',
-        timestamp: Date.now()
+        challenge: additionalData?.challenge || 'blink',
+        timestamp: additionalData?.timestamp || Date.now(),
+        motionData: additionalData?.motionData,
+        textureData: additionalData?.textureData,
+        deviceInfo: additionalData?.deviceInfo
       }
     });
     
@@ -145,8 +156,14 @@ const loginWithBiometrics = async (userId: string, biometricData: string) => {
       throw new Error('Verificación biométrica fallida');
     }
     
-    // Paso 2: Obtener token de sesión
-    const authResponse = await api.post('/api/auth/login/biometric', { userId });
+    // Paso 2: Obtener token de sesión con score de confianza
+    const authResponse = await api.post('/api/auth/login/biometric', { 
+      userId,
+      verificationScore: bioResponse.data.score,
+      verificationMethod: bioResponse.data.method,
+      deviceInfo: additionalData?.deviceInfo
+    });
+    
     const { token, user } = authResponse.data;
     
     localStorage.setItem('token', token);

@@ -33,21 +33,34 @@ const isEyesClosed = (face: DetectedFace): boolean => {
   const leftEye = landmarks.getLeftEye();
   const rightEye = landmarks.getRightEye();
   
-  // Calcular altura y anchura de los ojos
-  const leftEyeHeight = Math.abs(leftEye[1].y - leftEye[5].y);
-  const leftEyeWidth = Math.abs(leftEye[0].x - leftEye[3].x);
+  // Calcular EAR (Eye Aspect Ratio) - medida más precisa para parpadeo
+  const leftEAR = calculateEAR(leftEye);
+  const rightEAR = calculateEAR(rightEye);
   
-  const rightEyeHeight = Math.abs(rightEye[1].y - rightEye[5].y);
-  const rightEyeWidth = Math.abs(rightEye[0].x - rightEye[3].x);
+  // Promedio de ambos ojos
+  const earAvg = (leftEAR + rightEAR) / 2.0;
   
-  // Calcular ratio altura/anchura
-  const leftRatio = leftEyeHeight / leftEyeWidth;
-  const rightRatio = rightEyeHeight / rightEyeWidth;
+  // Umbral adaptativo basado en valores típicos humanos
+  const threshold = 0.19; // Ajustado según estudios de características faciales
   
-  // Umbral para determinar si los ojos están cerrados
-  const threshold = 0.15;
+  return earAvg < threshold;
+};
+
+// Agregar función para calcular EAR
+const calculateEAR = (eye: faceapi.Point[]): number => {
+  // Distancia vertical entre puntos superiores e inferiores
+  const height1 = euclideanDistance(eye[1], eye[5]);
+  const height2 = euclideanDistance(eye[2], eye[4]);
   
-  return leftRatio < threshold && rightRatio < threshold;
+  // Distancia horizontal entre extremos del ojo
+  const width = euclideanDistance(eye[0], eye[3]);
+  
+  // Fórmula EAR: promedio de alturas verticales / anchura
+  return (height1 + height2) / (2.0 * width);
+};
+
+const euclideanDistance = (pt1: faceapi.Point, pt2: faceapi.Point): number => {
+  return Math.sqrt(Math.pow(pt2.x - pt1.x, 2) + Math.pow(pt2.y - pt1.y, 2));
 };
 
 // Función pura para calcular asimetría facial
@@ -250,185 +263,225 @@ useEffect(() => {
   
   // Verificación de liveness memoizada para evitar recreación en cada render
   const checkLiveness = useCallback((face: DetectedFace) => {
-  // Obtener expresiones faciales actuales
-  const expressions = face.expressions;
-  const history = expressionHistoryRef.current;
-  
-  // Iniciar verificación de liveness una vez que tenemos suficientes frames
-  if (history.length < 5) return;
-  
-  if (livenessState === 'waiting' || livenessState === 'progress') {
-    setLivenessState('progress');
+    // Obtener expresiones faciales actuales
+    const expressions = face.expressions;
+    const history = expressionHistoryRef.current;
     
-    switch (livenessChallenge) {
-      case 'blink':
-        // Detección de parpadeo mejorada con análisis de secuencia temporal
-        const eyesClosed = isEyesClosed(face);
-        const currentBlinkState = expressions.neutral > 0.8 && eyesClosed;
-        
-        // Verificar duración del parpadeo para prevenir falsos positivos
-        // Un parpadeo natural dura entre 100-400ms
-        const blinkDuration = currentBlinkState ? 
-          Date.now() - (lastBlinkStartTimeRef.current || Date.now()) : 0;
-        
-        if (currentBlinkState && !lastBlinkStateRef.current) {
-          // Ojos recién cerrados - registrar tiempo
-          lastBlinkStartTimeRef.current = Date.now();
-        } else if (!currentBlinkState && lastBlinkStateRef.current) {
-          // Ojos recién abiertos después de estar cerrados
-          // Comprobar que la duración es razonable (evitar parpadeos falsos o pausas de video)
-          if (blinkDuration > 50 && blinkDuration < 500) {
-            // Parpadeo natural
-            positiveFramesRef.current += 3;
-            blinkDetectedCountRef.current += 1;
-            
-            // Mostrar feedback al usuario
-            blinkFeedbackTimeoutRef.current = setTimeout(() => {
-              setBlinkFeedback(false);
-            }, 1000);
-            setBlinkFeedback(true);
-          }
-        }
-        
-        lastBlinkStateRef.current = currentBlinkState;
-        break;
-        
-      case 'smile':
-        // Detección de sonrisa mejorada con verificación gradual y temporal
-        // Una sonrisa genuina aparece gradualmente
-        
-        // Calcular promedio de expresión feliz en los últimos 5 frames
-        const recentHappiness = history.slice(-5).reduce(
-          (sum, expr) => sum + expr.happy, 0) / 5;
-        
-        // Calcular variación para detectar cambios bruscos (posible falsificación)
-        const happyVariation = Math.abs(expressions.happy - recentHappiness);
-        
-        // Una sonrisa natural tiene cierta gradualidad
-        if (expressions.happy > 0.7 && happyVariation < 0.2) {
-          positiveFramesRef.current += 1;
+    // Iniciar verificación de liveness una vez que tenemos suficientes frames
+    if (history.length < 5) return;
+    
+    if (livenessState === 'waiting' || livenessState === 'progress') {
+      setLivenessState('progress');
+      
+      switch (livenessChallenge) {
+        case 'blink':
+          // Detección de parpadeo mejorada con análisis de secuencia temporal
+          const eyesClosed = isEyesClosed(face);
+          const currentBlinkState = expressions.neutral > 0.8 && eyesClosed;
           
-          // Bonificación por sonrisa sostenida
-          if (recentHappiness > 0.7 && smileDurationRef.current > 10) {
+          // Verificar duración del parpadeo para prevenir falsos positivos
+          // Un parpadeo natural dura entre 100-400ms
+          const blinkDuration = currentBlinkState ? 
+            Date.now() - (lastBlinkStartTimeRef.current || Date.now()) : 0;
+          
+          if (currentBlinkState && !lastBlinkStateRef.current) {
+            // Ojos recién cerrados - registrar tiempo
+            lastBlinkStartTimeRef.current = Date.now();
+          } else if (!currentBlinkState && lastBlinkStateRef.current) {
+            // Ojos recién abiertos después de estar cerrados
+            // Comprobar que la duración es razonable (evitar parpadeos falsos o pausas de video)
+            if (blinkDuration > 50 && blinkDuration < 500) {
+              // Parpadeo natural
+              positiveFramesRef.current += 3;
+              blinkDetectedCountRef.current += 1;
+              
+              // Mostrar feedback al usuario
+              blinkFeedbackTimeoutRef.current = setTimeout(() => {
+                setBlinkFeedback(false);
+              }, 1000);
+              setBlinkFeedback(true);
+            }
+          }
+          
+          lastBlinkStateRef.current = currentBlinkState;
+          break;
+          
+        case 'smile':
+          // Detección de sonrisa mejorada con verificación gradual y temporal
+          // Una sonrisa genuina aparece gradualmente
+          
+          // Calcular promedio de expresión feliz en los últimos 5 frames
+          const recentHappiness = history.slice(-5).reduce(
+            (sum, expr) => sum + expr.happy, 0) / 5;
+          
+          // Calcular variación para detectar cambios bruscos (posible falsificación)
+          const happyVariation = Math.abs(expressions.happy - recentHappiness);
+          
+          // Una sonrisa natural tiene cierta gradualidad
+          if (expressions.happy > 0.7 && happyVariation < 0.2) {
+            positiveFramesRef.current += 1;
+            
+            // Bonificación por sonrisa sostenida
+            if (recentHappiness > 0.7 && smileDurationRef.current > 10) {
+              positiveFramesRef.current += 1;
+            }
+            
+            smileDurationRef.current += 1;
+          } else {
+            smileDurationRef.current = 0;
+          }
+          break;
+          
+        case 'head-turn':
+          // Detección de giro de cabeza mejorada con análisis de suavidad de movimiento
+          const landmarks = face.landmarks;
+          const jawOutline = landmarks.getJawOutline();
+          
+          // Calcular asimetría para detectar giro
+          const leftSide = jawOutline.slice(0, 8);
+          const rightSide = jawOutline.slice(8);
+          const asymmetry = calculateAsymmetry(leftSide, rightSide);
+          
+          // Guardar historial de asimetrías para analizar suavidad del movimiento
+          asymmetryHistoryRef.current.push(asymmetry);
+          if (asymmetryHistoryRef.current.length > 10) {
+            asymmetryHistoryRef.current.shift();
+          }
+          
+          // Calcular suavidad de movimiento
+          const asymmetryDiffs = [];
+          for (let i = 1; i < asymmetryHistoryRef.current.length; i++) {
+            asymmetryDiffs.push(Math.abs(
+              asymmetryHistoryRef.current[i] - asymmetryHistoryRef.current[i-1]
+            ));
+          }
+          
+          const movementSmoothness = asymmetryDiffs.length > 0 ? 
+            1 - (asymmetryDiffs.reduce((a, b) => a + b, 0) / asymmetryDiffs.length) : 0;
+          
+          // Un movimiento natural es suave y tiene cierta asimetría
+          if (asymmetry > 0.2 && movementSmoothness > 0.7) {
             positiveFramesRef.current += 1;
           }
-          
-          smileDurationRef.current += 1;
-        } else {
-          smileDurationRef.current = 0;
-        }
-        break;
-        
-      case 'head-turn':
-        // Detección de giro de cabeza mejorada con análisis de suavidad de movimiento
-        const landmarks = face.landmarks;
-        const jawOutline = landmarks.getJawOutline();
-        
-        // Calcular asimetría para detectar giro
-        const leftSide = jawOutline.slice(0, 8);
-        const rightSide = jawOutline.slice(8);
-        const asymmetry = calculateAsymmetry(leftSide, rightSide);
-        
-        // Guardar historial de asimetrías para analizar suavidad del movimiento
-        asymmetryHistoryRef.current.push(asymmetry);
-        if (asymmetryHistoryRef.current.length > 10) {
-          asymmetryHistoryRef.current.shift();
-        }
-        
-        // Calcular suavidad de movimiento
-        const asymmetryDiffs = [];
-        for (let i = 1; i < asymmetryHistoryRef.current.length; i++) {
-          asymmetryDiffs.push(Math.abs(
-            asymmetryHistoryRef.current[i] - asymmetryHistoryRef.current[i-1]
-          ));
-        }
-        
-        const movementSmoothness = asymmetryDiffs.length > 0 ? 
-          1 - (asymmetryDiffs.reduce((a, b) => a + b, 0) / asymmetryDiffs.length) : 0;
-        
-        // Un movimiento natural es suave y tiene cierta asimetría
-        if (asymmetry > 0.2 && movementSmoothness > 0.7) {
-          positiveFramesRef.current += 1;
-        }
-        break;
-    }
+          break;
+      }
 
-    // Función para detectar inconsistencias entre frames (posible fraude)
-    const detectInconsistencies = (face: DetectedFace, history: Array<faceapi.FaceExpressions>) => {
-      // 1. Verificar cambios bruscos en landmarks faciales
-      if (faceHistoryRef.current.length > 0) {
-        const prevFace = faceHistoryRef.current[faceHistoryRef.current.length - 1];
-        const landmarkDistance = calculateLandmarkDistance(prevFace.landmarks, face.landmarks);
-        
-        // Movimiento demasiado brusco entre frames
-        if (landmarkDistance > LANDMARK_DISTANCE_THRESHOLD) {
-          return 0.8; // Alta probabilidad de inconsistencia
+      // Función para detectar inconsistencias entre frames (posible fraude)
+      const detectInconsistencies = (face: DetectedFace, history: Array<faceapi.FaceExpressions>) => {
+        // 1. Verificar cambios bruscos en landmarks faciales
+        if (faceHistoryRef.current.length > 0) {
+          const prevFace = faceHistoryRef.current[faceHistoryRef.current.length - 1];
+          const landmarkDistance = calculateLandmarkDistance(prevFace.landmarks, face.landmarks);
+          
+          // Movimiento demasiado brusco entre frames
+          if (landmarkDistance > LANDMARK_DISTANCE_THRESHOLD) {
+            return 0.8; // Alta probabilidad de inconsistencia
+          }
         }
-      }
-      
-      // 2. Verificar transiciones no naturales en expresiones
-      if (history.length > 2) {
-        const prevExpressions = history[history.length - 2];
-        const currentExpressions = history[history.length - 1];
         
-        // Cambio completamente brusco en todas las expresiones
-        let totalChange = 0;
-        Object.keys(currentExpressions).forEach(expr => {
-          totalChange += Math.abs(
-            (currentExpressions as any)[expr] - (prevExpressions as any)[expr]
-          );
-        });
+        // 2. Verificar transiciones no naturales en expresiones
+        if (history.length > 2) {
+          const prevExpressions = history[history.length - 2];
+          const currentExpressions = history[history.length - 1];
+          
+          // Cambio completamente brusco en todas las expresiones
+          let totalChange = 0;
+          Object.keys(currentExpressions).forEach(expr => {
+            totalChange += Math.abs(
+              (currentExpressions as any)[expr] - (prevExpressions as any)[expr]
+            );
+          });
+          
+          if (totalChange > 3.5) { // Umbral para cambio natural máximo entre frames
+            return 0.9; // Muy alta probabilidad de inconsistencia
+          }
+        }
         
-        if (totalChange > 3.5) { // Umbral para cambio natural máximo entre frames
-          return 0.9; // Muy alta probabilidad de inconsistencia
+        // 3. Verificar iluminación constante
+        if (illuminationHistoryRef.current.length > 5) {
+          const illuminationVariance = calculateVariance(illuminationHistoryRef.current);
+          if (illuminationVariance < 0.0001) { // Iluminación sospechosamente constante
+            return 0.7; // Probable video pregrabado
+          }
         }
-      }
+        
+        return 0; // Sin inconsistencias detectadas
+      };
       
-      // 3. Verificar iluminación constante
-      if (illuminationHistoryRef.current.length > 5) {
-        const illuminationVariance = calculateVariance(illuminationHistoryRef.current);
-        if (illuminationVariance < 0.0001) { // Iluminación sospechosamente constante
-          return 0.7; // Probable video pregrabado
+      // Sistema anti-fraude: Verificar consistencia entre frames
+      const inconsistencyScore = detectInconsistencies(face, history);
+      if (inconsistencyScore > 0.7) {
+        // Posible intento de fraude - reset o penalización
+        inconsistencyCountRef.current += 1;
+        
+        if (inconsistencyCountRef.current > 5) {
+          // Demasiadas inconsistencias, posible fraude
+          setError("Se detectaron inconsistencias en la verificación. Por favor, inténtelo de nuevo.");
+          setLivenessState('failed');
+          return;
         }
+      } else {
+        // Reset contador si no hay inconsistencias
+        inconsistencyCountRef.current = Math.max(0, inconsistencyCountRef.current - 1);
       }
       
-      return 0; // Sin inconsistencias detectadas
-    };
-    
-    // Sistema anti-fraude: Verificar consistencia entre frames
-    const inconsistencyScore = detectInconsistencies(face, history);
-    if (inconsistencyScore > 0.7) {
-      // Posible intento de fraude - reset o penalización
-      inconsistencyCountRef.current += 1;
+      // Actualizar progreso con estabilización para evitar fluctuaciones
+      const rawProgress = Math.min(100, Math.round((positiveFramesRef.current / totalFramesNeededRef.current) * 100));
+      const smoothedProgress = progressPercentage * 0.7 + rawProgress * 0.3;
       
-      if (inconsistencyCountRef.current > 5) {
-        // Demasiadas inconsistencias, posible fraude
-        setError("Se detectaron inconsistencias en la verificación. Por favor, inténtelo de nuevo.");
-        setLivenessState('failed');
-        return;
+      if (Math.abs(smoothedProgress - progressPercentage) > 1) {
+        setProgressPercentage(Math.round(smoothedProgress));
       }
-    } else {
-      // Reset contador si no hay inconsistencias
-      inconsistencyCountRef.current = Math.max(0, inconsistencyCountRef.current - 1);
+      
+      // Verificar si se completó el desafío con umbral adaptativo
+      // Requisito más estricto si se detectaron inconsistencias
+      const adaptiveThreshold = totalFramesNeededRef.current * 
+        (1 + (inconsistencyCountRef.current * 0.1));
+      
+      if (positiveFramesRef.current >= adaptiveThreshold) {
+        setLivenessState('passed');
+      }
+      const detectSpoofing = (face: DetectedFace): number => {
+        // 1. Analizar textura - fotos impresas tienen patrones diferentes
+        const textureScore = analyzeTextureVariance(face);
+        
+        // 2. Verificar consistencia de movimiento - pequeños movimientos naturales
+        const movementScore = calculateMovementConsistency();
+        
+        // 3. Verificar respuesta de reflejo reflectivo
+        const reflectionScore = checkReflectionResponse();
+        
+        // Combinar scores - peso mayor para métricas más confiables
+        return (textureScore * 0.5) + (movementScore * 0.3) + (reflectionScore * 0.2);
+      };
+
+      // Verificar patrones de textura (simplificado)
+      const analyzeTextureVariance = (face: DetectedFace): number => {
+        // En implementación real, analizar patrones moiré, ruido de impresión, etc.
+        if (faceHistoryRef.current.length < 5) return 0;
+        
+        // Varianza en landmarks debería ser natural (ni demasiado perfecto ni caótico)
+        const landmarkVariances = [];
+        
+        for (let i = 1; i < faceHistoryRef.current.length; i++) {
+          const prevFace = faceHistoryRef.current[i-1];
+          const currFace = faceHistoryRef.current[i];
+          
+          // Varianza entre landmarks consecutivos
+          landmarkVariances.push(calculateLandmarkDistance(prevFace.landmarks, currFace.landmarks));
+        }
+        
+        const varianceOfVariances = calculateVariance(landmarkVariances);
+        
+        // Una foto estática o video pregrabado tendría varianza muy baja o demasiado consistente
+        if (varianceOfVariances < 0.001 || varianceOfVariances > 10) {
+          return 0.8; // Alta probabilidad de spoofing
+        }
+        
+        return 0.1; // Baja probabilidad
+      };
     }
     
-    // Actualizar progreso con estabilización para evitar fluctuaciones
-    const rawProgress = Math.min(100, Math.round((positiveFramesRef.current / totalFramesNeededRef.current) * 100));
-    const smoothedProgress = progressPercentage * 0.7 + rawProgress * 0.3;
-    
-    if (Math.abs(smoothedProgress - progressPercentage) > 1) {
-      setProgressPercentage(Math.round(smoothedProgress));
-    }
-    
-    // Verificar si se completó el desafío con umbral adaptativo
-    // Requisito más estricto si se detectaron inconsistencias
-    const adaptiveThreshold = totalFramesNeededRef.current * 
-      (1 + (inconsistencyCountRef.current * 0.1));
-    
-    if (positiveFramesRef.current >= adaptiveThreshold) {
-      setLivenessState('passed');
-    }
-  }
   }, [livenessState, livenessChallenge, progressPercentage]);
   
   // Función para renderizar los resultados en el canvas
@@ -474,13 +527,8 @@ useEffect(() => {
   if (!videoRef.current || !canvasRef.current || !modelsLoaded) return;
   
   let animationFrameId: number;
+  const processInterval = navigator.userAgent.match(/Mobile|Android/) ? 150 : 80; // Ajuste adaptativo
   let lastProcessTimestamp = 0;
-  let frameSkipCount = 0;
-  
-  // Ajustar intervalo según dispositivo
-  const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-  const processInterval = isMobile ? 150 : 100; // Menor frecuencia en móviles
-  const maxHistoryLength = isMobile ? 5 : 10; // Menos historial en móviles
   
   const video = videoRef.current;
   const canvas = canvasRef.current;
@@ -489,88 +537,135 @@ useEffect(() => {
   faceapi.matchDimensions(canvas, displaySize);
   
   const processFrame = async (timestamp: number) => {
-        // Calcular FPS
-      if (lastFrameTimeRef.current > 0) {
-        const delta = timestamp - lastFrameTimeRef.current;
-        const fps = 1000 / delta;
-        fpsCounterRef.current.push(fps);
-        
-        // Limitar tamaño del array
-        if (fpsCounterRef.current.length > 60) {
-          fpsCounterRef.current.shift();
-        }
-      }
-      lastFrameTimeRef.current = timestamp;
-        // Procesar solo cada ciertos frames para ahorrar recursos
-        frameSkipCount++;
     const shouldProcess = timestamp - lastProcessTimestamp >= processInterval;
-        
-        if (shouldProcess) {
-          frameSkipCount = 0;
-          frameCounterRef.current += 1;
-          lastProcessTimestamp = timestamp;
-          
-          try {
-            // Solo procesar si el video está activo
-            if (video.paused || video.ended || !streamRef.current) {
-              animationFrameId = requestAnimationFrame(processFrame);
-              return;
-            }
-            
-            // Detectar cara con opciones optimizadas
-            const detections = await faceapi.detectAllFaces(
-              video, 
-              new faceapi.TinyFaceDetectorOptions({ 
-                scoreThreshold: 0.6,
-                inputSize: isMobile ? 224 : 320 // Menor tamaño de entrada en móviles
-              })
-            )
-            .withFaceLandmarks()
-            .withFaceExpressions()
-            .withFaceDescriptors();
-
-            if (detections.length > 0) {
-              const bestDetection = detections[0];
-              setDetectedFace(bestDetection);
-              expressionHistoryRef.current.push(bestDetection.expressions);
-              faceHistoryRef.current.push(bestDetection);
-              renderResults(detections, displaySize);
-              checkLiveness(bestDetection);
-            } else {
-              setDetectedFace(null);
-            }
-            
-            // Limitar tamaño de historial para ahorrar memoria
-            if (expressionHistoryRef.current.length > maxHistoryLength) {
-              expressionHistoryRef.current = expressionHistoryRef.current.slice(-maxHistoryLength);
-            }
-            
-            // Resto del código existente...
-          } catch (err) {
-            console.error('Error en detección facial:', err);
-          }
+    
+    if (shouldProcess) {
+      lastProcessTimestamp = timestamp;
+      frameCounterRef.current += 1;
+      
+      try {
+        if (video.paused || video.ended || !streamRef.current) {
+          animationFrameId = requestAnimationFrame(processFrame);
+          return;
         }
         
-        // Continuar el bucle
-        animationFrameId = requestAnimationFrame(processFrame);
-    };
+        // Usar TinyFaceDetector para mejor rendimiento
+        const detections = await faceapi.detectAllFaces(
+          video, 
+          new faceapi.TinyFaceDetectorOptions({ 
+            scoreThreshold: 0.65,  // Aumentado para mayor precisión
+            inputSize: 320  // Balanceado para rendimiento/precisión
+          })
+        )
+        .withFaceLandmarks(true)  // Usar modelo tiny para mejor rendimiento
+        .withFaceExpressions()
+        .withFaceDescriptors();
+
+        if (detections.length > 0) {
+          // Calcular iluminación para anti-spoofing
+          const imageData = extractImageData(video);
+          const illumination = calculateIllumination(imageData);
+          illuminationHistoryRef.current.push(illumination);
+          
+          if (illuminationHistoryRef.current.length > 10) {
+            illuminationHistoryRef.current.shift();
+          }
+          
+          const bestDetection = detections[0];
+          setDetectedFace(bestDetection);
+          expressionHistoryRef.current.push(bestDetection.expressions);
+          faceHistoryRef.current.push(bestDetection);
+          
+          // Límite de historial para no saturar memoria
+          if (faceHistoryRef.current.length > 10) {
+            faceHistoryRef.current.shift();
+          }
+          
+          renderResults(detections, displaySize);
+          checkLiveness(bestDetection);
+        } else {
+          setDetectedFace(null);
+        }
+      } catch (err) {
+        console.error('Error en detección facial:', err);
+      }
+    }
+    
+    animationFrameId = requestAnimationFrame(processFrame);
+  };
   
-  // Iniciar bucle de animación
   animationFrameId = requestAnimationFrame(processFrame);
+
+  const detectSpoofing = (face: DetectedFace): number => {
+  // 1. Analizar textura - fotos impresas tienen patrones diferentes
+  const textureScore = analyzeTextureVariance(face);
   
-  // Retornar función de limpieza con liberación de recursos
+  // 2. Verificar consistencia de movimiento - pequeños movimientos naturales
+  const movementScore = calculateMovementConsistency();
+  
+  // 3. Verificar respuesta de reflejo reflectivo
+  const reflectionScore = checkReflectionResponse();
+  
+  // Combinar scores - peso mayor para métricas más confiables
+  return (textureScore * 0.5) + (movementScore * 0.3) + (reflectionScore * 0.2);
+};
+
+// Verificar patrones de textura (simplificado)
+const analyzeTextureVariance = (face: DetectedFace): number => {
+  // En implementación real, analizar patrones moiré, ruido de impresión, etc.
+  if (faceHistoryRef.current.length < 5) return 0;
+  
+  // Varianza en landmarks debería ser natural (ni demasiado perfecto ni caótico)
+  const landmarkVariances = [];
+  
+  for (let i = 1; i < faceHistoryRef.current.length; i++) {
+    const prevFace = faceHistoryRef.current[i-1];
+    const currFace = faceHistoryRef.current[i];
+    
+    // Varianza entre landmarks consecutivos
+    landmarkVariances.push(calculateLandmarkDistance(prevFace.landmarks, currFace.landmarks));
+  }
+  
+  const varianceOfVariances = calculateVariance(landmarkVariances);
+  
+  // Una foto estática o video pregrabado tendría varianza muy baja o demasiado consistente
+  if (varianceOfVariances < 0.001 || varianceOfVariances > 10) {
+    return 0.8; // Alta probabilidad de spoofing
+  }
+  
+  return 0.1; // Baja probabilidad
+};
+  
   return () => {
     cancelAnimationFrame(animationFrameId);
-    // Limpiar referencias grandes para ayudar al GC
     expressionHistoryRef.current = [];
-    if (faceHistoryRef && faceHistoryRef.current) {
-      faceHistoryRef.current = [];
-    }
-    if (illuminationHistoryRef && illuminationHistoryRef.current) {
-      illuminationHistoryRef.current = [];
-    }
+    faceHistoryRef.current = [];
+    illuminationHistoryRef.current = [];
   };
-}, [modelsLoaded, checkLiveness, detectedFace, livenessState, renderResults]);
+}, [modelsLoaded, checkLiveness, renderResults]);
+
+// Funciones auxiliares para agregar al componente
+const extractImageData = (video: HTMLVideoElement) => {
+  const canvas = document.createElement('canvas');
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  const ctx = canvas.getContext('2d');
+  if (ctx) {
+    ctx.drawImage(video, 0, 0);
+    return ctx.getImageData(0, 0, canvas.width, canvas.height);
+  }
+  return null;
+};
+
+const calculateIllumination = (imageData: ImageData | null) => {
+  if (!imageData) return 0;
+  const data = imageData.data;
+  let sum = 0;
+  for (let i = 0; i < data.length; i += 4) {
+    sum += (data[i] + data[i+1] + data[i+2]) / 3;
+  }
+  return sum / (data.length / 4);
+};
   
   // Iniciar cámara con opciones optimizadas
   const startVideo = useCallback(async () => {

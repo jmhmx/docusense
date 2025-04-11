@@ -23,13 +23,17 @@ export class CryptoService {
     iv: Buffer;
     authTag: Buffer;
   } {
-    // Usar cifrado AES-GCM para datos biométricos
-    const key = crypto.scryptSync(process.env.MASTER_KEY, 'salt', 32);
+    // Usar AES-GCM para mayor seguridad (autenticación incluida)
+    const key = crypto.scryptSync(
+      process.env.MASTER_KEY || 'default-key-should-be-replaced-in-production',
+      crypto.randomBytes(16), // Salt aleatorio
+      32, // 256 bits
+    );
+
     const iv = crypto.randomBytes(16);
     const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
 
     const encrypted = Buffer.concat([cipher.update(data), cipher.final()]);
-
     const authTag = cipher.getAuthTag();
 
     return {

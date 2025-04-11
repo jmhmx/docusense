@@ -1,13 +1,34 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import BiometricCapture from '../components/BiometricCapture';
+import { api } from '../api/client';
+import useAuth from '../hooks/UseAuth';
 
 const BiometricRegistration = () => {
   const [registrationComplete, setRegistrationComplete] = useState(false);
   const navigate = useNavigate();
+  const { user, updateUserBiometrics } = useAuth();
   
   const handleRegistrationSuccess = () => {
     setRegistrationComplete(true);
+    
+    // Guardar flag en localStorage
+    localStorage.setItem('hasBiometrics', 'true');
+    
+    // Actualizar contexto de autenticación
+    if (updateUserBiometrics) {
+      updateUserBiometrics(true);
+    }
+    
+    // Notificar al backend
+    if (user && user.id) {
+      api.post('/api/users/biometrics/setup-complete', {
+        userId: user.id,
+        setupMethod: 'facial'
+      }).catch((err: Error) => console.error('Error notificando setup biométrico:', err));
+    }
+    
+    // Redireccionar
     setTimeout(() => {
       navigate('/dashboard');
     }, 3000);

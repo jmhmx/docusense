@@ -18,6 +18,7 @@ interface AuthContextType {
   setupBiometrics: () => Promise<void>;
   hasBiometrics: boolean;
   isBiometricsVerifying: boolean;
+  updateUserBiometrics: (status: boolean) => void;
 }
 
 export const AuthContext = createContext<AuthContextType>({
@@ -30,7 +31,8 @@ export const AuthContext = createContext<AuthContextType>({
   loginWithBiometrics: async () => {},
   setupBiometrics: async () => {},
   hasBiometrics: false,
-  isBiometricsVerifying: false
+  isBiometricsVerifying: false,
+  updateUserBiometrics: async () => {}
 });
 
 interface AuthProviderProps {
@@ -103,23 +105,27 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   };
 
   useEffect(() => {
-  // Verificar si el usuario tiene biometría registrada
-  const checkBiometrics = async () => {
-    if (user) {
-      try {
-        const response = await api.get('/api/biometry/status');
-        setHasBiometrics(response.data.registered);
-      } catch (error) {
-        console.error('Error verificando estado biométrico:', error);
+    // Verificar si el usuario tiene biometría registrada
+    const checkBiometrics = async () => {
+      if (user) {
+        try {
+          const response = await api.get('/api/biometry/status');
+          setHasBiometrics(response.data.registered);
+          
+          // Guardar en localStorage para acceso rápido
+          localStorage.setItem('hasBiometrics', response.data.registered ? 'true' : 'false');
+        } catch (error) {
+          console.error('Error verificando estado biométrico:', error);
+          setHasBiometrics(false);
+        }
+      } else {
         setHasBiometrics(false);
+        localStorage.removeItem('hasBiometrics');
       }
-    } else {
-      setHasBiometrics(false);
-    }
-  };
-  
-  checkBiometrics();
-}, [user]);
+    };
+    
+    checkBiometrics();
+  }, [user]);
 
 const loginWithBiometrics = async (userId: string, biometricData: string) => {
   setIsBiometricsVerifying(true);
@@ -159,6 +165,11 @@ const setupBiometrics = async () => {
   
   // Redireccionar a página de registro biométrico
   window.location.href = '/biometric-registration';
+  };
+
+const updateUserBiometrics = (status: boolean) => {
+  setHasBiometrics(status);
+  localStorage.setItem('hasBiometrics', status ? 'true' : 'false');
 };
 
   return (
@@ -173,7 +184,11 @@ const setupBiometrics = async () => {
         loginWithBiometrics,
   setupBiometrics,
   hasBiometrics,
-  isBiometricsVerifying
+  isBiometricsVerifying,
+  updateUserBiometrics: (status: boolean) => {
+    setHasBiometrics(status);
+    localStorage.setItem('hasBiometrics', status ? 'true' : 'false');
+  }
       }}
     >
       {children}

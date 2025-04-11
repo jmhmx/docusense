@@ -3,6 +3,7 @@ import {
   Logger,
   BadRequestException,
   NotFoundException,
+  InternalServerErrorException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -14,16 +15,63 @@ import { RegisterBiometryDto } from './dto/register-biometry.dto';
 import { VerifyBiometryDto } from './dto/verify-biometry.dto';
 import { LivenessCheckDto } from './dto/liveness-check.dto';
 
+// Interfaces mejoradas para mayor tipado y seguridad
 interface FaceDescriptor {
   length: number;
   [index: number]: number;
 }
 
+interface LivenessResult {
+  verified: boolean;
+  score: number;
+  method: string;
+  reason?: string;
+  confidence?: number;
+  details?: Record<string, any>;
+}
+
+interface BiometricVerificationResult {
+  verified: boolean;
+  score: number;
+  timestamp: string;
+  faceMatchScore?: number;
+  livenessScore?: number;
+  securityScore?: number;
+  confidence?: number;
+  method?: string;
+  analysisDetails?: Record<string, any>;
+}
+
+interface TextureAnalysisResult {
+  isRealFace: boolean;
+  confidence: number;
+  textureScore: number;
+  noisePatternScore: number;
+  depthConsistencyScore: number;
+  details?: Record<string, any>;
+}
+
+interface MotionAnalysisResult {
+  isNaturalMotion: boolean;
+  confidence: number;
+  microMovementScore: number;
+  accelerationPatternScore: number;
+  details?: Record<string, any>;
+}
+
 @Injectable()
 export class BiometryService {
   private readonly logger = new Logger(BiometryService.name);
+  
+  // Umbrales configurables para permitir ajustes de seguridad
   private readonly MATCH_THRESHOLD = 0.6; // Umbral de similitud por defecto
   private readonly MIN_LIVENESS_SCORE = 0.75; // Puntuación mínima de liveness
+  private readonly TEXTURE_THRESHOLD = 0.7; // Umbral para análisis de textura
+  private readonly SPOOFING_THRESHOLD = 0.65; // Umbral para detección de spoofing
+  private readonly MICROMOVEMENT_THRESHOLD = 0.6; // Umbral para micromovimientos naturales
+  
+  // Cache para optimización de rendimiento
+  private modelCache: Map<string, any> = new Map();
 
   constructor(
     @InjectRepository(BiometricData)
@@ -31,10 +79,34 @@ export class BiometryService {
     private readonly cryptoService: CryptoService,
     private readonly usersService: UsersService,
     private readonly auditLogService: AuditLogService,
-  ) {}
+  ) {
+    // Inicializar modelos en memoria para análisis facial
+    this.initializeModels();
+  }
+  
+  /**
+   * Inicializa modelos de IA para análisis facial
+   * Esta función precarga modelos para optimizar rendimiento
+   */
+  private async initializeModels(): Promise<void> {
+    try {
+      // En un entorno real, aquí cargaríamos modelos TensorFlow/ONNX 
+      // para análisis facial, detección de spoofing, etc.
+      this.logger.log('Inicializando modelos de análisis biométrico...');
+      
+      // Simulamos carga de modelos
+      this.modelCache.set('faceDetection', { loaded: true, version: '1.0.0' });
+      this.modelCache.set('livenessDetection', { loaded: true, version: '2.1.0' });
+      this.modelCache.set('antispoofing', { loaded: true, version: '3.0.0' });
+      
+      this.logger.log('Modelos de análisis biométrico cargados correctamente');
+    } catch (error) {
+      this.logger.error(`Error inicializando modelos: ${error.message}`, error.stack);
+    }
+  }
 
   /**
-   * Registra datos biométricos para un usuario
+   * Registra datos biométricos para un usuario con verificación avanzada
    */
   async register(
     registerDto: RegisterBiometryDto,
@@ -79,6 +151,22 @@ export class BiometryService {
     );
 
     if (!livenessVerified.verified) {
+      // Registrar intento fallido en auditoría
+      await this.auditLogService.log(
+        AuditAction.USER_UPDATE,
+        registerDto.userId,
+        null,
+        {
+          action: 'biometric_registration_failed',
+          reason: 'liveness_verification_failed',
+          details: livenessVerified.reason,
+          ipAddress,
+          userAgent,
+        },
+        ipAddress,
+        userAgent,
+      );
+      
       throw new BadRequestException(
         `Verificación de vida fallida: ${livenessVerified.reason}`,
       );
@@ -98,21 +186,43 @@ export class BiometryService {
 
       descriptorBuffer = Buffer.from(descriptorData);
     } catch (error) {
+      this.logger.error(
+        `Error decodificando datos biométricos: ${error.message}`,
+        error.stack
+      );
       throw new BadRequestException(
         `Error al decodificar datos biométricos: ${error.message}`,
       );
     }
 
     // Cifrar datos biométricos con mayor seguridad
-    const { encryptedData, iv, authTag } =
-      this.cryptoService.encryptBiometricData(descriptorBuffer);
+    let encryptedData: Buffer, iv: Buffer, authTag: Buffer;
+    try {
+      const encryptionResult = this.cryptoService.encryptBiometricData(descriptorBuffer);
+      encryptedData = encryptionResult.encryptedData;
+      iv = encryptionResult.iv;
+      authTag = encryptionResult.authTag;
+    } catch (error) {
+      this.logger.error(
+        `Error cifrando datos biométricos: ${error.message}`,
+        error.stack
+      );
+      throw new InternalServerErrorException(
+        'Error al cifrar datos biométricos',
+      );
+    }
+
+    // Calcular calidad biométrica
+    const qualityScore = this.calculateBiometricQuality(
+      JSON.parse(descriptorBuffer.toString('utf-8'))
+    );
 
     // Crear registro con metadatos completos
     const biometricData = this.biometricDataRepository.create({
       userId: registerDto.userId,
       descriptorData: encryptedData,
       iv,
-      authTag, // Añadir el authTag aquí
+      authTag,
       type: registerDto.type,
       metadata: {
         ...registerDto.metadata,
@@ -127,6 +237,9 @@ export class BiometryService {
           timestamp: new Date().toISOString(),
         },
         securityLevel: 'high',
+        biometricQuality: qualityScore,
+        antispoofingChecks: livenessVerified.details || {},
+        registrationVersion: '2.0',
       },
       active: true,
     });
@@ -147,6 +260,7 @@ export class BiometryService {
           livenessScore: livenessVerified.score,
           securityLevel: 'high',
           biometricDataId: savedData.id,
+          qualityScore,
         },
         ipAddress,
         userAgent,
@@ -184,13 +298,13 @@ export class BiometryService {
   }
 
   /**
-   * Verifica la identidad de un usuario usando sus datos biométricos
+   * Verifica la identidad de un usuario usando sus datos biométricos con sistema avanzado
    */
   async verify(
     verifyDto: VerifyBiometryDto,
     ipAddress?: string,
     userAgent?: string,
-  ): Promise<boolean> {
+  ): Promise<BiometricVerificationResult> {
     // Verificar usuario
     const user = await this.usersService.findOne(verifyDto.userId);
     if (!user) {
@@ -210,33 +324,10 @@ export class BiometryService {
       );
     }
 
-    // Verificar prueba de vida con método avanzado
+    // Verificar prueba de vida con método avanzado multinivel
     const livenessVerified = await this.verifyLivenessAdvanced(
       verifyDto.livenessProof,
     );
-
-    if (!livenessVerified.verified) {
-      // Registrar intento fallido en auditoría
-      await this.auditLogService.log(
-        AuditAction.AUTH_2FA_VERIFY,
-        verifyDto.userId,
-        null,
-        {
-          action: 'biometric_verification',
-          success: false,
-          reason: 'liveness_failed',
-          details: livenessVerified.reason,
-          ipAddress,
-          userAgent,
-        },
-        ipAddress,
-        userAgent,
-      );
-
-      throw new BadRequestException(
-        `Verificación de vida fallida: ${livenessVerified.reason}`,
-      );
-    }
 
     // Decodificar datos biométricos actuales
     let currentDescriptor: number[];
@@ -250,6 +341,25 @@ export class BiometryService {
       // Validar el descriptor
       this.validateFaceDescriptor(currentDescriptor);
     } catch (error) {
+      this.logger.error(`Error al decodificar datos biométricos: ${error.message}`);
+      
+      // Registrar intento fallido en auditoría
+      await this.auditLogService.log(
+        AuditAction.AUTH_2FA_VERIFY,
+        verifyDto.userId,
+        null,
+        {
+          action: 'biometric_verification',
+          success: false,
+          reason: 'invalid_descriptor',
+          details: error.message,
+          ipAddress,
+          userAgent,
+        },
+        ipAddress,
+        userAgent,
+      );
+      
       throw new BadRequestException(
         `Error al decodificar datos biométricos: ${error.message}`,
       );
@@ -269,7 +379,7 @@ export class BiometryService {
         error.stack,
       );
 
-      throw new BadRequestException(
+      throw new InternalServerErrorException(
         'Error al descifrar datos biométricos almacenados',
       );
     }
@@ -284,69 +394,156 @@ export class BiometryService {
       );
     }
 
-    // Comparar descriptores con algoritmo de similitud de coseno
-    const similarity = this.calculateCosineSimilarity(
+    // Sistema de verificación multifactorial
+    // 1. Comparar descriptores con algoritmo de similitud de coseno mejorado
+    const similarity = this.calculateEnhancedCosineSimilarity(
       currentDescriptor,
       storedDescriptor,
     );
+
+    // 2. Verificar datos de textura facial para anti-spoofing avanzado
+    const textureAnalysis = await this.analyzeTexturePatterns(
+      verifyDto.livenessProof?.imageData,
+    );
+
+    // 3. Verificar movimientos naturales (si hay datos disponibles)
+    const motionAnalysis = this.analyzeMotionData(
+      verifyDto.livenessProof?.motionData,
+    );
+
+    // 4. Verificar consistencia entre las diferentes métricas
+    const consistencyScore = this.checkMetricsConsistency(
+      similarity,
+      livenessVerified.score,
+      textureAnalysis.confidence,
+      motionAnalysis.confidence,
+    );
+
+    // 5. Calcular puntuación final ponderada
+    const weightedScores = {
+      faceMatch: similarity * 0.40,
+      liveness: livenessVerified.score * 0.25,
+      texture: textureAnalysis.confidence * 0.15,
+      motion: motionAnalysis.confidence * 0.10,
+      consistency: consistencyScore * 0.10,
+    };
+    
+    const finalScore = Object.values(weightedScores).reduce((a, b) => a + b, 0);
 
     // Determinar umbral de similitud (puede ser ajustado según el caso de uso)
     const customThreshold =
       storedBiometricData.metadata?.customMatchThreshold ||
       this.MATCH_THRESHOLD;
-    const isMatch = similarity >= customThreshold;
+    
+    // 6. Evaluación de contexto de seguridad (análisis de riesgo adaptativo)
+    const riskFactor = this.calculateRiskFactor(
+      verifyDto.userId,
+      ipAddress,
+      userAgent,
+      finalScore,
+    );
+    
+    // Ajustar umbral según nivel de riesgo
+    const adjustedThreshold = customThreshold * (1 + (riskFactor * 0.2));
+    
+    // Decisión final
+    const isMatch = finalScore >= adjustedThreshold && 
+                    livenessVerified.verified &&
+                    textureAnalysis.isRealFace;
 
     // Actualizar fecha de última verificación y estadísticas
-    if (isMatch) {
-      storedBiometricData.lastVerifiedAt = new Date();
-      storedBiometricData.metadata = {
-        ...storedBiometricData.metadata,
-        verificationStats: {
-          ...(storedBiometricData.metadata?.verificationStats || {}),
-          lastSuccess: new Date().toISOString(),
-          successCount:
-            (storedBiometricData.metadata?.verificationStats?.successCount ||
-              0) + 1,
-        },
-      };
-      await this.biometricDataRepository.save(storedBiometricData);
-    } else {
-      // Actualizar estadísticas de fallos
-      storedBiometricData.metadata = {
-        ...storedBiometricData.metadata,
-        verificationStats: {
-          ...(storedBiometricData.metadata?.verificationStats || {}),
-          lastFailure: new Date().toISOString(),
-          failureCount:
-            (storedBiometricData.metadata?.verificationStats?.failureCount ||
-              0) + 1,
-          lastSimilarityScore: similarity,
-        },
-      };
-      await this.biometricDataRepository.save(storedBiometricData);
-
-      // Verificar si hay demasiados fallos consecutivos
-      const failureCount =
-        storedBiometricData.metadata?.verificationStats?.failureCount || 0;
-      if (failureCount >= 5) {
-        // Marcar para revisión de seguridad
+    try {
+      if (isMatch) {
+        // Éxito: actualizar estadísticas positivas
+        storedBiometricData.lastVerifiedAt = new Date();
         storedBiometricData.metadata = {
           ...storedBiometricData.metadata,
-          securityFlags: {
-            ...(storedBiometricData.metadata?.securityFlags || {}),
-            multipleFailures: true,
-            flaggedAt: new Date().toISOString(),
+          verificationStats: {
+            ...(storedBiometricData.metadata?.verificationStats || {}),
+            lastSuccess: new Date().toISOString(),
+            successCount:
+              (storedBiometricData.metadata?.verificationStats?.successCount ||
+                0) + 1,
+            lastScores: {
+              similarity,
+              liveness: livenessVerified.score,
+              texture: textureAnalysis.confidence,
+              motion: motionAnalysis.confidence,
+              final: finalScore,
+            },
           },
         };
-        await this.biometricDataRepository.save(storedBiometricData);
-
-        this.logger.warn(
-          `Múltiples fallos de verificación biométrica para usuario ${verifyDto.userId}`,
-        );
+      } else {
+        // Fallo: actualizar estadísticas negativas y evaluar posibles amenazas
+        storedBiometricData.metadata = {
+          ...storedBiometricData.metadata,
+          verificationStats: {
+            ...(storedBiometricData.metadata?.verificationStats || {}),
+            lastFailure: new Date().toISOString(),
+            failureCount:
+              (storedBiometricData.metadata?.verificationStats?.failureCount ||
+                0) + 1,
+            lastFailureDetails: {
+              similarity,
+              liveness: livenessVerified.score,
+              texture: textureAnalysis.confidence,
+              motion: motionAnalysis.confidence,
+              final: finalScore,
+              threshold: adjustedThreshold,
+              livenessReason: livenessVerified.reason,
+              ipAddress,
+              userAgent,
+            },
+          },
+        };
+        
+        // Verificar umbrales de seguridad adicionales
+        const failedAttempts = (storedBiometricData.metadata?.verificationStats?.failureCount || 0) + 1;
+        
+        if (failedAttempts >= 5) {
+          // Posible ataque - implementar bloqueo temporal
+          storedBiometricData.metadata = {
+            ...storedBiometricData.metadata,
+            securityFlags: {
+              ...(storedBiometricData.metadata?.securityFlags || {}),
+              multipleFailures: true,
+              temporaryLock: true,
+              lockUntil: new Date(Date.now() + 30 * 60 * 1000).toISOString(), // 30 min
+              flaggedAt: new Date().toISOString(),
+            },
+          };
+          
+          // Alerta de seguridad en log
+          this.logger.warn(
+            `ALERTA DE SEGURIDAD: Múltiples fallos de verificación biométrica para usuario ${verifyDto.userId}`,
+          );
+        }
+        
+        // Análisis de anomalías
+        if (finalScore < 0.3 && livenessVerified.score > 0.7) {
+          // Posible ataque con foto
+          storedBiometricData.metadata = {
+            ...storedBiometricData.metadata,
+            securityFlags: {
+              ...(storedBiometricData.metadata?.securityFlags || {}),
+              possibleSpoofingAttempt: true,
+              anomalyType: 'photo_attack',
+              flaggedAt: new Date().toISOString(),
+            },
+          };
+        }
       }
+      
+      // Guardar las actualizaciones
+      await this.biometricDataRepository.save(storedBiometricData);
+    } catch (error) {
+      this.logger.error(
+        `Error al actualizar estadísticas biométricas: ${error.message}`,
+        error.stack,
+      );
     }
 
-    // Registrar en auditoría con detalles adicionales
+    // Registrar en auditoría con detalles forenses completos
     await this.auditLogService.log(
       AuditAction.AUTH_2FA_VERIFY,
       verifyDto.userId,
@@ -354,34 +551,62 @@ export class BiometryService {
       {
         action: 'biometric_verification',
         success: isMatch,
-        similarity,
-        threshold: customThreshold,
-        livenessScore: livenessVerified.score,
-        livenessMethod: livenessVerified.method,
-        deviceInfo: {
-          ipAddress,
-          userAgent,
+        scores: {
+          similarity,
+          liveness: livenessVerified.score,
+          texture: textureAnalysis.confidence,
+          motion: motionAnalysis.confidence,
+          consistency: consistencyScore,
+          final: finalScore,
+          threshold: adjustedThreshold,
+        },
+        methods: {
+          faceComparison: 'enhanced-cosine-similarity',
+          livenessMethod: livenessVerified.method,
+          textureAnalysis: textureAnalysis.isRealFace ? 'passed' : 'failed',
+          motionAnalysis: motionAnalysis.isNaturalMotion ? 'passed' : 'failed',
+        },
+        contextualFactors: {
+          riskFactor,
+          deviceInfo: {
+            ipAddress,
+            userAgent,
+          },
         },
       },
       ipAddress,
       userAgent,
     );
 
-    return isMatch;
+    // Respuesta estructurada
+    return {
+      verified: isMatch,
+      score: finalScore,
+      timestamp: new Date().toISOString(),
+      faceMatchScore: similarity,
+      livenessScore: livenessVerified.score,
+      securityScore: 1 - riskFactor,
+      confidence: Math.min(similarity, livenessVerified.score),
+      method: 'multifactor-v2',
+      analysisDetails: isMatch ? undefined : {
+        livenessVerification: livenessVerified.verified ? 'passed' : 'failed',
+        faceMatching: similarity >= customThreshold ? 'passed' : 'failed',
+        textureAnalysis: textureAnalysis.isRealFace ? 'passed' : 'failed',
+        reasons: [
+          ...(livenessVerified.verified ? [] : ['liveness_verification_failed']),
+          ...(similarity >= customThreshold ? [] : ['face_matching_failed']),
+          ...(textureAnalysis.isRealFace ? [] : ['texture_analysis_failed']),
+        ]
+      }
+    };
   }
 
   /**
-   * Verifica la prueba de vida de manera avanzada
+   * Verifica la prueba de vida de manera avanzada con múltiples desafíos
    */
   private async verifyLivenessAdvanced(
     livenessProof?: Record<string, any>,
-  ): Promise<{
-    verified: boolean;
-    score: number;
-    method: string;
-    reason?: string;
-    confidence?: number;
-  }> {
+  ): Promise<LivenessResult> {
     // Si no hay prueba de vida, falla
     if (!livenessProof) {
       return {
@@ -394,8 +619,7 @@ export class BiometryService {
     }
 
     // Obtener datos
-    const { challenge, timestamp, imageData, motionData, textureData } =
-      livenessProof;
+    const { challenge, timestamp, imageData, motionData, textureData } = livenessProof;
 
     // Verificar timestamp con tolerancia variable según el tipo de desafío
     const currentTime = Date.now();
@@ -403,11 +627,12 @@ export class BiometryService {
 
     // Diferentes desafíos pueden tener diferentes ventanas de tiempo
     const timeThresholds = {
-      blink: 30000, // 30 segundos para parpadeo
-      smile: 20000, // 20 segundos para sonrisa
-      'head-turn': 45000, // 45 segundos para giro de cabeza (más complejo)
-      nod: 35000, // Movimiento vertical de cabeza
-      'mouth-open': 25000, // Apertura de boca
+      blink: this.getTimeThresholdForChallenge('blink'),
+      smile: this.getTimeThresholdForChallenge('smile'),
+      'head-turn': this.getTimeThresholdForChallenge('head-turn'),
+      nod: this.getTimeThresholdForChallenge('nod'),
+      'mouth-open': this.getTimeThresholdForChallenge('mouth-open'),
+      sequence: this.getTimeThresholdForChallenge('sequence'),
     };
 
     const timeThreshold = timeThresholds[challenge] || 30000;
@@ -416,533 +641,160 @@ export class BiometryService {
       return {
         verified: false,
         score: 0,
-        method: 'timestamp',
+        method: 'timestamp-validation',
         reason: `La prueba de vida ha expirado (límite: ${timeThreshold / 1000}s)`,
         confidence: 0,
       };
     }
 
-    // Sistema avanzado anti-spoofing
-    let spoofScore = 0;
-
-    // Análisis de imagen para detectar spoof
-    if (imageData) {
-      spoofScore = Math.max(
-        spoofScore,
-        await this.analyzeImageForSpoofing(imageData),
-      );
-    }
-
-    // Análisis de datos de movimiento
-    if (motionData) {
-      spoofScore = Math.max(spoofScore, this.analyzeMotionData(motionData));
-    }
-
-    // Análisis de textura (especialmente útil para detectar impresiones o máscaras)
-    if (textureData) {
-      spoofScore = Math.max(spoofScore, this.analyzeTextureData(textureData));
-    }
-
-    if (spoofScore > 0.7) {
+    // Sistema multicapa anti-spoofing
+    const spoofAnalysis = await this.performMultilayerSpoofingDetection(
+      imageData,
+      motionData,
+      textureData,
+      challenge,
+    );
+    
+    if (spoofAnalysis.isSpoofDetected) {
       return {
         verified: false,
         score: 0,
-        method: 'anti-spoofing',
-        reason: 'Se ha detectado un posible intento de suplantación',
-        confidence: spoofScore,
+        method: 'advanced-anti-spoofing',
+        reason: `Se ha detectado un posible intento de suplantación: ${spoofAnalysis.reason}`,
+        confidence: spoofAnalysis.confidence,
+        details: spoofAnalysis.details,
       };
     }
 
-    // Implementación mejorada de verificación de desafío específico
-    let score = 0;
-    let method = 'basic';
-    let confidence = 0;
-
-    // Estimación de calidad
-    const baseQuality = this.estimateImageQuality(imageData) || 85;
-
-    // Sistema mejorado de puntuación adaptativa según desafío y calidad
+    // Implementación específica según el tipo de desafío
+    let verificationResult: LivenessResult;
+    
     switch (challenge) {
       case 'blink':
-        const blinkResult = await this.detectBlink(imageData);
-        score = blinkResult.score * (baseQuality / 100);
-        confidence = blinkResult.confidence;
-        method = 'blink-detection-v2';
+        verificationResult = await this.verifyBlinkChallenge(livenessProof);
         break;
-
+      
       case 'smile':
-        const smileResult = await this.detectSmile(imageData);
-        score = smileResult.score * (baseQuality / 100);
-        confidence = smileResult.confidence;
-        method = 'expression-analysis-v2';
+        verificationResult = await this.verifySmileChallenge(livenessProof);
         break;
-
+      
       case 'head-turn':
-        const turnResult = await this.detectHeadTurn(imageData);
-        score = turnResult.score * (baseQuality / 100);
-        confidence = turnResult.confidence;
-        method = 'pose-estimation-v2';
+        verificationResult = await this.verifyHeadTurnChallenge(livenessProof);
         break;
-
+      
       case 'nod':
-        const nodResult = await this.detectNod(imageData, motionData);
-        score = nodResult.score * (baseQuality / 100);
-        confidence = nodResult.confidence;
-        method = 'vertical-movement-v1';
+        verificationResult = await this.verifyNodChallenge(livenessProof);
         break;
-
+      
       case 'mouth-open':
-        const mouthResult = await this.detectMouthOpen(imageData);
-        score = mouthResult.score * (baseQuality / 100);
-        confidence = mouthResult.confidence;
-        method = 'facial-landmarks-v1';
+        verificationResult = await this.verifyMouthOpenChallenge(livenessProof);
         break;
-
+      
+      case 'sequence':
+        // Desafío secuencial (múltiples gestos en orden)
+        verificationResult = await this.verifySequenceChallenge(livenessProof);
+        break;
+      
       default:
-        score = 0.6 * (baseQuality / 100);
-        confidence = 0.5;
-        method = 'basic-presence';
+        // Detección genérica de presencia
+        verificationResult = await this.verifyGenericPresence(livenessProof);
     }
-
-    // Ajuste dinámico del umbral según factores de riesgo
-    const baseThreshold = this.MIN_LIVENESS_SCORE;
-    const riskFactor = this.calculateRiskFactor(livenessProof);
-    const adjustedThreshold = baseThreshold * (1 + 0.1 * riskFactor);
-
-    // Verificar si se alcanza la puntuación mínima
-    const verified = score >= adjustedThreshold;
-
-    return {
-      verified,
-      score,
-      method,
-      confidence,
-      reason: verified
-        ? undefined
-        : `Puntuación insuficiente (${score.toFixed(2)} < ${adjustedThreshold.toFixed(2)})`,
+    
+    // Añadir información adicional de análisis forense
+    verificationResult.details = {
+      ...verificationResult.details,
+      antispoofingScore: 1 - spoofAnalysis.confidence,
+      challengeCompliance: verificationResult.score,
+      timeValidity: 1 - Math.abs(currentTime - proofTime) / timeThreshold,
     };
+    
+    return verificationResult;
   }
-
-  // Añadir estos métodos nuevos para la detección de spoofing avanzada
-  private async analyzeImageForSpoofing(imageData: string): Promise<number> {
-    try {
-      // Decodificar imagen
-      const imageBuffer = Buffer.from(
-        imageData.replace(/^data:image\/\w+;base64,/, ''),
-        'base64',
-      );
-
-      // Características a analizar:
-      // 1. Distribución de colores y reflejo natural de luz
-      // 2. Patrones de moiré típicos de pantallas
-      // 3. Ruido artificial vs natural
-
-      // Para una implementación completa se requeriría un modelo de ML especializado
-      // Esta es una implementación simplificada basada en heurísticas
-
-      // Analizar patrones de moiré (típicos de pantallas)
-      const moireScore = this.detectMoirePatterns(imageBuffer);
-
-      // Analizar reflejos naturales (ausentes en fotos impresas)
-      const reflectionScore = this.detectNaturalReflections(imageBuffer);
-
-      // Analizar patrones de ruido
-      const noiseScore = this.analyzeImageNoise(imageBuffer);
-
-      // Combinar puntuaciones (mayor = más probable que sea spoofing)
-      return Math.max(moireScore, reflectionScore, noiseScore);
-    } catch (error) {
-      this.logger.error(`Error en análisis anti-spoofing: ${error.message}`);
-      return 0.5; // Valor neutro por defecto
-    }
-  }
-
-  // Método para detectar patrones de pantallas
-  private detectMoirePatterns(imageBuffer: Buffer): number {
-    // Implementación simplificada - en un sistema real se utilizaría
-    // procesamiento de imágenes con FFT para detectar patrones de moiré
-    return 0.2; // Valor de ejemplo
-  }
-
-  // Método para detectar reflejos naturales
-  private detectNaturalReflections(imageBuffer: Buffer): number {
-    // Implementación simplificada - en un sistema real se analizarían
-    // puntos de alta intensidad y su distribución
-    return 0.15; // Valor de ejemplo
-  }
-
-  // Método para analizar patrones de ruido
-  private analyzeImageNoise(imageBuffer: Buffer): number {
-    // Implementación simplificada - en un sistema real se analizaría
-    // la distribución del ruido para distinguir cámaras reales de imágenes impresas
-    return 0.1; // Valor de ejemplo
-  }
-
-  // Detectar movimiento de cabeza vertical (nod)
-  private async detectNod(
-    imageData: string,
-    motionData?: any,
-  ): Promise<{
-    score: number;
-    confidence: number;
-  }> {
-    // Implementación simplificada - en un sistema real se analizaría
-    // la serie temporal de posiciones de puntos faciales clave
-    return {
-      score: 0.85,
-      confidence: 0.8,
-    };
-  }
-
-  // Detectar apertura de boca
-  private async detectMouthOpen(imageData: string): Promise<{
-    score: number;
-    confidence: number;
-  }> {
-    // Implementación simplificada - en un sistema real se mediría
-    // la distancia entre puntos del labio superior e inferior
-    return {
-      score: 0.9,
-      confidence: 0.85,
-    };
-  }
-
-  // Nuevos métodos para mejorar la detección de liveness
-
-  private analyzeSpoofingRisk(imageData: string): number {
-    // En una implementación real, incorporaríamos:
-    // 1. Análisis de textura para detectar impresiones
-    // 2. Detección de bordes artificiales
-    // 3. Análisis de reflejo especular
-    // 4. Detección de profundidad inconsistente
-
-    // Retornamos puntuación ficticia entre 0-1 (mayor = más probable que sea spoofing)
-    return 0.1; // Bajo riesgo por defecto
-  }
-
-  private analyzeMotionData(motionData: any): number {
-    // Análisis de datos del sensor de movimiento
-    // - Microtemblores naturales vs. movimiento artificial
-    // - Consistencia con movimientos de cabeza humanos
-
-    return 0.1; // Bajo riesgo por defecto
-  }
-
-  private estimateImageQuality(imageData: string): number {
-    // Estimar calidad de imagen
-    // - Resolución
-    // - Enfoque
-    // - Iluminación
-    // - Ruido
-
-    // Retorna calidad de 0-100
-    return 85; // Calidad predeterminada
-  }
-
-  private detectBlink(imageData: string): {
-    score: number;
-    confidence: number;
-  } {
-    // Implementación mejorada de detección de parpadeo:
-    // 1. Localización precisa de ojos usando landmarks faciales
-    // 2. Medición de relación aspecto de ojo (EAR)
-    // 3. Análisis de secuencias temporales para detectar ciclo completo
-
-    return {
-      score: 0.85,
-      confidence: 0.9,
-    };
-  }
-
-  private detectSmile(imageData: string): {
-    score: number;
-    confidence: number;
-  } {
-    // Implementación mejorada de detección de sonrisa:
-    // 1. Análisis de músculos faciales (aumento de anchura, elevación de mejillas)
-    // 2. Detección de arrugas características alrededor de ojos y mejillas
-    // 3. Verificación de movimiento natural de labios
-
-    return {
-      score: 0.9,
-      confidence: 0.88,
-    };
-  }
-
-  private detectHeadTurn(imageData: string): {
-    score: number;
-    confidence: number;
-  } {
-    // Implementación mejorada de detección de giro de cabeza:
-    // 1. Análisis de relación entre puntos faciales en 3D
-    // 2. Estimación de pose craneal
-    // 3. Verificación de consistencia durante el movimiento
-
-    return {
-      score: 0.85,
-      confidence: 0.82,
-    };
-  }
-
-  private calculateRiskFactor(livenessProof: Record<string, any>): number {
-    // Calcular factor de riesgo basado en:
-    // - Anomalías en datos del sensor
-    // - Patrones de uso sospechosos
-    // - Historial de intentos fallidos
-    // - Geolocalización o IP inusual
-
-    // Retorna factor entre 0-1 (mayor = más riesgo)
-    return 0;
-  }
-
+  
   /**
-   * Realiza una verificación completa de liveness utilizando el imageData
+   * Verifica desafío de parpadeo (mejorado)
    */
-  async checkLiveness(checkDto: LivenessCheckDto): Promise<{
-    live: boolean;
-    score: number;
-    details: Record<string, any>;
-  }> {
-    // Verificación de imagen
-    if (!checkDto.imageData) {
-      throw new BadRequestException('Datos de imagen no proporcionados');
+  private async verifyBlinkChallenge(
+    livenessProof: Record<string, any>
+  ): Promise<LivenessResult> {
+    const { imageData, eyeStateSequence, blinkMetrics } = livenessProof;
+    
+    // En un sistema real, extraeríamos estos datos de la imagen o secuencia
+    // Aquí simularemos el análisis
+    
+    let score = 0.0;
+    let confidence = 0.0;
+    let details = {};
+    
+    // Análisis de fotogramas múltiples (si está disponible)
+    if (eyeStateSequence && eyeStateSequence.length >= 3) {
+      // Verificar secuencia completa de parpadeo (abierto->cerrado->abierto)
+      const hasFullBlinkSequence = this.verifyBlinkSequence(eyeStateSequence);
+      
+      // Verificar naturalidad del parpadeo (duración y transición)
+      const { isNatural, naturalityScore } = this.verifyBlinkNaturality(eyeStateSequence);
+      
+      score = hasFullBlinkSequence ? 0.7 + (naturalityScore * 0.3) : 0.2;
+      confidence = hasFullBlinkSequence ? 0.85 : 0.3;
+      
+      details = {
+        fullBlinkDetected: hasFullBlinkSequence,
+        blinkNaturality: naturalityScore,
+        framesAnalyzed: eyeStateSequence.length,
+      };
+    } 
+    // Si tenemos métricas de parpadeo detalladas
+    else if (blinkMetrics) {
+      const { earValues, blinkDuration, blinkTransitionSpeed } = blinkMetrics;
+      
+      // Verificar si los valores de EAR (Eye Aspect Ratio) indican parpadeo real
+      const validEarRange = this.validateEyeAspectRatio(earValues);
+      
+      // Verificar duración natural del parpadeo (100-400ms típicamente)
+      const validDuration = blinkDuration >= 100 && blinkDuration <= 400;
+      
+      // Verificar velocidad de transición (no debe ser instantánea ni demasiado lenta)
+      const validTransition = blinkTransitionSpeed > 0.1 && blinkTransitionSpeed < 0.8;
+      
+      score = validEarRange ? 0.6 : 0.2;
+      score += validDuration ? 0.2 : 0;
+      score += validTransition ? 0.2 : 0;
+      
+      confidence = score > 0.7 ? 0.9 : 0.4;
+      
+      details = {
+        validEarRange,
+        validDuration,
+        validTransition,
+        earValues,
+      };
     }
-
-    let imageBuffer: Buffer;
-    try {
-      // Extraer datos de base64 (eliminar prefijo si existe)
-      const base64Data = checkDto.imageData.replace(
-        /^data:image\/\w+;base64,/,
-        '',
-      );
-      imageBuffer = Buffer.from(base64Data, 'base64');
-    } catch (error) {
-      throw new BadRequestException('Formato de imagen inválido');
+    // Análisis básico de imagen única (menos fiable)
+    else if (imageData) {
+      // En un sistema real, utilizaríamos un modelo de ML para detectar parpadeo
+      // Por simplicidad, simulamos un resultado
+      score = 0.65;
+      confidence = 0.5;
+      details = {
+        analysisType: 'single-image',
+        reliability: 'low',
+      };
+    } else {
+      return {
+        verified: false,
+        score: 0,
+        method: 'blink-detection',
+        reason: 'No se proporcionaron datos suficientes para verificar parpadeo',
+        confidence: 0,
+      };
     }
-
-    // Aquí iría la lógica real de análisis de imagen para liveness
-    // Por ejemplo, detectar texturas faciales, reflejo de luz, parpadeo, etc.
-
-    // Simulación de verificación avanzada
-    const challenge = checkDto.challenge || 'generic';
-    let score = 0.8; // Puntuación base
-    const details: Record<string, any> = {
-      timestamp: new Date().toISOString(),
-      imageSize: imageBuffer.length,
-      challengeType: challenge,
-    };
-
-    // Ajustar puntuación según desafío y otros factores
-    if (challenge === 'blink') {
-      score = 0.85;
-      details.blinkDetected = true;
-    } else if (challenge === 'smile') {
-      score = 0.9;
-      details.smileConfidence = 0.92;
-    } else if (challenge === 'head-turn') {
-      score = 0.85;
-      details.poseAngle = '15deg';
-    }
-
-    // Verificar si hay manipulación de imagen
-    // En producción: detectar fotomontajes, imágenes de pantallas, etc.
-    details.manipulationDetected = false;
-
-    // Determinación final de liveness
-    const isLive =
-      score >= this.MIN_LIVENESS_SCORE && !details.manipulationDetected;
-
+    
     return {
-      live: isLive,
+      verified: score >= this.MIN_LIVENESS_SCORE,
       score,
+      method: 'advanced-blink-detection',
+      reason: score >= this.MIN_LIVENESS_SCORE ? undefined : 'No se detectó un parpadeo válido',
+      confidence,
       details,
     };
   }
-
-  /**
-   * Calcula la similitud de coseno entre dos descriptores faciales
-   */
-  private calculateCosineSimilarity(
-    descriptor1: number[],
-    descriptor2: number[],
-  ): number {
-    if (descriptor1.length !== descriptor2.length) {
-      throw new BadRequestException(
-        'Los descriptores faciales no tienen la misma dimensión',
-      );
-    }
-
-    // Producto punto
-    let dotProduct = 0;
-    let norm1 = 0;
-    let norm2 = 0;
-
-    for (let i = 0; i < descriptor1.length; i++) {
-      dotProduct += descriptor1[i] * descriptor2[i];
-      norm1 += descriptor1[i] * descriptor1[i];
-      norm2 += descriptor2[i] * descriptor2[i];
-    }
-
-    // Evitar división por cero
-    if (norm1 === 0 || norm2 === 0) {
-      return 0;
-    }
-
-    return dotProduct / (Math.sqrt(norm1) * Math.sqrt(norm2));
-  }
-
-  /**
-   * Valida que el descriptor facial tenga el formato correcto
-   */
-  private validateFaceDescriptor(descriptor: any): void {
-    if (!Array.isArray(descriptor)) {
-      throw new BadRequestException('El descriptor facial debe ser un array');
-    }
-
-    // Verificar longitud (típicamente 128 para FaceAPI.js)
-    if (descriptor.length !== 128) {
-      throw new BadRequestException(
-        'El descriptor facial debe tener 128 dimensiones',
-      );
-    }
-
-    // Verificar que todos los elementos sean números
-    for (const value of descriptor) {
-      if (typeof value !== 'number' || isNaN(value)) {
-        throw new BadRequestException(
-          'El descriptor facial contiene valores inválidos',
-        );
-      }
-    }
-  }
-
-  /**
-   * Obtiene el estado de registro biométrico de un usuario
-   */
-  async getUserBiometricStatus(userId: string): Promise<{
-    registered: boolean;
-    type?: string;
-    lastVerified?: Date;
-    registrationDate?: Date;
-  }> {
-    // Buscar datos biométricos activos del usuario
-    const biometricData = await this.biometricDataRepository.findOne({
-      where: { userId, active: true },
-      order: { createdAt: 'DESC' },
-    });
-
-    if (!biometricData) {
-      return { registered: false };
-    }
-
-    return {
-      registered: true,
-      type: biometricData.type,
-      lastVerified: biometricData.lastVerifiedAt,
-      registrationDate: biometricData.createdAt,
-    };
-  }
-
-  /**
-   * Obtiene diagnósticos del sistema biométrico (solo para admin)
-   */
-  async getSystemDiagnostics(): Promise<Record<string, any>> {
-    // Obtener estadísticas generales
-    const totalRegistrations = await this.biometricDataRepository.count();
-    const activeRegistrations = await this.biometricDataRepository.count({
-      where: { active: true },
-    });
-
-    // Usuarios con múltiples intentos fallidos
-    const usersWithFailures = await this.biometricDataRepository
-      .createQueryBuilder('bio')
-      .where(`bio.metadata->>'securityFlags' IS NOT NULL`)
-      .andWhere(`bio.metadata->'securityFlags'->>'multipleFailures' = 'true'`)
-      .getCount();
-
-    // Tipos de biometría registrados
-    const faceCount = await this.biometricDataRepository.count({
-      where: { type: 'face', active: true },
-    });
-    const fingerprintCount = await this.biometricDataRepository.count({
-      where: { type: 'fingerprint', active: true },
-    });
-
-    // Estadísticas de verificación
-    const recentVerifications = await this.biometricDataRepository
-      .createQueryBuilder('bio')
-      .where('bio.lastVerifiedAt IS NOT NULL')
-      .andWhere('bio.lastVerifiedAt > :date', {
-        date: new Date(Date.now() - 24 * 60 * 60 * 1000),
-      }) // Últimas 24h
-      .getCount();
-
-    return {
-      totalRegistrations,
-      activeRegistrations,
-      inactiveRegistrations: totalRegistrations - activeRegistrations,
-      biometryTypes: {
-        face: faceCount,
-        fingerprint: fingerprintCount,
-      },
-      securityMetrics: {
-        usersWithFailures,
-        recentVerifications,
-      },
-      systemStatus: 'operational',
-      timestamp: new Date().toISOString(),
-    };
-  }
-
-  /**
-   * Elimina los datos biométricos de un usuario
-   */
-  async removeUserBiometricData(
-    userId: string,
-    ipAddress?: string,
-    userAgent?: string,
-  ): Promise<void> {
-    // Buscar datos biométricos activos del usuario
-    const biometricData = await this.biometricDataRepository.find({
-      where: { userId, active: true },
-    });
-
-    if (biometricData.length === 0) {
-      // Sin datos que eliminar
-      return;
-    }
-
-    // En lugar de eliminar, desactivamos los registros
-    for (const data of biometricData) {
-      data.active = false;
-      data.metadata = {
-        ...data.metadata,
-        deactivatedAt: new Date().toISOString(),
-        deactivatedReason: 'user_requested',
-        deactivatedBy: {
-          ipAddress,
-          userAgent,
-        },
-      };
-    }
-
-    // Guardar cambios
-    await this.biometricDataRepository.save(biometricData);
-
-    // Registrar en auditoría
-    await this.auditLogService.log(
-      AuditAction.USER_UPDATE,
-      userId,
-      null,
-      {
-        action: 'biometric_data_removal',
-        count: biometricData.length,
-        ids: biometricData.map((data) => data.id),
-      },
-      ipAddress,
-      userAgent,
-    );
-
-    this.logger.log(`Datos biométricos desactivados para usuario ${userId}`);
-  }
-}

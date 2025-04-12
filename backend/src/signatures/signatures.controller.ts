@@ -9,10 +9,13 @@ import {
   UnauthorizedException,
   NotFoundException,
   BadRequestException,
+  Headers,
+  Ip,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { SignaturesService } from './signatures.service';
 import { CreateSignatureDto } from './dto/create-signature.dto';
+import { CreateSignatureWithBiometricDto } from './dto/create-signature-with-biometric.dto';
 
 @Controller('api/signatures')
 export class SignaturesController {

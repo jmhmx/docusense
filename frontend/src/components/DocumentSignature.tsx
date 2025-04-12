@@ -1,13 +1,13 @@
 import { useState, useRef, useEffect } from 'react';
 import { api } from '../api/client';
 import Button from './Button';
+import BiometricAuthVerify from './BiometricAuthVerify';
 
 interface SignaturePosition {
   page: number;
   x: number;
   y: number;
 }
-
 interface Signature {
   id: string;
   userId: string;
@@ -43,6 +43,9 @@ const DocumentSignature = ({
   const [showVerification, setShowVerification] = useState(false);
   const [verificationCode, setVerificationCode] = useState('');
   const [verificationId, setVerificationId] = useState<string | null>(null);
+  const [showBiometricVerification, setShowBiometricVerification] = useState(false);
+  const [hasBiometrics, setHasBiometrics] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [canSign, setCanSign] = useState(true);
   const [cannotSignReason, setCannotSignReason] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState<{id: string, name: string} | null>(null);
@@ -62,6 +65,27 @@ const DocumentSignature = ({
   const [isVerifyingIntegrity, setIsVerifyingIntegrity] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [drawSignature, setDrawSignature] = useState(false);
+
+  // Check if user has biometrics enabled
+  useEffect(() => {
+    const checkBiometricStatus = async () => {
+      try {
+        // Check if user has biometrics from localStorage first for quicker UI response
+        const storedBiometrics = localStorage.getItem('hasBiometrics');
+        if (storedBiometrics === 'true') {
+          setHasBiometrics(true);
+        }
+        
+        // Verify with the server
+        const response = await api.get('/api/biometry/status');
+        setHasBiometrics(response.data.registered);
+      } catch (err) {
+        console.error('Error checking biometric status', err);
+      }
+    };
+    
+    checkBiometricStatus();
+  }, []);
 
   // Load current user
   useEffect(() => {
@@ -258,70 +282,69 @@ const DocumentSignature = ({
   // Sign document
   const signDocument = async () => {
     if (!signaturePosition) {
-    setError('Por favor seleccione una posición para la firma');
-    return;
+      setError('Por favor seleccione una posición para la firma');
+      return;
     }
     
-    // Verificar si el usuario tiene biometría configurada
+    // Check if user has biometrics enabled
     if (hasBiometrics) {
-      // Mostrar modal de verificación biométrica
+      // Show biometric verification modal
       setShowBiometricVerification(true);
     } else {
-      // Proceder con verificación de 2FA estándar
+      // Proceed with standard 2FA verification
       await requestVerificationCode();
     }
-  
   };
 
   const handleBiometricSuccess = async (result: any) => {
-  // Resultado contiene datos de verificación biométrica
-  setIsLoading(true);
-  setError(null);
-  
-  try {
-    // Asegurarse de tener toda la información necesaria
-    if (!documentId || !signaturePosition) {
-      throw new Error('Información de firma incompleta');
-    }
+    setIsLoading(true);
+    setError(null);
     
-    // Crear payload con información biométrica
-    const payload = {
-      position: signaturePosition,
-      reason: reason.trim() || 'Document signature',
-      biometricVerification: {
-        timestamp: Date.now(),
-        challenge: result.challenge || 'blink',
-        score: result.score || 0.9,
-        method: result.method || 'facial-recognition'
+    try {
+      // Make sure we have all required information
+      if (!documentId || !signaturePosition) {
+        throw new Error('Incomplete signature information');
       }
-    };
-    
-    // Enviar solicitud de firma con verificación biométrica
-    const response = await api.post(`/api/signatures/${documentId}/biometric`, payload);
-    
-    // Recargar firmas
-    const signaturesResponse = await api.get(`/api/signatures/document/${documentId}`);
-    setSignatures(signaturesResponse.data);
-    
-    // Resetear estado y cerrar modales
-    setShowBiometricVerification(false);
-    setSignaturePosition(null);
-    setReason('');
-    setDrawSignature(false);
-    
-    // Mostrar mensaje de éxito
-    setSuccessMessage('Documento firmado exitosamente con verificación biométrica');
-    
-    if (onSignSuccess) {
-      onSignSuccess();
+      
+      // Create payload with biometric verification info
+      const payload = {
+        position: signaturePosition,
+        reason: reason.trim() || 'Document signature',
+        biometricVerification: {
+          timestamp: Date.now(),
+          challenge: result.challenge || 'blink',
+          score: result.score || 0.9,
+          method: result.method || 'facial-recognition'
+        }
+      };
+      
+      // Send biometric signature request
+      const response = await api.post(`/api/signatures/${documentId}/biometric`, payload);
+      
+      // Reload signatures
+      const signaturesResponse = await api.get(`/api/signatures/document/${documentId}`);
+      setSignatures(signaturesResponse.data);
+      
+      // Reset state and close modals
+      setShowBiometricVerification(false);
+      setShowSignModal(false);
+      setSignaturePosition(null);
+      setReason('');
+      setDrawSignature(false);
+      
+      // Show success message
+      setSuccessMessage('Document signed successfully with biometric verification');
+      
+      if (onSignSuccess) {
+        onSignSuccess();
+      }
+    } catch (err: any) {
+      console.error('Error signing document with biometrics:', err);
+      setError(err?.response?.data?.message || 'Error signing document');
+    } finally {
+      setIsLoading(false);
     }
-  } catch (err: any) {
-    console.error('Error al firmar el documento con biometría:', err);
-    setError(err?.response?.data?.message || 'Error al firmar el documento');
-  } finally {
-    setIsLoading(false);
-  }
-};
+  };
 
   // Handle signature position selection
   const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -721,17 +744,40 @@ const DocumentSignature = ({
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+      {/* Add biometric verification modal */}
+      {showBiometricVerification && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-600 bg-opacity-50">
+          <div className="w-full max-w-lg p-6 bg-white rounded-lg">
+            <div className="mb-4">
+              <h3 className="text-lg font-medium text-gray-900">Verificación Biométrica</h3>
+              <p className="mt-1 text-sm text-gray-500">
+                Por favor complete la verificación biométrica para firmar el documento
+              </p>
+            </div>
             
-            {showBiometricVerification && (
-              <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-600 bg-opacity-50">
-                <div className="w-full max-w-md p-8 bg-white rounded-lg">
-                  <BiometricAuthVerify
-                    onSuccess={handleBiometricSuccess}
-                    onCancel={() => setShowBiometricVerification(false)}
-                  />
-                </div>
-              </div>
-            )}
+            <BiometricAuthVerify
+              onSuccess={handleBiometricSuccess}
+              onCancel={() => setShowBiometricVerification(false)}
+            />
+          </div>
+        </div>
+      )}
+      
+      {/* Show success message if needed */}
+      {successMessage && (
+        <div className="p-4 mt-4 rounded-md bg-green-50">
+          <div className="flex">
+            <div className="flex-shrink-0">
+              <svg className="w-5 h-5 text-green-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <div className="ml-3">
+              <p className="text-sm font-medium text-green-800">{successMessage}</p>
+            </div>
           </div>
         </div>
       )}

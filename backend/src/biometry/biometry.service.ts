@@ -557,6 +557,15 @@ export class BiometryService {
     }
   }
 
+  private analyzeTextureData(textureData: any): number {
+    // Implementation for texture data analysis
+    // This is a simplified implementation - in a real system, you would analyze
+    // the texture data to detect printed faces, masks, etc.
+
+    // For now, we'll return a low risk score
+    return 0.2;
+  }
+
   // Método para detectar patrones de pantallas
   private detectMoirePatterns(imageBuffer: Buffer): number {
     // Implementación simplificada - en un sistema real se utilizaría

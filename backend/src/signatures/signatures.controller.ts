@@ -143,4 +143,62 @@ export class SignaturesController {
   async getSignatureRisk(@Param('signatureId') signatureId: string) {
     return this.signaturesService.getSignatureRiskAssessment(signatureId);
   }
+
+  @UseGuards(JwtAuthGuard)
+  @Post(':documentId/biometric')
+  async signDocumentWithBiometric(
+    @Param('documentId') documentId: string,
+    @Body() createSignatureDto: CreateSignatureWithBiometricDto,
+    @Request() req,
+    @Headers() headers,
+    @Ip() ip: string,
+  ) {
+    try {
+      // Extraer la información biométrica
+      const { position, reason, biometricVerification } = createSignatureDto;
+
+      // Realizar validaciones adicionales de seguridad
+      if (!biometricVerification || !biometricVerification.timestamp) {
+        throw new BadRequestException(
+          'Información de verificación biométrica incompleta',
+        );
+      }
+
+      // Verificar que la verificación biométrica sea reciente (máximo 5 minutos)
+      const verificationTime = new Date(biometricVerification.timestamp);
+      const now = new Date();
+      const timeDifference = now.getTime() - verificationTime.getTime();
+      const maxDifference = 5 * 60 * 1000; // 5 minutos en milisegundos
+
+      if (timeDifference > maxDifference) {
+        throw new BadRequestException('La verificación biométrica ha expirado');
+      }
+
+      // Crear firma con verificación biométrica
+      const signature = await this.signaturesService.signDocumentWithBiometric(
+        documentId,
+        req.user.id,
+        position,
+        reason,
+        biometricVerification,
+        ip,
+        headers['user-agent'] || 'Unknown',
+      );
+
+      return {
+        message: 'Documento firmado correctamente con verificación biométrica',
+        signatureId: signature.id,
+        documentId: signature.documentId,
+        timestamp: signature.signedAt,
+        verificationMethod: 'biometric',
+      };
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new BadRequestException(
+        `No se pudo firmar el documento: ${error.message}`,
+      );
+    }
+  }
 }

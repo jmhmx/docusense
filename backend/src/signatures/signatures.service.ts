@@ -714,4 +714,168 @@ export class SignaturesService {
       factors,
     };
   }
+
+  /**
+   * Firma un documento con verificación biométrica
+   */
+  async signDocumentWithBiometric(
+    documentId: string,
+    userId: string,
+    position?: { page: number; x: number; y: number },
+    reason?: string,
+    biometricVerification?: Record<string, any>,
+    ipAddress?: string,
+    userAgent?: string,
+  ): Promise<Signature> {
+    // Verificación básica de entradas
+    if (!documentId || !userId) {
+      throw new BadRequestException('Document ID and User ID are required');
+    }
+
+    try {
+      // Verificar documento
+      const document = await this.documentsRepository.findOne({
+        where: { id: documentId },
+      });
+
+      if (!document) {
+        throw new NotFoundException(`Document with ID ${documentId} not found`);
+      }
+
+      // Verificar usuario
+      const user = await this.usersService.findOne(userId);
+      if (!user) {
+        throw new NotFoundException(`User with ID ${userId} not found`);
+      }
+
+      // Verificar estado del documento
+      if (document.status !== 'completed' && document.status !== 'pending') {
+        throw new BadRequestException(
+          `Document is not ready for signing. Current status: ${document.status}`,
+        );
+      }
+
+      // Verificar permisos
+      if (document.userId !== userId) {
+        const hasAccess = await this.canUserSignDocument(userId, documentId);
+        if (!hasAccess.canSign) {
+          throw new UnauthorizedException(
+            hasAccess.reason ||
+              'You do not have permission to sign this document',
+          );
+        }
+      }
+
+      // Generar hash del documento para integridad
+      const documentHash = this.cryptoService.generateHash(document.filePath);
+
+      // Datos para firmar (incluye verificación biométrica)
+      const timestamp = new Date().toISOString();
+      const dataToSign = JSON.stringify({
+        documentId,
+        documentHash,
+        userId,
+        timestamp,
+        reason,
+        position,
+        biometricVerification: {
+          method: biometricVerification?.method,
+          challenge: biometricVerification?.challenge,
+          timestamp: biometricVerification?.timestamp,
+        },
+      });
+
+      // Verificar claves del usuario
+      let keyPair = await this.cryptoService.getUserKeyPair(userId);
+      if (!keyPair) {
+        this.logger.log(
+          `Generating new key pair for user ${user.name} (${userId})`,
+        );
+        keyPair = await this.cryptoService.generateKeyPair(userId);
+      }
+
+      // Firmar datos con seguridad adicional para biometría
+      const signatureData = await this.cryptoService.signData(
+        userId,
+        dataToSign,
+      );
+
+      if (!signatureData) {
+        throw new BadRequestException('Failed to generate digital signature');
+      }
+
+      // Crear registro de firma con metadatos biométricos
+      const signatureEntity = this.signaturesRepository.create({
+        id: uuidv4(),
+        documentId: document.id,
+        userId,
+        signatureData,
+        documentHash,
+        signedAt: new Date(),
+        reason: reason || 'Document signature with biometric verification',
+        position: position ? JSON.stringify(position) : null,
+        valid: true,
+        metadata: {
+          userAgent: userAgent || 'Unknown',
+          ipAddress: ipAddress || 'Unknown',
+          dataToSign,
+          biometricVerification: {
+            method: biometricVerification?.method || 'unknown',
+            challenge: biometricVerification?.challenge || 'unknown',
+            score: biometricVerification?.score || 0,
+            timestamp: biometricVerification?.timestamp
+              ? new Date(biometricVerification.timestamp).toISOString()
+              : new Date().toISOString(),
+          },
+          documentMetadata: {
+            title: document.title,
+            fileSize: document.fileSize,
+            mimeType: document.mimeType,
+          },
+          securityLevel: 'high', // Mayor nivel de seguridad con biometría
+        },
+      });
+
+      // Guardar firma
+      const savedSignature =
+        await this.signaturesRepository.save(signatureEntity);
+
+      // Actualizar metadatos del documento
+      document.metadata = {
+        ...document.metadata,
+        isSigned: true,
+        lastSignedAt: new Date().toISOString(),
+        signaturesCount: (document.metadata?.signaturesCount || 0) + 1,
+        hasBiometricSignatures: true,
+      };
+
+      await this.documentsService.update(documentId, document);
+
+      // Registrar en log de auditoría con detalles biométricos
+      await this.auditLogService.log(
+        AuditAction.DOCUMENT_SIGN,
+        userId,
+        documentId,
+        {
+          title: document.title,
+          signatureId: savedSignature.id,
+          signatureMethod: 'biometric',
+          biometricMethod: biometricVerification?.method || 'unknown',
+        },
+        ipAddress,
+        userAgent,
+      );
+
+      this.logger.log(
+        `Document ${documentId} signed with biometrics by user ${userId}`,
+      );
+      return savedSignature;
+    } catch (error) {
+      this.logger.error(
+        `Error en proceso de firma biométrica: ${error.message}`,
+        error.stack,
+      );
+      throw error;
+    }
+  }
 }

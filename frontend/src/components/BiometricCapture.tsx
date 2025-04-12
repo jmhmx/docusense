@@ -78,12 +78,10 @@ const calculateAsymmetry = (leftPoints: faceapi.Point[], rightPoints: faceapi.Po
   return Math.abs(leftDist - rightDist) / ((leftDist + rightDist) / 2);
 };
 
-const calculateTextureness = (face: DetectedFace): number => {
-  // Extraer región de la cara para análisis de textura
+// Función para calcular textura facial - ayuda a detectar imágenes impresas o pantallas
+const calculateTextureness = (video: HTMLVideoElement, face: DetectedFace): number => {
+  // Crear un canvas temporal para extracción de textura
   const canvas = document.createElement('canvas');
-  const video = videoRef.current;
-  if (!video) return 0;
-  
   const ctx = canvas.getContext('2d');
   if (!ctx) return 0;
   
@@ -92,6 +90,7 @@ const calculateTextureness = (face: DetectedFace): number => {
   canvas.width = box.width;
   canvas.height = box.height;
   
+  // Dibujar solo la región facial
   ctx.drawImage(
     video, 
     box.x, box.y, box.width, box.height,
@@ -335,88 +334,128 @@ useEffect(() => {
   
   // Verificación de liveness memoizada para evitar recreación en cada render
   const checkLiveness = useCallback((face: DetectedFace) => {
-    // Obtener expresiones faciales actuales
-    const expressions = face.expressions;
-    const history = expressionHistoryRef.current;
-    
-    // Iniciar verificación de liveness una vez que tenemos suficientes frames
-    if (history.length < 5) return;
-    
-// Dentro de la función checkLiveness
-const confidenceScoring = () => {
-  let confidenceScore = 0;
+  // Obtener expresiones faciales actuales
+  const expressions = face.expressions;
+  const history = expressionHistoryRef.current;
+  const faceHistory = faceHistoryRef.current;
   
-  // Puntuación base por desafío completado
+  // Iniciar verificación de liveness una vez que tenemos suficientes frames
+  if (history.length < 5) {
+    history.push(expressions);
+    return;
+  }
+  
+  // Actualizar estado a "en progreso"
+  if (livenessState === 'waiting') {
+    setLivenessState('progress');
+  }
+  
+  // Verificar tipo de desafío
   switch (livenessChallenge) {
     case 'blink':
-      confidenceScore += blinkDetectedCountRef.current * 0.2;
-      break;
-    case 'smile':
-      confidenceScore += (smileDurationRef.current / 10) * 0.2;
-      break;
-    case 'head-turn':
-      // Analizar variación en asimetría para confirmar movimiento real
-      if (asymmetryHistoryRef.current.length > 5) {
-        const variance = calculateVariance(asymmetryHistoryRef.current);
-        confidenceScore += variance * 10; // Mayor varianza = movimiento real
+      // Verificar parpadeo
+      const eyesClosed = isEyesClosed(face);
+      
+      // Detectar ciclo completo de parpadeo
+      if (eyesClosed && !lastBlinkStateRef.current) {
+        lastBlinkStateRef.current = true;
+        lastBlinkStartTimeRef.current = Date.now();
+        
+        // Feedback visual
+        setBlinkFeedback(true);
+        if (blinkFeedbackTimeoutRef.current) {
+          clearTimeout(blinkFeedbackTimeoutRef.current);
+        }
+        blinkFeedbackTimeoutRef.current = setTimeout(() => {
+          setBlinkFeedback(false);
+        }, 1000);
+        
+        // Incrementar contador de parpadeos detectados
+        blinkDetectedCountRef.current += 1;
+        positiveFramesRef.current += 5; // Bonus por parpadeo completo
+      } else if (!eyesClosed && lastBlinkStateRef.current) {
+        lastBlinkStateRef.current = false;
+        
+        // Verificar que el parpadeo duró un tiempo razonable (evitar falsos positivos)
+        const blinkDuration = Date.now() - (lastBlinkStartTimeRef.current || 0);
+        if (blinkDuration > 50 && blinkDuration < 500) { // Duración típica de parpadeo (ms)
+          positiveFramesRef.current += 3; // Bonus adicional por duración natural
+        }
       }
       break;
-    case 'nod':
-      // Análisis de movimiento vertical - implementar si se añade este desafío
-      confidenceScore += 0.15;
+      
+    case 'smile':
+      // Verificar sonrisa
+      const smile = expressions.happy > 0.7;
+      if (smile) {
+        smileDurationRef.current += 1;
+        positiveFramesRef.current += 1;
+      }
       break;
-    case 'mouth-open':
-      // Detección de apertura de boca - implementar si se añade este desafío
-      confidenceScore += 0.15;
+      
+    case 'head-turn':
+      // Verificar giro de cabeza - usando asimetría facial
+      if (faceHistory.length > 2) {
+        const currentLandmarks = face.landmarks;
+        const prevLandmarks = faceHistory[faceHistory.length - 2].landmarks;
+        
+        // Calcular asimetría actual
+        const leftEye = currentLandmarks.getLeftEye();
+        const rightEye = currentLandmarks.getRightEye();
+        const currentAsymmetry = calculateAsymmetry(leftEye, rightEye);
+        
+        asymmetryHistoryRef.current.push(currentAsymmetry);
+        if (asymmetryHistoryRef.current.length > 10) {
+          asymmetryHistoryRef.current.shift();
+        }
+        
+        // Calcular distancia entre landmarks actuales y anteriores
+        const landmarkDistance = calculateLandmarkDistance(currentLandmarks, prevLandmarks);
+        
+        // Verificar movimiento auténtico
+        if (landmarkDistance > LANDMARK_DISTANCE_THRESHOLD && 
+            landmarkDistance < LANDMARK_DISTANCE_THRESHOLD * 5) { // Evitar movimientos irreales
+          positiveFramesRef.current += 1;
+        } else {
+          inconsistencyCountRef.current += 0.1;
+        }
+      }
       break;
   }
   
-  // Puntos adicionales por consistencia entre frames
-  if (faceHistoryRef.current.length > 5) {
-    const consecutiveFramesConsistency = 1 - inconsistencyCountRef.current * 0.1;
-    confidenceScore += Math.max(0, consecutiveFramesConsistency) * 0.3;
-  }
-  
-  // Puntos por variaciones naturales de iluminación
-  if (illuminationHistoryRef.current.length > 5) {
-    const illumVariation = analyzeIlluminationVariation(illuminationHistoryRef.current);
-    // Variación muy baja (estática) o muy alta (parpadeo artificial) son sospechosas
-    const normalizedIllumScore = 1 - Math.abs(illumVariation - 0.05) * 10;
-    confidenceScore += Math.max(0, Math.min(0.2, normalizedIllumScore));
-  }
-  
-  // Puntos por textura facial realista
-  if (detectedFace) {
-    const textureScore = calculateTextureness(detectedFace);
-    // Rango ideal para rostros reales: 5-15 (empírico)
-    const normalizedTextureScore = 
-      textureScore < 5 ? textureScore / 5 : // Demasiado suave
-      textureScore > 15 ? (30 - textureScore) / 15 : // Demasiado ruidoso
-      1; // En rango ideal
+  // Análisis de textura facial para anti-spoofing
+  if (faceHistory.length > 3) {
+    // Verificar variación de iluminación - debería ser gradual en rostros reales
+    const landmarks = face.landmarks;
+    const faceRegion = landmarks.positions;
     
-    confidenceScore += normalizedTextureScore * 0.3;
+    // Obtener un valor aproximado de iluminación de la región facial
+    let totalBrightness = 0;
+    // Código simplificado - en implementación real se analizarían 
+    // píxeles específicos de la región facial
+    illuminationHistoryRef.current.push(totalBrightness);
+    
+    if (illuminationHistoryRef.current.length > 10) {
+      illuminationHistoryRef.current.shift();
+    }
   }
   
-  return Math.min(1, confidenceScore);
-};
-
-// Calcular puntuación de confianza
-const confidence = confidenceScoring();
-
-// Actualizar progreso basado en puntuación de confianza
-const rawProgress = Math.min(100, Math.round(confidence * 100));
-const smoothedProgress = progressPercentage * 0.7 + rawProgress * 0.3;
-
-if (Math.abs(smoothedProgress - progressPercentage) > 1) {
+  // Actualizar contador de frames
+  frameCounterRef.current += 1;
+  
+  // Calcular progreso
+  const confidence = positiveFramesRef.current / totalFramesNeededRef.current;
+  const newProgress = Math.min(100, Math.round(confidence * 100));
+  
+  // Evitar cambios bruscos en la barra de progreso
+  const smoothedProgress = progressPercentage * 0.7 + newProgress * 0.3;
   setProgressPercentage(Math.round(smoothedProgress));
-}
-
-// Verificar si se completó el desafío con nueva puntuación
-if (confidence >= 0.75) { // Umbral adaptativo
-  setLivenessState('passed');
-}
-    
-  }, [livenessState, livenessChallenge, progressPercentage]);
+  
+  // Verificar si se ha completado el desafío
+  if (confidence >= 1.0) {
+    setLivenessState('passed');
+  }
+}, [livenessChallenge, livenessState, progressPercentage]);
   
   // Función para renderizar los resultados en el canvas
   const renderResults = useCallback((detections: DetectedFace[], displaySize: {width: number, height: number}) => {

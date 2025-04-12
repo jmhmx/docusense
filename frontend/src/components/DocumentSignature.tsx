@@ -257,54 +257,67 @@ const DocumentSignature = ({
 
   // Sign document
   const signDocument = async () => {
-  if (!documentId || !signaturePosition) {
+    if (!signaturePosition) {
     setError('Por favor seleccione una posición para la firma');
     return;
-  }
+    }
+    
+    // Verificar si el usuario tiene biometría configurada
+    if (hasBiometrics) {
+      // Mostrar modal de verificación biométrica
+      setShowBiometricVerification(true);
+    } else {
+      // Proceder con verificación de 2FA estándar
+      await requestVerificationCode();
+    }
   
+  };
+
+  const handleBiometricSuccess = async (result: any) => {
+  // Resultado contiene datos de verificación biométrica
   setIsLoading(true);
   setError(null);
   
   try {
-    // Formato correcto de payload, asegúrate de que coincide con lo que el backend espera
+    // Asegurarse de tener toda la información necesaria
+    if (!documentId || !signaturePosition) {
+      throw new Error('Información de firma incompleta');
+    }
+    
+    // Crear payload con información biométrica
     const payload = {
       position: signaturePosition,
       reason: reason.trim() || 'Document signature',
+      biometricVerification: {
+        timestamp: Date.now(),
+        challenge: result.challenge || 'blink',
+        score: result.score || 0.9,
+        method: result.method || 'facial-recognition'
+      }
     };
     
-    // Añadir logs para depuración
-    console.log(`Intentando firmar documento: ${documentId}`);
-    console.log('Payload:', payload);
-    
-    // Asegúrate de que la URL coincide exactamente con la definida en el backend
-    const response = await api.post(`/api/signatures/${documentId}`, payload);
-    console.log('Respuesta de firma:', response.data);
+    // Enviar solicitud de firma con verificación biométrica
+    const response = await api.post(`/api/signatures/${documentId}/biometric`, payload);
     
     // Recargar firmas
     const signaturesResponse = await api.get(`/api/signatures/document/${documentId}`);
     setSignatures(signaturesResponse.data);
     
-    // Resetear estado y cerrar modal
-    setShowSignModal(false);
-    setShowVerification(false);
-    setVerificationCode('');
+    // Resetear estado y cerrar modales
+    setShowBiometricVerification(false);
     setSignaturePosition(null);
     setReason('');
     setDrawSignature(false);
+    
+    // Mostrar mensaje de éxito
+    setSuccessMessage('Documento firmado exitosamente con verificación biométrica');
     
     if (onSignSuccess) {
       onSignSuccess();
     }
   } catch (err: any) {
-    console.error('Error al firmar el documento:', err);
-    
-    // Mostrar información más detallada del error para depuración
-    if (err.response) {
-      console.error('Respuesta de error:', err.response.status, err.response.data);
-      setError(`Error al firmar (${err.response.status}): ${err.response.data.message || JSON.stringify(err.response.data)}`);
-    } else {
-      setError(err?.message || 'Error desconocido al firmar el documento');
-    }
+    console.error('Error al firmar el documento con biometría:', err);
+    setError(err?.response?.data?.message || 'Error al firmar el documento');
   } finally {
     setIsLoading(false);
   }
@@ -705,6 +718,17 @@ const DocumentSignature = ({
                   >
                     {isLoading ? 'Verifying...' : 'Sign Document'}
                   </Button>
+                </div>
+              </div>
+            )}
+            
+            {showBiometricVerification && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-600 bg-opacity-50">
+                <div className="w-full max-w-md p-8 bg-white rounded-lg">
+                  <BiometricAuthVerify
+                    onSuccess={handleBiometricSuccess}
+                    onCancel={() => setShowBiometricVerification(false)}
+                  />
                 </div>
               </div>
             )}

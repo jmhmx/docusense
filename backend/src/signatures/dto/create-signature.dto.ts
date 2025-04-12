@@ -20,3 +20,22 @@ export class CreateSignatureDto {
   @IsObject()
   position?: SignaturePositionDto;
 }
+
+export class CreateSignatureWithBiometricDto {
+  @IsOptional()
+  @IsString()
+  reason?: string;
+
+  @IsOptional()
+  @IsObject()
+  position?: SignaturePositionDto;
+
+  @IsNotEmpty()
+  @IsObject()
+  biometricVerification: {
+    timestamp: number;
+    challenge: string;
+    score: number;
+    method: string;
+  };
+}

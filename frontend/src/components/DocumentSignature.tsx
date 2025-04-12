@@ -320,6 +320,7 @@ const DocumentSignature = ({
       
       // Send biometric signature request
       const response = await api.post(`/api/signatures/${documentId}/biometric`, payload);
+      console.log('Signature created with id:', response.data.signatureId);
       
       // Reload signatures
       const signaturesResponse = await api.get(`/api/signatures/document/${documentId}`);

@@ -12,7 +12,7 @@ const BiometricStats = () => {
   });
   
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<string | null>(null);
   
   useEffect(() => {
     const fetchBiometricStats = async () => {
@@ -63,7 +63,7 @@ const BiometricStats = () => {
     );
   }
   
-  const formatDate = (dateString) => {
+  const formatDate = (dateString: string | null): string => {
     if (!dateString) return 'N/A';
     return new Date(dateString).toLocaleString();
   };

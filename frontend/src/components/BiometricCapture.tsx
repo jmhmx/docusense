@@ -78,73 +78,6 @@ const calculateAsymmetry = (leftPoints: faceapi.Point[], rightPoints: faceapi.Po
   return Math.abs(leftDist - rightDist) / ((leftDist + rightDist) / 2);
 };
 
-// Función para calcular textura facial - ayuda a detectar imágenes impresas o pantallas
-const calculateTextureness = (video: HTMLVideoElement, face: DetectedFace): number => {
-  // Crear un canvas temporal para extracción de textura
-  const canvas = document.createElement('canvas');
-  const ctx = canvas.getContext('2d');
-  if (!ctx) return 0;
-  
-  // Obtener región de la cara
-  const box = face.detection.box;
-  canvas.width = box.width;
-  canvas.height = box.height;
-  
-  // Dibujar solo la región facial
-  ctx.drawImage(
-    video, 
-    box.x, box.y, box.width, box.height,
-    0, 0, box.width, box.height
-  );
-  
-  // Obtener datos de imagen
-  const imageData = ctx.getImageData(0, 0, box.width, box.height);
-  const data = imageData.data;
-  
-  // Calcular gradientes locales para detectar texturas
-  let gradientSum = 0;
-  for (let y = 1; y < box.height - 1; y++) {
-    for (let x = 1; x < box.width - 1; x++) {
-      const idx = (y * box.width + x) * 4;
-      const idxUp = ((y - 1) * box.width + x) * 4;
-      const idxDown = ((y + 1) * box.width + x) * 4;
-      const idxLeft = (y * box.width + (x - 1)) * 4;
-      const idxRight = (y * box.width + (x + 1)) * 4;
-      
-      // Calcular diferencias en intensidad (solo canal rojo para simplificar)
-      const gradX = Math.abs(data[idxRight] - data[idxLeft]) / 2;
-      const gradY = Math.abs(data[idxDown] - data[idxUp]) / 2;
-      
-      gradientSum += Math.sqrt(gradX * gradX + gradY * gradY);
-    }
-  }
-  
-  // Normalizar por área
-  const normalizedGradient = gradientSum / ((box.width - 2) * (box.height - 2));
-  
-  // Valores muy bajos indican textura demasiado suave (posible imagen impresa)
-  // Valores muy altos indican ruido excesivo
-  return normalizedGradient;
-}
-
-// Añadir función para detectar variación de iluminación
-const analyzeIlluminationVariation = (history: number[]): number => {
-  if (history.length < 3) return 1; // No hay suficientes muestras
-  
-  // Calcular diferencias entre frames consecutivos
-  const diffs = [];
-  for (let i = 1; i < history.length; i++) {
-    diffs.push(Math.abs(history[i] - history[i-1]));
-  }
-  
-  // Calcular variación normalizada
-  const avgDiff = diffs.reduce((sum, diff) => sum + diff, 0) / diffs.length;
-  const avgIllumination = history.reduce((sum, val) => sum + val, 0) / history.length;
-  
-  // Normalizar por iluminación promedio
-  return avgDiff / (avgIllumination + 0.0001);
-}
-
 // Función para cargar modelos de faceapi una sola vez en toda la aplicación
 const loadFaceApiModels = async (): Promise<void> => {
   if (modelsLoadedCache.status) return;
@@ -231,14 +164,6 @@ const BiometricCapture = ({
     
     return totalDistance / points1.length;
   };
-
-  const calculateVariance = (array: number[]): number => {
-    if (array.length === 0) return 0;
-    
-    const mean = array.reduce((sum, val) => sum + val, 0) / array.length;
-    return array.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / array.length;
-  };
-
   
   // Cargar modelos con cache y progreso optimizado
   useEffect(() => {

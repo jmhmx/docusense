@@ -4,7 +4,7 @@ import Button from './Button';
 import useAuth from '../hooks/UseAuth';
 
 interface BiometricAuthVerifyProps {
-  onSuccess: () => void;
+  onSuccess: (result?: any) => void;  // Hacerlo opcional con ?
   onCancel: () => void;
 }
 

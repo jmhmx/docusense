@@ -281,20 +281,21 @@ const DocumentSignature = ({
 
   // Sign document
   const signDocument = async () => {
-    if (!signaturePosition) {
-      setError('Por favor seleccione una posición para la firma');
-      return;
-    }
-    
-    // Check if user has biometrics enabled
-    if (hasBiometrics) {
-      // Show biometric verification modal
-      setShowBiometricVerification(true);
-    } else {
-      // Proceed with standard 2FA verification
-      await requestVerificationCode();
-    }
-  };
+  if (!signaturePosition) {
+    setError('Por favor seleccione una posición para la firma');
+    return;
+  }
+  
+  // Check if user has biometrics enabled
+  if (hasBiometrics) {
+    // Show biometric verification modal inmediatamente
+    setShowBiometricVerification(true);
+    // No llamar a requestVerificationCode aquí
+  } else {
+    // Proceed with standard 2FA verification
+    await requestVerificationCode();
+  }
+};
 
   const handleBiometricSuccess = async (result: any) => {
     setIsLoading(true);
@@ -746,9 +747,7 @@ const DocumentSignature = ({
               </div>
             )}
           </div>
-        </div>
-      )}
-      {/* Add biometric verification modal */}
+          {/* Add biometric verification modal */}
       {showBiometricVerification && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-600 bg-opacity-50">
           <div className="w-full max-w-lg p-6 bg-white rounded-lg">
@@ -764,6 +763,8 @@ const DocumentSignature = ({
               onCancel={() => setShowBiometricVerification(false)}
             />
           </div>
+        </div>
+      )}
         </div>
       )}
       

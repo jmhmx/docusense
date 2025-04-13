@@ -1,5 +1,10 @@
-import { IsEmail, IsOptional, MinLength, IsBoolean } from 'class-validator';
-
+import {
+  IsEmail,
+  IsOptional,
+  MinLength,
+  IsBoolean,
+  IsString,
+} from 'class-validator';
 export class UpdateUserDto {
   @IsOptional()
   name?: string;
@@ -15,4 +20,15 @@ export class UpdateUserDto {
   @IsOptional()
   @IsBoolean()
   isAdmin?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  biometricAuthEnabled?: boolean;
+
+  @IsOptional()
+  @IsString()
+  biometricAuthMethod?: string;
+
+  @IsOptional()
+  biometricAuthSetupAt?: Date;
 }

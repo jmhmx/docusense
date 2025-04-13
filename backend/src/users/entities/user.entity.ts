@@ -46,4 +46,13 @@ export class User {
 
   @Column({ type: 'simple-array', nullable: true })
   twoFactorRecoveryCodes: string[];
+
+  @Column({ default: false })
+  biometricAuthEnabled: boolean;
+
+  @Column({ nullable: true })
+  biometricAuthMethod: string;
+
+  @Column({ nullable: true, name: 'biometric_auth_setup_at' })
+  biometricAuthSetupAt: Date;
 }

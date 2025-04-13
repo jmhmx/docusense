@@ -55,12 +55,18 @@ export class BiometryController {
     }
 
     try {
-      await this.biometryService.register(registerDto, ip, userAgent);
+      const biometricData = await this.biometryService.register(
+        registerDto,
+        ip,
+        userAgent,
+      );
 
       return {
         success: true,
         message: 'Datos biométricos registrados correctamente',
         timestamp: new Date().toISOString(),
+        id: biometricData.id,
+        type: biometricData.type,
       };
     } catch (error) {
       this.logger.error(`Error en registro biométrico: ${error.message}`);

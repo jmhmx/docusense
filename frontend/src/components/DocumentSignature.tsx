@@ -303,51 +303,57 @@ const DocumentSignature = ({
     setError(null);
     
     try {
-      // Make sure we have all required information
-      if (!documentId || !signaturePosition) {
-        throw new Error('Incomplete signature information');
+      // Si no tenemos posición de firma, usar una predeterminada
+      if (!signaturePosition) {
+        setSignaturePosition({
+          page: 1,
+          x: 100,
+          y: 100
+        });
       }
       
-      // Create payload with biometric verification info
+      // Crear payload con información biométrica
       const payload = {
-        position: signaturePosition,
-        reason: reason.trim() || 'Document signature',
+        position: signaturePosition || { page: 1, x: 100, y: 100 },
+        reason: reason.trim() || 'Document signature with biometric verification',
         biometricVerification: {
           timestamp: Date.now(),
           challenge: result.challenge || 'blink',
           score: result.score || 0.9,
-          method: result.method || 'facial-recognition'
+          method: 'facial-recognition'
         }
       };
       
-      // Send biometric signature request
+      console.log('Sending biometric signature request with payload:', payload);
+      
+      // Llamar al endpoint específico para firma biométrica
       const response = await api.post(`/api/signatures/${documentId}/biometric`, payload);
       console.log('Signature created with id:', response.data.signatureId);
       
-      // Reload signatures
+      // Recargar firmas
       const signaturesResponse = await api.get(`/api/signatures/document/${documentId}`);
       setSignatures(signaturesResponse.data);
       
-      // Reset state and close modals
+      // Resetear estado y cerrar modales
       setShowBiometricVerification(false);
       setShowSignModal(false);
       setSignaturePosition(null);
       setReason('');
       setDrawSignature(false);
       
-      // Show success message
+      // Mostrar mensaje de éxito
       setSuccessMessage('Document signed successfully with biometric verification');
       
       if (onSignSuccess) {
         onSignSuccess();
       }
-    } catch (err: any) {
-      console.error('Error signing document with biometrics:', err);
-      setError(err?.response?.data?.message || 'Error signing document');
-    } finally {
-      setIsLoading(false);
-    }
-  };
+      } catch (err: any) {
+        console.error('Error signing document with biometrics:', err);
+        setError(err?.response?.data?.message || 'Error signing document with biometrics');
+      } finally {
+        setIsLoading(false);
+      }
+    };
 
   // Handle signature position selection
   const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -451,15 +457,34 @@ const DocumentSignature = ({
               {isVerifyingIntegrity ? 'Verifying...' : 'Verify Integrity'}
             </Button>
             
-            <Button 
-              onClick={() => setShowSignModal(true)}
-              variant="primary"
-              disabled={!canSign || documentStatus !== 'completed'}
-              size="small"
-              title={cannotSignReason || (documentStatus !== 'completed' ? 'Document must be processed first' : '')}
-            >
-              Sign Document
-            </Button>
+            <div className="flex space-x-1">
+              <Button 
+                onClick={() => setShowSignModal(true)}
+                variant="primary"
+                disabled={!canSign || documentStatus !== 'completed'}
+                size="small"
+                title={cannotSignReason || (documentStatus !== 'completed' ? 'Document must be processed first' : '')}
+              >
+                Sign with 2FA
+              </Button>
+              
+              <Button 
+                onClick={() => {
+                  // Configurar posición y luego mostrar verificación biométrica
+                  setSignaturePosition({
+                    page: 1,
+                    x: 100,
+                    y: 100,
+                  });
+                  setShowBiometricVerification(true);
+                }}
+                variant="primary"
+                disabled={!canSign || documentStatus !== 'completed'}
+                size="small"
+              >
+                Sign with Biometrics
+              </Button>
+            </div>
           </div>
         </div>
         
@@ -748,7 +773,11 @@ const DocumentSignature = ({
               </div>
             )}
           </div>
-          {/* Add biometric verification modal */}
+          
+        </div>
+      )}
+
+      {/* Add biometric verification modal */}
       {showBiometricVerification && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-600 bg-opacity-50">
           <div className="w-full max-w-lg p-6 bg-white rounded-lg">
@@ -764,8 +793,6 @@ const DocumentSignature = ({
               onCancel={() => setShowBiometricVerification(false)}
             />
           </div>
-        </div>
-      )}
         </div>
       )}
       

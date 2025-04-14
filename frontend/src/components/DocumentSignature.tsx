@@ -257,7 +257,44 @@ const DocumentSignature = ({
       setIsLoading(false);
     }
   };
+  
+  const finalizeSignature = async () => {
+  try {
+    if (!documentId || !signaturePosition) {
+      throw new Error('Información de firma incompleta');
+    }
 
+    const response = await api.post(`/api/signatures/${documentId}`, {
+      position: signaturePosition,
+      reason: reason.trim() || 'Firma de documento'
+    });
+
+    console.log('Firma creada con id:', response.data.signatureId);
+    
+    // Recargar firmas
+    const signaturesResponse = await api.get(`/api/signatures/document/${documentId}`);
+    setSignatures(signaturesResponse.data);
+    
+    // Resetear estado y cerrar modales
+    setShowVerification(false);
+    setShowSignModal(false);
+    setSignaturePosition(null);
+    setReason('');
+    setDrawSignature(false);
+    
+    // Mostrar mensaje de éxito
+    setSuccessMessage('Documento firmado exitosamente');
+    
+    if (onSignSuccess) {
+      onSignSuccess();
+    }
+  } catch (err: any) {
+    console.error('Error firmando documento:', err);
+    setError(err?.response?.data?.message || 'Error firmando documento');
+  } finally {
+    setIsLoading(false);
+  }
+};
   // Verify 2FA code
   const verifyCode = async () => {
     if (!verificationCode.trim() || verificationCode.length !== 6) {
@@ -270,7 +307,9 @@ const DocumentSignature = ({
     
     try {
       await api.post('/api/auth/2fa/verify', { code: verificationCode });
-      signDocument();
+      // Aquí falta la llamada para firmar el documento después de la verificación
+      // Esta es la parte que falta:
+      await finalizeSignature();
     } catch (err: any) {
       console.error('Error verifying code:', err);
       setError(err?.response?.data?.message || 'Invalid verification code');
@@ -281,21 +320,21 @@ const DocumentSignature = ({
 
   // Sign document
   const signDocument = async () => {
-  if (!signaturePosition) {
-    setError('Por favor seleccione una posición para la firma');
-    return;
-  }
-  
-  // Check if user has biometrics enabled
-  if (hasBiometrics) {
-    // Show biometric verification modal inmediatamente
-    setShowBiometricVerification(true);
-    // No llamar a requestVerificationCode aquí
-  } else {
-    // Proceed with standard 2FA verification
-    await requestVerificationCode();
-  }
-};
+    if (!signaturePosition) {
+      setError('Por favor seleccione una posición para la firma');
+      return;
+    }
+    
+    // Check if user has biometrics enabled
+    if (hasBiometrics) {
+      // Show biometric verification modal inmediatamente
+      setShowBiometricVerification(true);
+      // No llamar a requestVerificationCode aquí
+    } else {
+      // Proceed with standard 2FA verification
+      await requestVerificationCode();
+    }
+  };
 
   const handleBiometricSuccess = async (result: any) => {
     setIsLoading(true);

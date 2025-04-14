@@ -44,7 +44,6 @@ const DocumentSignature = ({
   const [verificationCode, setVerificationCode] = useState('');
   const [verificationId, setVerificationId] = useState<string | null>(null);
   const [showBiometricVerification, setShowBiometricVerification] = useState(false);
-  const [hasBiometrics, setHasBiometrics] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [canSign, setCanSign] = useState(true);
   const [cannotSignReason, setCannotSignReason] = useState<string | null>(null);
@@ -65,27 +64,6 @@ const DocumentSignature = ({
   const [isVerifyingIntegrity, setIsVerifyingIntegrity] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [drawSignature, setDrawSignature] = useState(false);
-
-  // Check if user has biometrics enabled
-  useEffect(() => {
-    const checkBiometricStatus = async () => {
-      try {
-        // Check if user has biometrics from localStorage first for quicker UI response
-        const storedBiometrics = localStorage.getItem('hasBiometrics');
-        if (storedBiometrics === 'true') {
-          setHasBiometrics(true);
-        }
-        
-        // Verify with the server
-        const response = await api.get('/api/biometry/status');
-        setHasBiometrics(response.data.registered);
-      } catch (err) {
-        console.error('Error checking biometric status', err);
-      }
-    };
-    
-    checkBiometricStatus();
-  }, []);
 
   // Load current user
   useEffect(() => {
@@ -316,23 +294,6 @@ const DocumentSignature = ({
       setError(err?.response?.data?.message || 'Error firmando documento');
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  // Sign document - FUNCIÓN CORREGIDA
-  const signDocument = async () => {
-    if (!signaturePosition) {
-      setError('Por favor seleccione una posición para la firma');
-      return;
-    }
-    
-    // Check if user has biometrics enabled
-    if (hasBiometrics) {
-      // Show biometric verification modal inmediatamente
-      setShowBiometricVerification(true);
-    } else {
-      // Proceed with standard 2FA verification
-      await requestVerificationCode();
     }
   };
 

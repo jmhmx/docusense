@@ -45,7 +45,7 @@ const isEyesClosed = (face: DetectedFace): boolean => {
   const earAvg = (leftEAR + rightEAR) / 2.0;
   
   // Umbral adaptativo basado en valores típicos humanos
-  const threshold = 0.19; // Ajustado según estudios de características faciales
+  const threshold = 0.30; // Ajustado según estudios de características faciales
   
   return earAvg < threshold;
 };
@@ -130,7 +130,7 @@ const BiometricCapture = ({
   // Referencias para contadores y análisis de liveness (evita re-renderizados)
   const frameCounterRef = useRef<number>(0);
   const positiveFramesRef = useRef<number>(0);
-  const totalFramesNeededRef = useRef<number>(30);
+  const totalFramesNeededRef = useRef<number>(20);
   const expressionHistoryRef = useRef<Array<faceapi.FaceExpressions>>([]);
   const lastBlinkStateRef = useRef<boolean>(false);
 
@@ -315,10 +315,10 @@ useEffect(() => {
       
     case 'smile':
       // Verificar sonrisa
-      const smile = expressions.happy > 0.7;
+      const smile = expressions.happy > 0.5;
       if (smile) {
         smileDurationRef.current += 1;
-        positiveFramesRef.current += 1;
+        positiveFramesRef.current += 1.5;
       }
       break;
       
@@ -389,8 +389,21 @@ useEffect(() => {
   // Verificar si se ha completado el desafío
   if (confidence >= 1.0) {
     setLivenessState('passed');
-  }
+    }
+    
+  
 }, [livenessChallenge, livenessState, progressPercentage]);
+
+  const calculateEyeStatus = (face: DetectedFace): number => {
+    const landmarks = face.landmarks;
+    const leftEye = landmarks.getLeftEye();
+    const rightEye = landmarks.getRightEye();
+    
+    const leftEAR = calculateEAR(leftEye);
+    const rightEAR = calculateEAR(rightEye);
+    
+    return (leftEAR + rightEAR) / 2.0;
+  };
   
   // Función para renderizar los resultados en el canvas
   const renderResults = useCallback((detections: DetectedFace[], displaySize: {width: number, height: number}) => {
@@ -417,10 +430,24 @@ useEffect(() => {
       const detection = resizedDetections[0].detection;
       const box = detection.box;
       ctx.strokeStyle = livenessState === 'passed' ? 'green' : 
-                        livenessState === 'failed' ? 'red' : 
-                        livenessState === 'progress' ? 'blue' : 'yellow';
+                      livenessState === 'failed' ? 'red' : 
+                      livenessState === 'progress' ? 'blue' : 'yellow';
       ctx.lineWidth = 3;
       ctx.strokeRect(box.x, box.y, box.width, box.height);
+      
+      // Show debug info
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+      ctx.fillRect(10, 10, 200, 80);
+      ctx.fillStyle = 'black';
+      ctx.font = '12px Arial';
+      
+      if (detections[0].expressions) {
+        const earAvg = calculateEyeStatus(detections[0]);
+        const smileScore = detections[0].expressions.happy.toFixed(2);
+        ctx.fillText(`Blink score: ${earAvg.toFixed(2)}`, 15, 30);
+        ctx.fillText(`Smile score: ${smileScore}`, 15, 50);
+        ctx.fillText(`Progress: ${progressPercentage}%`, 15, 70);
+      }
     }
 
     if (blinkFeedback && detections.length > 0) {
@@ -447,7 +474,7 @@ useEffect(() => {
   const processFrame = async (timestamp: number) => {
     const shouldProcess = timestamp - lastProcessTimestamp >= processInterval;
     
-    if (shouldProcess) {
+    if (shouldProcess || true) {
       lastProcessTimestamp = timestamp;
       frameCounterRef.current += 1;
       
@@ -547,12 +574,12 @@ const startVideo = useCallback(async () => {
     // Adaptar configuración según dispositivo
     const constraints = {
       video: { 
-        width: { ideal: isMobile ? 320 : 640 },
-        height: { ideal: isMobile ? 240 : 480 },
+        width: { ideal: isMobile ? 640 : 640 },
+        height: { ideal: isMobile ? 480 : 480 },
         facingMode: "user",
         frameRate: { 
-          ideal: isLowEndDevice ? 5 : (isMobile ? 10 : 15), 
-          max: isLowEndDevice ? 10 : (isMobile ? 15 : 30)
+          ideal: isLowEndDevice ? 10 : (isMobile ? 15 : 30), 
+          max: isLowEndDevice ? 15 : (isMobile ? 20 : 30)
         }
       }
     };

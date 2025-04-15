@@ -55,4 +55,20 @@ export class User {
 
   @Column({ nullable: true, name: 'biometric_auth_setup_at' })
   biometricAuthSetupAt: Date;
+
+  // Nuevos campos para la rotación de claves
+  @Column({ nullable: true, name: 'key_created_at' })
+  keyCreatedAt: Date;
+
+  @Column({ default: 0, name: 'key_rotation_count' })
+  keyRotationCount: number;
+
+  @Column({ nullable: true, name: 'last_key_rotation' })
+  lastKeyRotation: Date;
+
+  @Column({ default: false, name: 'force_key_rotation' })
+  forceKeyRotation: boolean;
+
+  @Column({ nullable: true, name: 'key_expires_at' })
+  keyExpiresAt: Date;
 }

@@ -14,6 +14,7 @@ import { UsersService } from '../users/users.service';
 import { Signature } from './entities/signature.entity';
 import { AuditLogService, AuditAction } from '../audit/audit-log.service';
 import { Document } from '../documents/entities/document.entity';
+import { BlockchainService } from '../blockchain/blockchain.service';
 
 export interface SignatureVerificationResult {
   isValid: boolean;
@@ -28,12 +29,13 @@ export class SignaturesService {
   constructor(
     @InjectRepository(Signature)
     private signaturesRepository: Repository<Signature>,
-    @InjectRepository(Document) // Añadimos esto
-    private documentsRepository: Repository<Document>, // Y esto
+    @InjectRepository(Document)
+    private documentsRepository: Repository<Document>,
     private readonly cryptoService: CryptoService,
     private readonly documentsService: DocumentsService,
     private readonly usersService: UsersService,
     private readonly auditLogService: AuditLogService,
+    private readonly blockchainService: BlockchainService,
   ) {}
 
   /**
@@ -217,6 +219,25 @@ export class SignaturesService {
             error.stack,
           );
           // Continue even if audit log fails
+        }
+
+        try {
+          await this.blockchainService.updateDocumentRecord(
+            documentId,
+            documentHash,
+            'SIGNATURE',
+            userId,
+            {
+              signatureId: savedSignature.id,
+              timestamp: savedSignature.signedAt.toISOString(),
+            },
+          );
+        } catch (blockchainError) {
+          this.logger.error(
+            `Failed to register signature on blockchain: ${blockchainError.message}`,
+            blockchainError.stack,
+          );
+          // Continue anyway, blockchain registration is not critical for functionality
         }
 
         this.logger.log(`Document ${documentId} signed by user ${userId}`);
@@ -562,6 +583,25 @@ export class SignaturesService {
       }),
     );
 
+    let blockchainVerification = null;
+    try {
+      const documentHash = this.cryptoService.generateHash(document.filePath);
+      blockchainVerification = await this.blockchainService.verifyDocument(
+        documentId,
+        documentHash,
+      );
+
+      if (blockchainVerification && !blockchainVerification.verified) {
+        intact = false; // Document has been modified according to blockchain
+      }
+    } catch (blockchainError) {
+      this.logger.error(
+        `Failed to verify document on blockchain: ${blockchainError.message}`,
+        blockchainError.stack,
+      );
+      // Continue anyway, blockchain verification is not critical
+    }
+
     // Registrar verificación de integridad en auditoría
     await this.auditLogService.log(
       AuditAction.DOCUMENT_SIGN,
@@ -579,6 +619,10 @@ export class SignaturesService {
       signatures: verifiedSignatures,
       verifiedAt: new Date(),
       hashAlgorithm: 'SHA-256',
+      blockchainVerified: blockchainVerification
+        ? blockchainVerification.verified
+        : null,
+      blockchainDetails: blockchainVerification,
     };
   }
 

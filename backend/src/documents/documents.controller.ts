@@ -393,4 +393,16 @@ export class DocumentsController {
       );
     }
   }
+
+  @UseGuards(JwtAuthGuard)
+  @Get(':id/blockchain/verify')
+  async verifyDocumentOnBlockchain(@Param('id') id: string, @Request() req) {
+    return this.documentsService.verifyDocumentOnBlockchain(id, req.user.id);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get(':id/blockchain/certificate')
+  async getBlockchainCertificate(@Param('id') id: string, @Request() req) {
+    return this.documentsService.getBlockchainCertificate(id, req.user.id);
+  }
 }

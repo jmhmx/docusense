@@ -7,6 +7,7 @@ import DocumentEncrypt from '../components/DocumentEncrypt';
 import DocumentSharing from '../components/DocumentSharing';
 import DocumentComments from '../components/DocumentComments';
 import PDFViewer from '../components/PDFViewer';
+import DocumentBlockchainVerification from '../components/DocumentBlockchainVerification';
 
 
 interface DocumentType {
@@ -31,7 +32,7 @@ const DocumentViewer = () => {
   const [document, setDocument] = useState<DocumentType | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'preview' | 'metadata' | 'content' | 'analysis' | 'signatures' | 'sharing' | 'comments'>('preview');
+  const [activeTab, setActiveTab] = useState<'preview' | 'metadata' | 'content' | 'analysis' | 'signatures' | 'sharing' | 'comments' | 'blockchain'>('preview');
   const [processingDocument, setProcessingDocument] = useState<boolean>(false);
   const [unreadComments, setUnreadComments] = useState(0);
 
@@ -437,7 +438,6 @@ const fetchUnreadComments = async () => {
       </div>
 
       {/* Tabs */}
-      {/* Tabs */}
       <div className="mb-6 border-b border-gray-200">
         <nav className="flex -mb-px space-x-8" aria-label="Tabs">
           <button
@@ -515,6 +515,16 @@ const fetchUnreadComments = async () => {
           >
             Signatures
           </button>
+          <button
+            onClick={() => setActiveTab('blockchain')}
+            className={`${
+              activeTab === 'blockchain'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
+          >
+            Blockchain
+          </button>
         </nav>
       </div>
 
@@ -539,6 +549,12 @@ const fetchUnreadComments = async () => {
             // Actualizar badge o contador de comentarios si es necesario
             setUnreadComments(count);
           }}
+        />
+      )}
+      {activeTab === 'blockchain' && id && (
+        <DocumentBlockchainVerification 
+          documentId={id}
+          documentTitle={document?.title || 'Document'}
         />
       )}
     </div>

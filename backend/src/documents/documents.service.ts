@@ -9,6 +9,7 @@ import { AuditLogService, AuditAction } from '../audit/audit-log.service';
 import { SharingService } from '../sharing/sharing.service';
 import * as fs from 'fs';
 import * as path from 'path';
+import { BlockchainService } from '../blockchain/blockchain.service';
 
 @Injectable()
 export class DocumentsService {
@@ -18,6 +19,7 @@ export class DocumentsService {
     private readonly cryptoService: CryptoService,
     private readonly auditLogService: AuditLogService,
     private readonly sharingService?: SharingService,
+    private readonly blockchainService: BlockchainService,
   ) {
     // Verificar servicios
     console.log('CryptoService disponible:', !!this.cryptoService);

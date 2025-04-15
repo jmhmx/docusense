@@ -44,7 +44,9 @@
     "rxjs": "^7.8.1",
     "speakeasy": "^2.0.0",
     "typeorm": "^0.3.20",
-    "uuid": "^9.0.1"
+    "uuid": "^9.0.1",
+    "fabric-network": "^2.2.13",
+    "fabric-ca-client": "^2.2.13"
   },
   "devDependencies": {
     "@nestjs/cli": "^10.0.0",

@@ -1,0 +1,19 @@
+{
+  "name": "document-contract",
+  "version": "0.1.0",
+  "description": "Smart contract for document verification and tracking",
+  "main": "index.js",
+  "engines": {
+    "node": ">=12",
+    "npm": ">=6"
+  },
+  "scripts": {
+    "start": "fabric-chaincode-node start"
+  },
+  "author": "DocuSense",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "fabric-contract-api": "^2.4.1",
+    "fabric-shim": "^2.4.1"
+  }
+}

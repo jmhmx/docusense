@@ -11,6 +11,7 @@ import { AuditModule } from './audit/audit.module';
 import { SignaturesModule } from './signatures/signatures.module';
 import { SharingModule } from './sharing/sharing.module';
 import { BiometryModule } from './biometry/biometry.module';
+import { BlockchainModule } from './blockchain/blockchain.module';
 
 @Module({
   controllers: [HealthController],
@@ -20,7 +21,7 @@ import { BiometryModule } from './biometry/biometry.module';
     }),
     ScheduleModule.forRoot(),
     TypeOrmModule.forRootAsync({
-      imports: [ConfigModule],
+      imports: [ConfigModule, BlockchainModule],
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
         type: 'postgres',
@@ -46,6 +47,7 @@ import { BiometryModule } from './biometry/biometry.module';
     SignaturesModule,
     SharingModule,
     BiometryModule,
+    BlockchainModule,
   ],
 })
 export class AppModule {}

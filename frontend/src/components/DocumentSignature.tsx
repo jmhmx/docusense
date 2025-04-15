@@ -2,6 +2,8 @@ import { useState, useRef, useEffect } from 'react';
 import { api } from '../api/client';
 import Button from './Button';
 import BiometricAuthVerify from './BiometricAuthVerify';
+import BiometricSignatureWorkflow from './BiometricSignatureWorkflow';
+
 
 interface SignaturePosition {
   page: number;
@@ -64,6 +66,8 @@ const DocumentSignature = ({
   const [isVerifyingIntegrity, setIsVerifyingIntegrity] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [drawSignature, setDrawSignature] = useState(false);
+  const [showBiometricWorkflow, setShowBiometricWorkflow] = useState(false);
+
 
   // Load current user
   useEffect(() => {
@@ -297,64 +301,6 @@ const DocumentSignature = ({
     }
   };
 
-  // FUNCIÓN CORREGIDA para manejo de éxito en verificación biométrica
-  const handleBiometricSuccess = async (result: any) => {
-    setIsLoading(true);
-    setError(null);
-    
-    try {
-      // Si no tenemos posición de firma, usar una predeterminada
-      if (!signaturePosition) {
-        setSignaturePosition({
-          page: 1,
-          x: 100,
-          y: 100
-        });
-      }
-      
-      // Crear payload con información biométrica
-      const payload = {
-        position: signaturePosition || { page: 1, x: 100, y: 100 },
-        reason: reason.trim() || 'Document signature with biometric verification',
-        biometricVerification: {
-          timestamp: Date.now(),
-          challenge: result.challenge || 'blink',
-          score: result.score || 0.9,
-          method: 'facial-recognition'
-        }
-      };
-      
-      console.log('Sending biometric signature request with payload:', payload);
-      
-      // Llamar al endpoint específico para firma biométrica
-      const response = await api.post(`/api/signatures/${documentId}/biometric`, payload);
-      console.log('Signature created with id:', response.data.signatureId);
-      
-      // Recargar firmas
-      const signaturesResponse = await api.get(`/api/signatures/document/${documentId}`);
-      setSignatures(signaturesResponse.data);
-      
-      // Resetear estado y cerrar modales
-      setShowBiometricVerification(false);
-      setShowSignModal(false);
-      setSignaturePosition(null);
-      setReason('');
-      setDrawSignature(false);
-      
-      // Mostrar mensaje de éxito
-      setSuccessMessage('Document signed successfully with biometric verification');
-      
-      if (onSignSuccess) {
-        onSignSuccess();
-      }
-      } catch (err: any) {
-        console.error('Error signing document with biometrics:', err);
-        setError(err?.response?.data?.message || 'Error signing document with biometrics');
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
   // Handle signature position selection
   const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!canvasRef.current) return;
@@ -469,15 +415,7 @@ const DocumentSignature = ({
               </Button>
               
               <Button 
-                onClick={() => {
-                  // Configurar posición y luego mostrar verificación biométrica
-                  setSignaturePosition({
-                    page: 1,
-                    x: 100,
-                    y: 100,
-                  });
-                  setShowBiometricVerification(true);
-                }}
+                onClick={() => setShowBiometricWorkflow(true)}
                 variant="primary"
                 disabled={!canSign || documentStatus !== 'completed'}
                 size="small"
@@ -778,14 +716,24 @@ const DocumentSignature = ({
       )}
 
       {/* Add biometric verification modal */}
-      {showBiometricVerification && (
+      {showBiometricWorkflow && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-600 bg-opacity-50">
-          <div className="w-full max-w-lg p-6 bg-white rounded-lg">
-            <BiometricAuthVerify
-              onSuccess={handleBiometricSuccess}
-              onCancel={() => setShowBiometricVerification(false)}
-            />
-          </div>
+          <BiometricSignatureWorkflow 
+            documentId={documentId}
+            documentTitle={documentTitle}
+            onSuccess={(result) => {
+              setShowBiometricWorkflow(false);
+              if (onSignSuccess) {
+                onSignSuccess();
+              }
+              // Recargar firmas
+              fetchSignatures();
+              // Mostrar mensaje de éxito
+              setSuccessMessage('Documento firmado exitosamente con verificación biométrica');
+            }}
+            onCancel={() => setShowBiometricWorkflow(false)}
+            navigateToRegistration={() => navigate('/biometric-registration')}
+          />
         </div>
       )}
       

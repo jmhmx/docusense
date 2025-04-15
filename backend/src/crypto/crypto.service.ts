@@ -162,7 +162,7 @@ export class CryptoService {
    */
   private generateSecurePassphrase(userId: string): string {
     // Combinar un identificador con una salt aleatoria
-    const seedData = userId + process.env.JWT_SECRET + Date.now().toString();
+    const seedData = userId + process.env.JWT_SECRET;
     // Crear un hash como base para la contraseña
     const hash = crypto.createHash('sha256').update(seedData).digest('hex');
     // Añadir complejidad con caracteres especiales

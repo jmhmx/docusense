@@ -781,13 +781,6 @@ const DocumentSignature = ({
       {showBiometricVerification && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-600 bg-opacity-50">
           <div className="w-full max-w-lg p-6 bg-white rounded-lg">
-            <div className="mb-4">
-              <h3 className="text-lg font-medium text-gray-900">Verificación Biométrica</h3>
-              <p className="mt-1 text-sm text-gray-500">
-                Por favor complete la verificación biométrica para firmar el documento
-              </p>
-            </div>
-            
             <BiometricAuthVerify
               onSuccess={handleBiometricSuccess}
               onCancel={() => setShowBiometricVerification(false)}

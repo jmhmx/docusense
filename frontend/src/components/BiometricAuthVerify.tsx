@@ -50,9 +50,7 @@ const BiometricAuthVerify = ({ onSuccess, onCancel }: BiometricAuthVerifyProps) 
   };
   
   return (
-    <div className="p-6 bg-white rounded-lg shadow-lg">
-      <h2 className="mb-4 text-xl font-semibold text-gray-800">Verificación Biométrica</h2>
-      
+    <div className="p-6 bg-white rounded-lg shadow-lg">      
       {error && (
         <div className="p-4 mb-4 text-red-700 bg-red-100 rounded-md">
           {error}

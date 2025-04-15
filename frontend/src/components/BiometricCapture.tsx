@@ -83,15 +83,16 @@ const loadFaceApiModels = async (): Promise<void> => {
   if (modelsLoadedCache.status) return;
   
   if (!modelsLoadedCache.promise) {
-      modelsLoadedCache.promise = (async () => {
+    modelsLoadedCache.promise = (async () => {
       try {
-        // Usar modelos tiny cuando sea posible para menor tamaño
+        console.log('Loading face-api models from:', MODEL_URL);
         await Promise.all([
           faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
-          faceapi.nets.faceLandmark68TinyNet.loadFromUri(MODEL_URL), // Cambio a versión tiny
+          faceapi.nets.faceLandmark68TinyNet.loadFromUri(MODEL_URL),
           faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
           faceapi.nets.faceExpressionNet.loadFromUri(MODEL_URL)
         ]);
+        console.log('Face-api models loaded successfully');
         modelsLoadedCache.status = true;
       } catch (error) {
         console.error('Error loading face-api models:', error);
@@ -123,6 +124,7 @@ const BiometricCapture = ({
   // Referencias
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const detectionIntervalRef = useRef<number | null>(null);
   
@@ -164,6 +166,29 @@ const BiometricCapture = ({
     
     return totalDistance / points1.length;
   };
+
+  const resizeCanvas = useCallback(() => {
+  if (!videoRef.current || !canvasRef.current || !containerRef.current) return;
+  
+  // Obtener dimensiones del contenedor
+  const containerWidth = containerRef.current.clientWidth;
+  
+  // Calcular altura manteniendo relación de aspecto 4:3
+  const aspectRatio = 4/3;
+  const newHeight = containerWidth / aspectRatio;
+  
+  // Aplicar dimensiones al video y canvas
+  videoRef.current.width = containerWidth;
+  videoRef.current.height = newHeight;
+  canvasRef.current.width = containerWidth;
+  canvasRef.current.height = newHeight;
+  
+  // Si ya hay detecciones, actualizar el canvas
+  if (detectedFace) {
+    const displaySize = { width: containerWidth, height: newHeight };
+    faceapi.matchDimensions(canvasRef.current, displaySize);
+  }
+}, [detectedFace]);
   
   // Cargar modelos con cache y progreso optimizado
   useEffect(() => {
@@ -257,6 +282,19 @@ useEffect(() => {
   };
 }, [detectionStarted]);
   
+  useEffect(() => {
+  // Iniciar con el tamaño correcto
+  resizeCanvas();
+  
+  // Añadir listener de redimensionamiento
+  window.addEventListener('resize', resizeCanvas);
+  
+  // Limpiar al desmontar
+  return () => {
+    window.removeEventListener('resize', resizeCanvas);
+  };
+}, [resizeCanvas]);
+  
   // Verificación de liveness memoizada para evitar recreación en cada render
   const checkLiveness = useCallback((face: DetectedFace) => {
   // Obtener expresiones faciales actuales
@@ -298,6 +336,8 @@ useEffect(() => {
         // Incrementar contador de parpadeos detectados
         blinkDetectedCountRef.current += 1;
         positiveFramesRef.current += 5; // Bonus por parpadeo completo
+        
+        console.log('Blink detected! Positive frames:', positiveFramesRef.current);
       } else if (!eyesClosed && lastBlinkStateRef.current) {
         lastBlinkStateRef.current = false;
         
@@ -305,6 +345,7 @@ useEffect(() => {
         const blinkDuration = Date.now() - (lastBlinkStartTimeRef.current || 0);
         if (blinkDuration > 50 && blinkDuration < 500) { // Duración típica de parpadeo (ms)
           positiveFramesRef.current += 3; // Bonus adicional por duración natural
+          console.log('Natural blink duration detected:', blinkDuration);
         }
       }
       break;
@@ -424,7 +465,7 @@ useEffect(() => {
       ctx.font = '20px Arial';
       ctx.fillText('¡Parpadeo detectado!', 10, 30);
     }
-  }, [livenessState]);
+  }, [livenessState, blinkFeedback]);
   
   // Detección optimizada usando un bucle de requestAnimationFrame en vez de setInterval
   const detectFaces = useCallback(() => {
@@ -680,6 +721,8 @@ const startVideo = useCallback(async () => {
     'nod': 'Asentimiento detectado... continúe',
     'mouth-open': 'Apertura de boca detectada... continúe'
   } as Record<ChallengeType, string>), []);
+
+  
   
   return (
     <div className="p-4 bg-white rounded-lg shadow">
@@ -728,22 +771,18 @@ const startVideo = useCallback(async () => {
         )}
         
         <div className="flex flex-col items-center">
-          <div className="relative mb-4">
+          <div ref={containerRef} className="relative w-full max-w-lg mb-4">
             <video 
               ref={videoRef}
-              width="640"
-              height="480"
               autoPlay
               playsInline
               muted
-              className="rounded-md"
+              className="w-full rounded-md"
               style={{ display: !modelsLoaded ? 'none' : 'block' }}
             />
             <canvas 
               ref={canvasRef}
-              width="640"
-              height="480"
-              className="absolute top-0 left-0 z-10"
+              className="absolute top-0 left-0 z-10 w-full h-full"
             />
             
             {/* Mensajes condicionales según el estado */}
@@ -768,12 +807,15 @@ const startVideo = useCallback(async () => {
                 <p className="text-sm font-medium text-blue-800">
                   {progressInstructions[livenessChallenge]}
                 </p>
-                <div className="w-full h-2 mt-2 bg-white bg-opacity-50 rounded-full">
+                <div className="w-full h-4 mt-2 bg-white bg-opacity-50 rounded-full">
                   <div 
-                    className="h-2 bg-blue-500 rounded-full"
+                    className="h-4 transition-all duration-300 bg-blue-500 rounded-full"
                     style={{ width: `${progressPercentage}%` }}
                   ></div>
                 </div>
+                <p className="mt-1 text-xs text-blue-700">
+                  Progreso: {progressPercentage}%
+                </p>
               </div>
             )}
             
@@ -823,6 +865,11 @@ const startVideo = useCallback(async () => {
           {challengeInstructions[livenessChallenge]}
         </p>
       </div>
+      {blinkFeedback && (
+        <div className="absolute top-0 left-0 right-0 p-2 text-center text-white bg-green-500 bg-opacity-75">
+          ¡Parpadeo detectado!
+        </div>
+      )}
     </div>
   );
 

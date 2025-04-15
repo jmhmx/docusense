@@ -11,6 +11,7 @@ import {
   Headers,
   Ip,
   BadRequestException,
+  ForbiddenException, // Added missing import
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { SecureCommunicationService } from './secure-communication.service';

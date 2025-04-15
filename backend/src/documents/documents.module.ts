@@ -10,7 +10,7 @@ import { DocumentAnalyzerService } from '../analyzers/document-analyzer.service'
 import { CryptoModule } from '../crypto/crypto.module';
 import { AuditModule } from '../audit/audit.module';
 import { SharingModule } from '../sharing/sharing.module';
-
+import { BlockchainModule } from '../blockchain/blockchain.module';
 @Module({
   imports: [
     TypeOrmModule.forFeature([Document]),
@@ -18,6 +18,7 @@ import { SharingModule } from '../sharing/sharing.module';
     CryptoModule,
     AuditModule,
     forwardRef(() => SharingModule), // Usar forwardRef para evitar dependencia circular
+    forwardRef(() => BlockchainModule),
   ],
   controllers: [DocumentsController, DocumentEncryptionController],
   providers: [

@@ -497,6 +497,8 @@ export class SignaturesService {
     }[];
     verifiedAt: Date;
     hashAlgorithm: string; // Añadimos información sobre el algoritmo
+    blockchainVerified?: boolean | null;
+    blockchainDetails?: any;
   }> {
     // Validación de entrada
     if (!documentId) {

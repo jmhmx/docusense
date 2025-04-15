@@ -1,5 +1,6 @@
 import {
   Injectable,
+  Logger,
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
@@ -17,12 +18,13 @@ import { BlockchainService } from '../blockchain/blockchain.service';
 
 @Injectable()
 export class DocumentsService {
+  private readonly logger = new Logger(DocumentsService.name);
   constructor(
     @InjectRepository(Document)
     private readonly documentsRepository: Repository<Document>,
     private readonly cryptoService: CryptoService,
     private readonly auditLogService: AuditLogService,
-    private readonly sharingService?: SharingService,
+    private readonly sharingService: SharingService,
     private readonly blockchainService: BlockchainService,
   ) {
     // Verificar servicios

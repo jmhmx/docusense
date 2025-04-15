@@ -4,16 +4,32 @@ import Button from './Button';
 import useAuth from '../hooks/UseAuth';
 import { api } from '../api/client';
 
-// Componente para integrar el flujo de firma biométrica
+interface BiometricSignatureWorkflowProps {
+  documentId: string;
+  documentTitle: string;
+  onSuccess: (result: any) => void;
+  onCancel: () => void;
+  navigateToRegistration: () => void;
+}
+
+interface BiometricVerificationResult {
+  verified: boolean;
+  timestamp: string;
+  userId: string;
+  descriptorData?: string;
+  challenge?: string;
+  score?: number;
+}
+
 const BiometricSignatureWorkflow = ({ 
   documentId, 
   documentTitle, 
   onSuccess, 
   onCancel,
   navigateToRegistration
-}) => {
-  const [step, setStep] = useState('intro'); // intro, capture, processing, success, error
-  const [error, setError] = useState(null);
+}: BiometricSignatureWorkflowProps) => {
+  const [step, setStep] = useState<'intro' | 'capture' | 'processing' | 'success' | 'error'>('intro');
+  const [error, setError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [hasBiometrics, setHasBiometrics] = useState(false);
   const { user } = useAuth();
@@ -36,7 +52,7 @@ const BiometricSignatureWorkflow = ({
   }, [user]);
 
   // Manejar éxito de captura biométrica
-  const handleBiometricSuccess = async (result) => {
+  const handleBiometricSuccess = async (result: BiometricVerificationResult) => {
     setIsProcessing(true);
     setError(null);
     
@@ -57,7 +73,7 @@ const BiometricSignatureWorkflow = ({
       const response = await api.post(`/api/signatures/${documentId}/biometric`, payload);
       
       // Si la firma fue exitosa, avanzar al paso de éxito
-      if (response.data.signatureId) {
+      if (response.data && response.data.signatureId) {
         setStep('success');
         
         // Si hay callback de éxito, llamarlo después de un retraso
@@ -65,7 +81,7 @@ const BiometricSignatureWorkflow = ({
           if (onSuccess) onSuccess(response.data);
         }, 1500);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error al firmar con biometría:', err);
       setError(err?.response?.data?.message || 'Error al procesar firma biométrica');
       setStep('error');

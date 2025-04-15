@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { api } from '../api/client';
 import Button from './Button';
-import BiometricAuthVerify from './BiometricAuthVerify';
 import BiometricSignatureWorkflow from './BiometricSignatureWorkflow';
 
 
@@ -45,7 +44,6 @@ const DocumentSignature = ({
   const [showVerification, setShowVerification] = useState(false);
   const [verificationCode, setVerificationCode] = useState('');
   const [verificationId, setVerificationId] = useState<string | null>(null);
-  const [showBiometricVerification, setShowBiometricVerification] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [canSign, setCanSign] = useState(true);
   const [cannotSignReason, setCannotSignReason] = useState<string | null>(null);
@@ -721,18 +719,28 @@ const DocumentSignature = ({
           <BiometricSignatureWorkflow 
             documentId={documentId}
             documentTitle={documentTitle}
-            onSuccess={(result) => {
+            onSuccess={(_result: any) => {
               setShowBiometricWorkflow(false);
               if (onSignSuccess) {
                 onSignSuccess();
               }
-              // Recargar firmas
+              // Recargar firmas - fix function name
+              const fetchSignatures = async () => {
+                try {
+                  const response = await api.get(`/api/signatures/document/${documentId}`);
+                  setSignatures(response.data);
+                } catch (err) {
+                  console.error('Error loading signatures:', err);
+                }
+              };
               fetchSignatures();
               // Mostrar mensaje de éxito
               setSuccessMessage('Documento firmado exitosamente con verificación biométrica');
             }}
             onCancel={() => setShowBiometricWorkflow(false)}
-            navigateToRegistration={() => navigate('/biometric-registration')}
+            navigateToRegistration={() => {
+              window.location.href = '/biometric-registration';
+            }}
           />
         </div>
       )}

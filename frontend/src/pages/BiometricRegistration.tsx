@@ -1,13 +1,22 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import BiometricCapture from '../components/BiometricCapture';
 import { api } from '../api/client';
 import useAuth from '../hooks/UseAuth';
 import Button from '../components/Button';
 
+// Define los tipos necesarios
+interface BiometricRegistrationResult {
+  success: boolean;
+  message: string;
+  id?: string;
+  type?: string;
+  timestamp?: string;
+  descriptorData?: string;
+  challenge?: string;
+}
+
 const BiometricRegistration = () => {
-  // @ts-ignore
-  const [registrationComplete, setRegistrationComplete] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [step, setStep] = useState<'intro' | 'capture' | 'complete'>('intro');
@@ -15,29 +24,46 @@ const BiometricRegistration = () => {
   const navigate = useNavigate();
   const { user, updateUserBiometrics } = useAuth();
   
+  // Verificar si ya tiene biometría registrada
+  useEffect(() => {
+    const checkExistingBiometrics = async () => {
+      try {
+        const response = await api.get('/api/biometry/status');
+        if (response.data.registered) {
+          // Si ya tiene biometría registrada, mostrar mensaje y redirigir
+          setError('Ya tienes biometría registrada. Serás redirigido al dashboard.');
+          setTimeout(() => navigate('/dashboard'), 3000);
+        }
+      } catch (err) {
+        // Ignorar errores aquí, simplemente continuamos con el registro
+        console.log('Verificando biometría:', err);
+      }
+    };
+    
+    if (user?.id) {
+      checkExistingBiometrics();
+    }
+  }, [user, navigate]);
+  
   const startRegistration = () => {
     setStep('capture');
+    setError(null);
   };
   
-  const handleRegistrationSuccess = async (result: any) => {
+  const handleRegistrationSuccess = async (_result: BiometricRegistrationResult) => {
+    if (!user?.id) {
+      setError('Usuario no identificado. Por favor, inicia sesión nuevamente.');
+      return;
+    }
+    
     setLoading(true);
+    setError(null);
     
     try {
-      // Primero registro en backend
-      await api.post('/api/biometry/register', {
-        userId: user?.id,
-        descriptorData: result.descriptorData,
-        type: 'face',
-        livenessProof: {
-          challenge: result.challenge || 'blink',
-          timestamp: Date.now(),
-          motionData: result.motionData
-        }
-      });
-      
-      // Luego notificar setup completo
+      // La BiometricCapture ya realizó el registro biométrico,
+      // solo necesitamos completar el proceso en el perfil del usuario
       await api.post('/api/users/biometrics/setup-complete', {
-        userId: user?.id,
+        userId: user.id,
         setupMethod: 'facial'
       });
       
@@ -47,11 +73,10 @@ const BiometricRegistration = () => {
         updateUserBiometrics(true);
       }
       
-      setRegistrationComplete(true);
       setStep('complete');
     } catch (err: any) {
       console.error('Error en registro biométrico:', err);
-      setError(err?.response?.data?.message || 'Error registrando datos biométricos');
+      setError(err?.response?.data?.message || 'Error al completar el registro biométrico');
     } finally {
       setLoading(false);
     }

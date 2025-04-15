@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Like, ILike } from 'typeorm';
 import { Document, DocumentStatus } from './entities/document.entity';
@@ -108,7 +112,100 @@ export class DocumentsService {
       }
     }
 
+    try {
+      const documentHash = this.cryptoService.generateHash(document.filePath);
+      await this.blockchainService.registerDocument(
+        document.id,
+        documentHash,
+        {
+          title: document.title,
+          fileSize: document.fileSize,
+          mimeType: document.mimeType,
+        },
+        userId,
+      );
+    } catch (blockchainError) {
+      this.logger.error(
+        `Failed to register document on blockchain: ${blockchainError.message}`,
+        blockchainError.stack,
+      );
+      // Continue anyway, blockchain registration is not critical
+    }
+
     return savedDocument;
+  }
+
+  async verifyDocumentOnBlockchain(id: string, userId: string): Promise<any> {
+    const document = await this.findOne(id, userId);
+
+    if (!document) {
+      throw new NotFoundException(`Document with ID ${id} not found`);
+    }
+
+    try {
+      const documentHash = this.cryptoService.generateHash(document.filePath);
+      return await this.blockchainService.verifyDocument(id, documentHash);
+    } catch (error) {
+      this.logger.error(
+        `Error verifying document ${id} on blockchain: ${error.message}`,
+        error.stack,
+      );
+      throw new BadRequestException(
+        `Failed to verify document on blockchain: ${error.message}`,
+      );
+    }
+  }
+
+  async getBlockchainCertificate(id: string, userId: string): Promise<any> {
+    const document = await this.findOne(id, userId);
+
+    if (!document) {
+      throw new NotFoundException(`Document with ID ${id} not found`);
+    }
+
+    try {
+      return await this.blockchainService.getVerificationCertificate(id);
+    } catch (error) {
+      this.logger.error(
+        `Error getting blockchain certificate for document ${id}: ${error.message}`,
+        error.stack,
+      );
+      throw new BadRequestException(
+        `Failed to get blockchain certificate: ${error.message}`,
+      );
+    }
+  }
+
+  async updateDocumentOnBlockchain(
+    id: string,
+    userId: string,
+    action: string,
+    metadata?: any,
+  ): Promise<boolean> {
+    const document = await this.findOne(id, userId);
+
+    if (!document) {
+      throw new NotFoundException(`Document with ID ${id} not found`);
+    }
+
+    try {
+      const documentHash = this.cryptoService.generateHash(document.filePath);
+      return await this.blockchainService.updateDocumentRecord(
+        id,
+        documentHash,
+        action,
+        userId,
+        metadata,
+      );
+    } catch (error) {
+      this.logger.error(
+        `Error updating document ${id} on blockchain: ${error.message}`,
+        error.stack,
+      );
+      throw new BadRequestException(
+        `Failed to update document on blockchain: ${error.message}`,
+      );
+    }
   }
 
   async findAll(userId?: string, searchQuery?: string): Promise<Document[]> {

@@ -3,35 +3,58 @@ import { useNavigate } from 'react-router-dom';
 import BiometricCapture from '../components/BiometricCapture';
 import { api } from '../api/client';
 import useAuth from '../hooks/UseAuth';
+import Button from '../components/Button';
 
 const BiometricRegistration = () => {
+  // @ts-ignore
   const [registrationComplete, setRegistrationComplete] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [step, setStep] = useState<'intro' | 'capture' | 'complete'>('intro');
+  
   const navigate = useNavigate();
   const { user, updateUserBiometrics } = useAuth();
   
-  const handleRegistrationSuccess = () => {
-    setRegistrationComplete(true);
+  const startRegistration = () => {
+    setStep('capture');
+  };
+  
+  const handleRegistrationSuccess = async (result: any) => {
+    setLoading(true);
     
-    // Guardar flag en localStorage
-    localStorage.setItem('hasBiometrics', 'true');
-    
-    // Actualizar contexto de autenticación
-    if (updateUserBiometrics) {
-      updateUserBiometrics(true);
-    }
-    
-    // Notificar al backend
-    if (user && user.id) {
-      api.post('/api/users/biometrics/setup-complete', {
-        userId: user.id,
+    try {
+      // Primero registro en backend
+      await api.post('/api/biometry/register', {
+        userId: user?.id,
+        descriptorData: result.descriptorData,
+        type: 'face',
+        livenessProof: {
+          challenge: result.challenge || 'blink',
+          timestamp: Date.now(),
+          motionData: result.motionData
+        }
+      });
+      
+      // Luego notificar setup completo
+      await api.post('/api/users/biometrics/setup-complete', {
+        userId: user?.id,
         setupMethod: 'facial'
-      }).catch((err: Error) => console.error('Error notificando setup biométrico:', err));
+      });
+      
+      // Actualizar estado local
+      localStorage.setItem('hasBiometrics', 'true');
+      if (updateUserBiometrics) {
+        updateUserBiometrics(true);
+      }
+      
+      setRegistrationComplete(true);
+      setStep('complete');
+    } catch (err: any) {
+      console.error('Error en registro biométrico:', err);
+      setError(err?.response?.data?.message || 'Error registrando datos biométricos');
+    } finally {
+      setLoading(false);
     }
-    
-    // Redireccionar
-    setTimeout(() => {
-      navigate('/dashboard');
-    }, 3000);
   };
   
   return (
@@ -45,7 +68,50 @@ const BiometricRegistration = () => {
         </p>
       </div>
       
-      {registrationComplete ? (
+      {error && (
+        <div className="p-4 mb-6 text-red-700 bg-red-100 rounded-md">
+          {error}
+        </div>
+      )}
+      
+      {step === 'intro' && (
+        <div className="p-8 mb-8 bg-white rounded-lg shadow">
+          <h2 className="mb-4 text-xl font-medium text-gray-900">Bienvenido al registro biométrico</h2>
+          <p className="mb-6 text-gray-700">
+            Para mejorar la seguridad de sus firmas digitales, utilizamos verificación biométrica
+            facial. El proceso es simple:
+          </p>
+          <ul className="mb-6 ml-6 text-gray-700 list-disc">
+            <li className="mb-2">Posicione su rostro frente a la cámara</li>
+            <li className="mb-2">Siga las instrucciones para completar el desafío (parpadeo)</li>
+            <li className="mb-2">Confirme y guarde sus datos biométricos</li>
+          </ul>
+          <div className="p-4 mb-6 rounded-md bg-blue-50">
+            <p className="text-blue-700">
+              <strong>Nota:</strong> Sus datos biométricos se cifran y almacenan de forma segura.
+              Puede eliminarlos en cualquier momento desde su perfil.
+            </p>
+          </div>
+          <div className="flex justify-center">
+            <Button 
+              onClick={startRegistration}
+              disabled={loading}
+            >
+              Comenzar registro biométrico
+            </Button>
+          </div>
+        </div>
+      )}
+      
+      {step === 'capture' && (
+        <BiometricCapture 
+          mode="register" 
+          onSuccess={handleRegistrationSuccess}
+          challengeType="blink"
+        />
+      )}
+      
+      {step === 'complete' && (
         <div className="p-8 text-center bg-white rounded-lg shadow">
           <div className="flex items-center justify-center w-16 h-16 mx-auto bg-green-100 rounded-full">
             <svg className="w-8 h-8 text-green-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -58,15 +124,12 @@ const BiometricRegistration = () => {
           <p className="mt-2 text-gray-500">
             Su biometría ha sido registrada exitosamente. Ahora puede usar la verificación biométrica para firmar documentos.
           </p>
-          <p className="mt-4 text-sm text-gray-500">
-            Redirigiendo al dashboard...
-          </p>
+          <div className="mt-6">
+            <Button onClick={() => navigate('/dashboard')}>
+              Ir al Dashboard
+            </Button>
+          </div>
         </div>
-      ) : (
-        <BiometricCapture 
-          mode="register" 
-          onSuccess={handleRegistrationSuccess} 
-        />
       )}
       
       <div className="p-6 mt-8 rounded-lg bg-blue-50">
@@ -74,9 +137,9 @@ const BiometricRegistration = () => {
           Información importante
         </h3>
         <ul className="mt-2 ml-6 text-sm text-blue-700 list-disc">
-          <li className="mt-1">Sus datos biométricos se almacenan de forma cifrada en nuestros servidores</li>
-          <li className="mt-1">Puede eliminar sus datos biométricos en cualquier momento desde su perfil</li>
-          <li className="mt-1">La verificación biométrica cumple con los requisitos de la LFEA para firmas electrónicas avanzadas</li>
+          <li className="mt-1">Sus datos biométricos se almacenan de forma cifrada</li>
+          <li className="mt-1">Puede eliminar sus datos biométricos en cualquier momento</li>
+          <li className="mt-1">La verificación biométrica cumple con los requisitos de firma electrónica avanzada</li>
           <li className="mt-1">Sus datos biométricos nunca se comparten con terceros</li>
         </ul>
       </div>

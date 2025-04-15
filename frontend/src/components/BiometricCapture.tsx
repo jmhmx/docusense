@@ -124,7 +124,6 @@ const BiometricCapture = ({
   // Referencias
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const detectionIntervalRef = useRef<number | null>(null);
   
@@ -166,29 +165,6 @@ const BiometricCapture = ({
     
     return totalDistance / points1.length;
   };
-
-  const resizeCanvas = useCallback(() => {
-  if (!videoRef.current || !canvasRef.current || !containerRef.current) return;
-  
-  // Obtener dimensiones del contenedor
-  const containerWidth = containerRef.current.clientWidth;
-  
-  // Calcular altura manteniendo relación de aspecto 4:3
-  const aspectRatio = 4/3;
-  const newHeight = containerWidth / aspectRatio;
-  
-  // Aplicar dimensiones al video y canvas
-  videoRef.current.width = containerWidth;
-  videoRef.current.height = newHeight;
-  canvasRef.current.width = containerWidth;
-  canvasRef.current.height = newHeight;
-  
-  // Si ya hay detecciones, actualizar el canvas
-  if (detectedFace) {
-    const displaySize = { width: containerWidth, height: newHeight };
-    faceapi.matchDimensions(canvasRef.current, displaySize);
-  }
-}, [detectedFace]);
   
   // Cargar modelos con cache y progreso optimizado
   useEffect(() => {
@@ -281,19 +257,6 @@ useEffect(() => {
     if (perfMonitorId) window.clearInterval(perfMonitorId);
   };
 }, [detectionStarted]);
-  
-  useEffect(() => {
-  // Iniciar con el tamaño correcto
-  resizeCanvas();
-  
-  // Añadir listener de redimensionamiento
-  window.addEventListener('resize', resizeCanvas);
-  
-  // Limpiar al desmontar
-  return () => {
-    window.removeEventListener('resize', resizeCanvas);
-  };
-}, [resizeCanvas]);
   
   // Verificación de liveness memoizada para evitar recreación en cada render
   const checkLiveness = useCallback((face: DetectedFace) => {
@@ -721,8 +684,6 @@ const startVideo = useCallback(async () => {
     'nod': 'Asentimiento detectado... continúe',
     'mouth-open': 'Apertura de boca detectada... continúe'
   } as Record<ChallengeType, string>), []);
-
-  
   
   return (
     <div className="p-4 bg-white rounded-lg shadow">
@@ -771,18 +732,22 @@ const startVideo = useCallback(async () => {
         )}
         
         <div className="flex flex-col items-center">
-          <div ref={containerRef} className="relative w-full max-w-lg mb-4">
+          <div className="relative mb-4">
             <video 
               ref={videoRef}
+              width="640"
+              height="480"
               autoPlay
               playsInline
               muted
-              className="w-full rounded-md"
+              className="rounded-md"
               style={{ display: !modelsLoaded ? 'none' : 'block' }}
             />
             <canvas 
               ref={canvasRef}
-              className="absolute top-0 left-0 z-10 w-full h-full"
+              width="640"
+              height="480"
+              className="absolute top-0 left-0 z-10"
             />
             
             {/* Mensajes condicionales según el estado */}
@@ -828,7 +793,7 @@ const startVideo = useCallback(async () => {
             )}
           </div>
           
-          <div className="flex space-x-4">
+          <div className="z-50 flex space-x-4">
             {!streamRef.current && (
               <Button
                 onClick={startVideo}

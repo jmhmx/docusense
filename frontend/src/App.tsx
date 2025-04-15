@@ -10,13 +10,14 @@ import DocumentViewer from './pages/DocumentViewer'
 import SharedDocumentView from './pages/SharedDocumentView'
 import Home from './pages/Home'
 import DebugHelper from './components/DebugHelper'
+import BiometricRegistration from './pages/BiometricRegistration'
 
 
 function App() {
    // Determinar si estamos en ambiente de desarrollo
   const isDev = true;
   return (
-    <BrowserRouter>
+     <BrowserRouter>
       <AuthProvider>
         <div className="flex flex-col min-h-screen bg-gray-50">
           <Navbar />
@@ -25,27 +26,13 @@ function App() {
               <Route path="/" element={<Home />} />
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
-              <Route 
-                path="/dashboard" 
-                element={
-                  <ProtectedRoute>
-                    <Dashboard />
-                  </ProtectedRoute>
-                } 
-              />
-              <Route 
-                path="/documents/:id" 
-                element={
-                  <ProtectedRoute>
-                    <DocumentViewer />
-                  </ProtectedRoute>
-                } 
-              />
+              <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+              <Route path="/documents/:id" element={<ProtectedRoute><DocumentViewer /></ProtectedRoute>} />
               <Route path="/share/:token" element={<SharedDocumentView />} />
+              <Route path="/biometric-registration" element={<ProtectedRoute><BiometricRegistration /></ProtectedRoute>} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </div>
-          {/* Solo mostrar el depurador en desarrollo */}
           {isDev && <DebugHelper />}
         </div>
       </AuthProvider>

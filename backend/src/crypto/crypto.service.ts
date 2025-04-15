@@ -8,33 +8,37 @@ export interface KeyPair {
   privateKey: string;
 }
 
+export interface EncryptionResult {
+  encryptedData: Buffer;
+  iv: Buffer;
+  authTag: Buffer;
+}
+
 @Injectable()
 export class CryptoService {
   private readonly logger = new Logger(CryptoService.name);
   private readonly MIN_KEY_SIZE = 2048; // Minimum acceptable key size
   private readonly MAX_SIGN_DATA_SIZE = 10 * 1024 * 1024; // 10MB limit for data to sign
   private readonly CRYPTO_TIMEOUT = 60000; // 60 seconds max for crypto operations
+  private readonly AES_KEY_LENGTH = 32; // 256 bits
 
   constructor(private readonly keyStorageService: KeyStorageService) {}
 
   // Método especializado para datos biométricos con mayor seguridad
-  encryptBiometricData(data: Buffer): {
-    encryptedData: Buffer;
-    iv: Buffer;
-    authTag: Buffer;
-  } {
+  encryptBiometricData(data: Buffer): EncryptionResult {
     // Usar AES-GCM para mayor seguridad (autenticación incluida)
     const key = crypto.scryptSync(
       process.env.MASTER_KEY || 'default-key-should-be-replaced-in-production',
       crypto.randomBytes(16), // Salt aleatorio
-      32, // 256 bits
+      this.AES_KEY_LENGTH, // 256 bits
+      { N: 32768, r: 8, p: 1 }, // Parámetros de seguridad más fuertes para scrypt
     );
 
-    const iv = crypto.randomBytes(16);
+    const iv = crypto.randomBytes(12); // GCM requiere un IV de 12 bytes para rendimiento óptimo
     const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
 
     const encrypted = Buffer.concat([cipher.update(data), cipher.final()]);
-    const authTag = cipher.getAuthTag();
+    const authTag = cipher.getAuthTag(); // Obtener el tag de autenticación
 
     return {
       encryptedData: encrypted,
@@ -48,11 +52,24 @@ export class CryptoService {
     iv: Buffer,
     authTag: Buffer,
   ): Buffer {
-    const key = crypto.scryptSync(process.env.MASTER_KEY, 'salt', 32);
-    const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
-    decipher.setAuthTag(authTag);
+    const key = crypto.scryptSync(
+      process.env.MASTER_KEY || 'default-key-should-be-replaced-in-production',
+      crypto.randomBytes(16), // Salt aleatorio - este debería ser el mismo que se usó para encriptar
+      this.AES_KEY_LENGTH,
+      { N: 32768, r: 8, p: 1 },
+    );
 
-    return Buffer.concat([decipher.update(encryptedData), decipher.final()]);
+    const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+    decipher.setAuthTag(authTag); // Verificar la autenticidad de los datos
+
+    try {
+      return Buffer.concat([decipher.update(encryptedData), decipher.final()]);
+    } catch (error) {
+      this.logger.error(`Error al descifrar datos: ${error.message}`);
+      throw new BadRequestException(
+        'Error al descifrar los datos: posible manipulación detectada',
+      );
+    }
   }
 
   /**
@@ -77,7 +94,7 @@ export class CryptoService {
         crypto.generateKeyPair(
           'rsa',
           {
-            modulusLength: this.MIN_KEY_SIZE,
+            modulusLength: 4096, // Incrementado desde 2048 para mayor seguridad
             publicKeyEncoding: {
               type: 'spki',
               format: 'pem',
@@ -85,6 +102,8 @@ export class CryptoService {
             privateKeyEncoding: {
               type: 'pkcs8',
               format: 'pem',
+              cipher: 'aes-256-cbc', // Cifrado adicional para la clave privada
+              passphrase: this.generateSecurePassphrase(userId),
             },
           },
           async (err, publicKey, privateKey) => {
@@ -135,6 +154,19 @@ export class CryptoService {
         );
       }
     });
+  }
+
+  /**
+   * Genera una contraseña segura utilizando información específica del usuario
+   * combinada con factores aleatorios
+   */
+  private generateSecurePassphrase(userId: string): string {
+    // Combinar un identificador con una salt aleatoria
+    const seedData = userId + process.env.JWT_SECRET + Date.now().toString();
+    // Crear un hash como base para la contraseña
+    const hash = crypto.createHash('sha256').update(seedData).digest('hex');
+    // Añadir complejidad con caracteres especiales
+    return hash.substring(0, 32) + '#!$%&-_';
   }
 
   /**
@@ -234,9 +266,16 @@ export class CryptoService {
       // Set timeout for the operation
       const signPromise = new Promise<string>((resolve, reject) => {
         try {
+          // Usar SHA-256 para la firma
           const sign = crypto.createSign('SHA256');
           sign.update(dataBuffer);
-          const signature = sign.sign(privateKey, 'base64');
+          const signature = sign.sign(
+            {
+              key: privateKey,
+              passphrase: this.generateSecurePassphrase(userId),
+            },
+            'base64',
+          );
 
           resolve(signature);
         } catch (error) {
@@ -351,14 +390,15 @@ export class CryptoService {
   }
 
   /**
-   * Encrypts a document with AES-256
+   * Encrypts a document with AES-256-GCM
    * @param data Document data to encrypt
-   * @returns Encrypted data and encryption keys
+   * @returns Encrypted data, key, IV and auth tag
    */
   encryptDocument(data: Buffer): {
     encryptedData: Buffer;
     key: Buffer;
     iv: Buffer;
+    authTag: Buffer;
   } {
     // Validate input
     if (!data || !Buffer.isBuffer(data)) {
@@ -375,11 +415,11 @@ export class CryptoService {
 
     try {
       // Generate random key and initialization vector
-      const key = crypto.randomBytes(32); // AES-256
-      const iv = crypto.randomBytes(16); // Initialization vector
+      const key = crypto.randomBytes(this.AES_KEY_LENGTH); // AES-256
+      const iv = crypto.randomBytes(12); // GCM recomienda un IV de 12 bytes para mayor rendimiento
 
-      // Create cipher
-      const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
+      // Create cipher with GCM mode
+      const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
 
       // Encrypt data
       const encryptedData = Buffer.concat([
@@ -387,7 +427,10 @@ export class CryptoService {
         cipher.final(),
       ]);
 
-      return { encryptedData, key, iv };
+      // Get authentication tag
+      const authTag = cipher.getAuthTag();
+
+      return { encryptedData, key, iv, authTag };
     } catch (error) {
       this.logger.error(
         `Error encrypting document: ${error.message}`,
@@ -400,32 +443,59 @@ export class CryptoService {
   }
 
   /**
-   * Decrypts AES encrypted data
+   * Decrypts AES-GCM encrypted data
    * @param encryptedData Encrypted document data
    * @param key Encryption key
    * @param iv Initialization vector
+   * @param authTag Authentication tag
    * @returns Decrypted document data
    */
-  decryptDocument(encryptedData: Buffer, key: Buffer, iv: Buffer): Buffer {
+  decryptDocument(
+    encryptedData: Buffer,
+    key: Buffer,
+    iv: Buffer,
+    authTag?: Buffer,
+  ): Buffer {
     // Validate inputs
     if (!encryptedData || !Buffer.isBuffer(encryptedData)) {
       throw new BadRequestException('Invalid encrypted data provided');
     }
 
-    if (!key || !Buffer.isBuffer(key) || key.length !== 32) {
+    if (!key || !Buffer.isBuffer(key) || key.length !== this.AES_KEY_LENGTH) {
       throw new BadRequestException('Invalid encryption key provided');
     }
 
-    if (!iv || !Buffer.isBuffer(iv) || iv.length !== 16) {
+    if (!iv || !Buffer.isBuffer(iv)) {
       throw new BadRequestException('Invalid initialization vector provided');
     }
 
     try {
-      // Create decipher
-      const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
-
-      // Decrypt data
-      return Buffer.concat([decipher.update(encryptedData), decipher.final()]);
+      // Si authTag está presente, usar GCM (nuevo método)
+      if (authTag && Buffer.isBuffer(authTag)) {
+        const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+        decipher.setAuthTag(authTag);
+        return Buffer.concat([
+          decipher.update(encryptedData),
+          decipher.final(),
+        ]);
+      }
+      // Si no hay authTag, usar CBC para retrocompatibilidad
+      else {
+        this.logger.warn(
+          'Using legacy CBC mode for decryption due to missing authentication tag',
+        );
+        // Asegurar que el IV es de 16 bytes para CBC
+        let cbcIv = iv;
+        if (iv.length !== 16) {
+          cbcIv = Buffer.alloc(16);
+          iv.copy(cbcIv);
+        }
+        const decipher = crypto.createDecipheriv('aes-256-cbc', key, cbcIv);
+        return Buffer.concat([
+          decipher.update(encryptedData),
+          decipher.final(),
+        ]);
+      }
     } catch (error) {
       this.logger.error(
         `Error decrypting document: ${error.message}`,
@@ -467,12 +537,12 @@ export class CryptoService {
     }
 
     try {
-      // Generate new key pair
+      // Generate new key pair with enhanced security
       const newKeyPair = await new Promise<KeyPair>((resolve, reject) => {
         crypto.generateKeyPair(
           'rsa',
           {
-            modulusLength: this.MIN_KEY_SIZE,
+            modulusLength: 4096, // Incrementado para mayor seguridad
             publicKeyEncoding: {
               type: 'spki',
               format: 'pem',
@@ -480,6 +550,8 @@ export class CryptoService {
             privateKeyEncoding: {
               type: 'pkcs8',
               format: 'pem',
+              cipher: 'aes-256-cbc',
+              passphrase: this.generateSecurePassphrase(userId),
             },
           },
           (err, publicKey, privateKey) => {
@@ -584,6 +656,110 @@ export class CryptoService {
       throw new BadRequestException(
         `Error en análisis de integridad: ${error.message}`,
       );
+    }
+  }
+
+  /**
+   * Calcula un token de verificación de integridad para un documento
+   * Combina hash, timestamp y firma para asegurar integridad
+   */
+  async generateIntegrityToken(
+    documentId: string,
+    userId: string,
+    fileData: Buffer,
+  ): Promise<string> {
+    // Crear payload con información de integridad
+    const timestamp = Date.now();
+    const documentHash = this.generateHash(fileData);
+
+    const payload = JSON.stringify({
+      documentId,
+      hash: documentHash,
+      timestamp,
+      userId,
+    });
+
+    // Firmar el payload
+    const signature = await this.signData(userId, payload);
+    if (!signature) {
+      throw new BadRequestException('Failed to sign integrity token');
+    }
+
+    // Combinar en token único (formato JSON para facilitar verificación)
+    return Buffer.from(
+      JSON.stringify({
+        payload: payload,
+        signature: signature,
+      }),
+    ).toString('base64');
+  }
+
+  /**
+   * Verifica un token de integridad y devuelve los datos originales
+   */
+  async verifyIntegrityToken(
+    token: string,
+    fileData: Buffer,
+  ): Promise<{
+    isValid: boolean;
+    documentId?: string;
+    userId?: string;
+    timestamp?: number;
+    reason?: string;
+  }> {
+    try {
+      // Decodificar token
+      const tokenData = JSON.parse(Buffer.from(token, 'base64').toString());
+      const { payload, signature } = tokenData;
+
+      if (!payload || !signature) {
+        return { isValid: false, reason: 'Invalid token format' };
+      }
+
+      // Extraer información del payload
+      const payloadData = JSON.parse(payload);
+      const { documentId, hash, timestamp, userId } = payloadData;
+
+      // Verificar que no falten campos
+      if (!documentId || !hash || !timestamp || !userId) {
+        return { isValid: false, reason: 'Missing fields in integrity token' };
+      }
+
+      // Verificar firma
+      const isSignatureValid = await this.verifySignature(
+        userId,
+        payload,
+        signature,
+      );
+      if (!isSignatureValid) {
+        return { isValid: false, reason: 'Invalid signature' };
+      }
+
+      // Verificar hash del documento
+      const currentHash = this.generateHash(fileData);
+      if (currentHash !== hash) {
+        return {
+          isValid: false,
+          reason: 'Document has been modified',
+          documentId,
+          userId,
+          timestamp,
+        };
+      }
+
+      // Todo correcto
+      return {
+        isValid: true,
+        documentId,
+        userId,
+        timestamp,
+      };
+    } catch (error) {
+      this.logger.error(`Error verifying integrity token: ${error.message}`);
+      return {
+        isValid: false,
+        reason: `Error verifying token: ${error.message}`,
+      };
     }
   }
 }

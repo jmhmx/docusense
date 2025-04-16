@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { api } from '../api/client';
 import Button from './Button';
 
@@ -10,7 +10,7 @@ interface DocumentBlockchainVerificationProps {
 const DocumentBlockchainVerification = ({ documentId, documentTitle }: DocumentBlockchainVerificationProps) => {
   const [verification, setVerification] = useState<any>(null);
   const [certificate, setCertificate] = useState<any>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  //const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isVerifying, setIsVerifying] = useState(false);
   const [isFetchingCertificate, setIsFetchingCertificate] = useState(false);

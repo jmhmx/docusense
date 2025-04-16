@@ -167,12 +167,12 @@ const fetchUnreadComments = async () => {
         <svg xmlns="http://www.w3.org/2000/svg" className="w-20 h-20 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
         </svg>
-        <p className="mt-4 text-gray-600">Preview not available for this document type.</p>
+        <p className="mt-4 text-gray-600">Previsualización no disponible para este tipo de archivo.</p>
         <button 
           onClick={handleDownloadDocument}
           className="inline-flex items-center px-4 py-2 mt-4 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
         >
-          Download to view
+          Descargar para ver
         </button>
       </div>
     );
@@ -185,29 +185,29 @@ const fetchUnreadComments = async () => {
     return (
       <div className="mt-4 overflow-hidden bg-white shadow sm:rounded-lg">
         <div className="px-4 py-5 sm:px-6">
-          <h3 className="text-lg font-medium leading-6 text-gray-900">Document Metadata</h3>
-          <p className="max-w-2xl mt-1 text-sm text-gray-500">Detailed information about the document.</p>
+          <h3 className="text-lg font-medium leading-6 text-gray-900">Metadatos del documento</h3>
+          <p className="max-w-2xl mt-1 text-sm text-gray-500">Información detallada sobre el documento.</p>
         </div>
         <div className="border-t border-gray-200">
           <dl>
             <div className="px-4 py-5 bg-gray-50 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-              <dt className="text-sm font-medium text-gray-500">Title</dt>
+              <dt className="text-sm font-medium text-gray-500">Título</dt>
               <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">{document.title}</dd>
             </div>
             <div className="px-4 py-5 bg-white sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-              <dt className="text-sm font-medium text-gray-500">File</dt>
+              <dt className="text-sm font-medium text-gray-500">Archivo</dt>
               <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">{document.filename}</dd>
             </div>
             <div className="px-4 py-5 bg-gray-50 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-              <dt className="text-sm font-medium text-gray-500">Size</dt>
+              <dt className="text-sm font-medium text-gray-500">Tamaño</dt>
               <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">{formatFileSize(document.fileSize)}</dd>
             </div>
             <div className="px-4 py-5 bg-white sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-              <dt className="text-sm font-medium text-gray-500">Type</dt>
+              <dt className="text-sm font-medium text-gray-500">Tipo</dt>
               <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">{document.mimeType || 'Unknown'}</dd>
             </div>
             <div className="px-4 py-5 bg-gray-50 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-              <dt className="text-sm font-medium text-gray-500">Status</dt>
+              <dt className="text-sm font-medium text-gray-500">Estatus</dt>
               <dd className="mt-1 sm:mt-0 sm:col-span-2">
                 <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusBadgeClass(document.status)}`}>
                   {document.status}
@@ -215,22 +215,22 @@ const fetchUnreadComments = async () => {
               </dd>
             </div>
             <div className="px-4 py-5 bg-white sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-              <dt className="text-sm font-medium text-gray-500">Created</dt>
+              <dt className="text-sm font-medium text-gray-500">Fecha creación</dt>
               <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">{formatDate(document.createdAt)}</dd>
             </div>
             <div className="px-4 py-5 bg-gray-50 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-              <dt className="text-sm font-medium text-gray-500">Last modified</dt>
+              <dt className="text-sm font-medium text-gray-500">Última modificación</dt>
               <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">{formatDate(document.updatedAt)}</dd>
             </div>
             {document.description && (
               <div className="px-4 py-5 bg-white sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-                <dt className="text-sm font-medium text-gray-500">Description</dt>
+                <dt className="text-sm font-medium text-gray-500">Descripción</dt>
                 <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">{document.description}</dd>
               </div>
             )}
             {document.metadata && Object.keys(document.metadata).length > 0 && (
               <div className="px-4 py-5 bg-gray-50 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-                <dt className="text-sm font-medium text-gray-500">Additional metadata</dt>
+                <dt className="text-sm font-medium text-gray-500">Metadatos adicionales</dt>
                 <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
                   <pre className="p-2 overflow-auto bg-gray-100 rounded max-h-40">
                     {JSON.stringify(document.metadata, null, 2)}
@@ -274,13 +274,13 @@ const fetchUnreadComments = async () => {
     return (
       <div className="mt-4 overflow-hidden bg-white shadow sm:rounded-lg">
         <div className="px-4 py-5 sm:px-6">
-          <h3 className="text-lg font-medium leading-6 text-gray-900">Extracted content</h3>
-          <p className="max-w-2xl mt-1 text-sm text-gray-500">Text and information extracted from the document.</p>
+          <h3 className="text-lg font-medium leading-6 text-gray-900">Extracción de contenido</h3>
+          <p className="max-w-2xl mt-1 text-sm text-gray-500">Texto e información extraídos del documento.</p>
         </div>
         <div className="px-4 py-5 border-t border-gray-200 sm:px-6">
           {document.extractedContent.text ? (
             <div className="mt-2">
-              <h4 className="mb-2 text-sm font-medium text-gray-500">Extracted text:</h4>
+              <h4 className="mb-2 text-sm font-medium text-gray-500">Texto extraído:</h4>
               <div className="p-4 overflow-auto rounded-md bg-gray-50 max-h-96">
                 <p className="text-sm text-gray-900 whitespace-pre-wrap">{document.extractedContent.text}</p>
               </div>
@@ -289,7 +289,7 @@ const fetchUnreadComments = async () => {
 
           {document.extractedContent.data ? (
             <div className="mt-6">
-              <h4 className="mb-2 text-sm font-medium text-gray-500">Structured data:</h4>
+              <h4 className="mb-2 text-sm font-medium text-gray-500">Estructura:</h4>
               <pre className="p-4 overflow-auto text-sm rounded-md bg-gray-50 max-h-96">
                 {JSON.stringify(document.extractedContent.data, null, 2)}
               </pre>
@@ -345,7 +345,7 @@ const fetchUnreadComments = async () => {
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
           </svg>
-          <p className="mt-2 text-sm font-medium text-gray-500">Loading document...</p>
+          <p className="mt-2 text-sm font-medium text-gray-500">Cargando documento...</p>
         </div>
       </div>
     );
@@ -377,7 +377,7 @@ const fetchUnreadComments = async () => {
                 onClick={() => navigate('/dashboard')}
                 className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
               >
-                Return to dashboard
+                Volver al dashboard
               </button>
             </div>
           </div>
@@ -420,7 +420,7 @@ const fetchUnreadComments = async () => {
                 <svg xmlns="http://www.w3.org/2000/svg" className="-ml-0.5 mr-1 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                 </svg>
-                Download
+                Descargar
               </button>
               <button
                 type="button"
@@ -430,7 +430,7 @@ const fetchUnreadComments = async () => {
                 <svg xmlns="http://www.w3.org/2000/svg" className="-ml-0.5 mr-1 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
                 </svg>
-                Back
+                Atrás
               </button>
             </div>
           </div>
@@ -448,7 +448,7 @@ const fetchUnreadComments = async () => {
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
             } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
           >
-            Preview
+            Visualizador
           </button>
           <button
             onClick={() => setActiveTab('metadata')}
@@ -458,7 +458,7 @@ const fetchUnreadComments = async () => {
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
             } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
           >
-            Metadata
+            Metadatos
           </button>
           <button
             onClick={() => setActiveTab('content')}
@@ -468,7 +468,7 @@ const fetchUnreadComments = async () => {
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
             } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
           >
-            Extracted content
+            Extraer contenido
           </button>
           <button
             onClick={() => setActiveTab('analysis')}
@@ -478,7 +478,7 @@ const fetchUnreadComments = async () => {
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
             } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
           >
-            Analysis
+            Análisis
           </button>
           <button
             onClick={() => setActiveTab('comments')}
@@ -503,7 +503,7 @@ const fetchUnreadComments = async () => {
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
             } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
           >
-            Sharing
+            Compartir
           </button>
           <button
             onClick={() => setActiveTab('signatures')}
@@ -513,7 +513,7 @@ const fetchUnreadComments = async () => {
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
             } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
           >
-            Signatures
+            Firmado
           </button>
           <button
             onClick={() => setActiveTab('blockchain')}

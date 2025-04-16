@@ -695,7 +695,7 @@ const DocumentSignature = ({
                       setVerificationCode('');
                     }}
                   >
-                    Back
+                    Atrás
                   </Button>
                   <Button
                     type="button"

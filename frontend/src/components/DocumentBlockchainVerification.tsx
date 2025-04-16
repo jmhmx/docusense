@@ -88,7 +88,7 @@ const DocumentBlockchainVerification = ({ documentId, documentTitle }: DocumentB
 
   return (
     <div className="p-6 bg-white rounded-lg shadow">
-      <h3 className="mb-4 text-lg font-medium text-gray-900">Blockchain Verification</h3>
+      <h3 className="mb-4 text-lg font-medium text-gray-900">Verificación Blockchain</h3>
       
       {error && (
         <div className="p-4 mb-4 border-l-4 border-red-400 bg-red-50">
@@ -111,7 +111,7 @@ const DocumentBlockchainVerification = ({ documentId, documentTitle }: DocumentB
           disabled={isVerifying}
           variant="primary"
         >
-          {isVerifying ? 'Verifying...' : 'Verify on Blockchain'}
+          {isVerifying ? 'Verificando...' : 'Verificar en Blockchain'}
         </Button>
         
         <Button
@@ -119,7 +119,7 @@ const DocumentBlockchainVerification = ({ documentId, documentTitle }: DocumentB
           disabled={isFetchingCertificate}
           variant="secondary"
         >
-          {isFetchingCertificate ? 'Fetching...' : 'Get Certificate'}
+          {isFetchingCertificate ? 'Generando...' : 'Obtener Certificado'}
         </Button>
       </div>
       
@@ -181,7 +181,7 @@ const DocumentBlockchainVerification = ({ documentId, documentTitle }: DocumentB
               <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
               </svg>
-              Download Certificate
+              Descargar certificado
             </button>
           </div>
         </div>
@@ -189,8 +189,7 @@ const DocumentBlockchainVerification = ({ documentId, documentTitle }: DocumentB
       
       <div className="mt-6 text-sm text-gray-500">
         <p>
-          Blockchain verification provides an immutable record of document authenticity and integrity.
-          The document's hash is stored on a distributed ledger to ensure it has not been modified since registration.
+          La verificación en blockchain proporciona un registro inmutable de la autenticidad e integridad de los documentos. El hash del documento se almacena en un registro distribuido para garantizar que no se haya modificado desde su registro.
         </p>
       </div>
     </div>

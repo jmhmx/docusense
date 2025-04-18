@@ -270,4 +270,116 @@ export class SatController {
       );
     }
   }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('respuestas')
+  async getResponses(@Request() req) {
+    try {
+      const responses = await this.satResponseRepository.find({
+        where: { userId: req.user.id },
+        order: { createdAt: 'DESC' },
+      });
+
+      return responses;
+    } catch (error) {
+      throw new BadRequestException(
+        `Error al obtener respuestas: ${error.message}`,
+      );
+    }
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('respuestas/:id')
+  async getResponseById(@Param('id') id: string, @Request() req) {
+    try {
+      const response = await this.satResponseRepository.findOne({
+        where: { id, userId: req.user.id },
+      });
+
+      if (!response) {
+        throw new NotFoundException('Respuesta no encontrada');
+      }
+
+      // Obtener acuses relacionados
+      const acuses = await this.satAcuseRepository.find({
+        where: { responseId: id },
+      });
+
+      return {
+        ...response,
+        acuses,
+      };
+    } catch (error) {
+      throw new BadRequestException(
+        `Error al obtener respuesta: ${error.message}`,
+      );
+    }
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('acuses/:id/download')
+  async downloadAcuse(@Param('id') id: string, @Request() req, @Res() res) {
+    try {
+      const acuse = await this.satAcuseRepository.findOne({
+        where: { id },
+        relations: ['response'],
+      });
+
+      if (!acuse) {
+        throw new NotFoundException('Acuse no encontrado');
+      }
+
+      // Verificar que el acuse pertenezca al usuario
+      if (acuse.response.userId !== req.user.id) {
+        throw new UnauthorizedException(
+          'No tiene permisos para descargar este acuse',
+        );
+      }
+
+      // Enviar el archivo
+      return res.download(acuse.filePath, acuse.filename);
+    } catch (error) {
+      throw new BadRequestException(
+        `Error al descargar acuse: ${error.message}`,
+      );
+    }
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('tramites')
+  async getTransactions(@Request() req) {
+    try {
+      return this.satTransactionService.getTransactionsByUser(req.user.id);
+    } catch (error) {
+      throw new BadRequestException(
+        `Error al obtener trámites: ${error.message}`,
+      );
+    }
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('tramites/:id')
+  async getTransactionById(@Param('id') id: string, @Request() req) {
+    try {
+      const transaction =
+        await this.satTransactionService.getTransactionById(id);
+
+      if (!transaction) {
+        throw new NotFoundException('Trámite no encontrado');
+      }
+
+      // Verificar que el trámite pertenezca al usuario
+      if (transaction.userId !== req.user.id) {
+        throw new UnauthorizedException(
+          'No tiene permisos para ver este trámite',
+        );
+      }
+
+      return transaction;
+    } catch (error) {
+      throw new BadRequestException(
+        `Error al obtener trámite: ${error.message}`,
+      );
+    }
+  }
 }

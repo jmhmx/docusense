@@ -112,4 +112,96 @@ export class SatNotificationService {
 
     return statusMap[status] || status;
   }
+
+  async notifyTransactionUpdate(transaction: SatTransaction): Promise<boolean> {
+    try {
+      // Obtener información del usuario
+      const user = await this.usersService.findOne(transaction.userId);
+      if (!user) {
+        this.logger.warn(
+          `No se encontró el usuario ${transaction.userId} para notificación de trámite`,
+        );
+        return false;
+      }
+
+      // Enviar notificación por email
+      await this.sendTransactionEmailNotification(user, transaction);
+
+      // Enviar notificación en tiempo real
+      await this.sendTransactionRealtimeNotification(user.id, transaction);
+
+      return true;
+    } catch (error) {
+      this.logger.error(
+        `Error al notificar actualización de trámite: ${error.message}`,
+      );
+      return false;
+    }
+  }
+
+  private async sendTransactionEmailNotification(
+    user: any,
+    transaction: SatTransaction,
+  ): Promise<void> {
+    const templateData = {
+      userName: user.name,
+      tramiteId: transaction.tramiteId,
+      tramiteType: this.getTransactionTypeName(transaction.type),
+      status: this.getTransactionStatusTranslation(transaction.status),
+      date: new Date().toLocaleDateString('es-MX'),
+      dashboardUrl: `${process.env.FRONTEND_URL}/sat/tramites/${transaction.id}`,
+      additionalInfo: transaction.responseData?.message || '',
+    };
+
+    await this.emailService.sendTemplateEmail({
+      to: user.email,
+      subject: `Actualización de trámite SAT - ${templateData.tramiteType}`,
+      template: 'sat-transaction-update',
+      context: templateData,
+    });
+  }
+
+  private async sendTransactionRealtimeNotification(
+    userId: string,
+    transaction: SatTransaction,
+  ): Promise<void> {
+    const notificationData = {
+      type: 'SAT_TRANSACTION_UPDATE',
+      title: 'Actualización de trámite SAT',
+      message: `Su trámite ${transaction.tramiteId} ha cambiado a estado: ${this.getTransactionStatusTranslation(transaction.status)}`,
+      data: {
+        transactionId: transaction.id,
+        tramiteId: transaction.tramiteId,
+        status: transaction.status,
+        type: transaction.type,
+      },
+      time: new Date().toISOString(),
+    };
+
+    this.websocketGateway.sendNotificationToUser(userId, notificationData);
+  }
+
+  private getTransactionTypeName(type: string): string {
+    const types = {
+      cfdi: 'Comprobante Fiscal',
+      declaracion: 'Declaración',
+      constancia: 'Constancia',
+      opinion: 'Opinión de Cumplimiento',
+    };
+
+    return types[type] || type;
+  }
+
+  private getTransactionStatusTranslation(status: string): string {
+    const statusMap = {
+      created: 'Creado',
+      submitted: 'Enviado',
+      processing: 'En Procesamiento',
+      completed: 'Completado',
+      rejected: 'Rechazado',
+      error: 'Error',
+    };
+
+    return statusMap[status] || status;
+  }
 }

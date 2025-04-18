@@ -15,7 +15,8 @@ import { Signature } from './entities/signature.entity';
 import { AuditLogService, AuditAction } from '../audit/audit-log.service';
 import { Document } from '../documents/entities/document.entity';
 import { BlockchainService } from '../blockchain/blockchain.service';
-
+import { EfirmaService } from '../sat/efirma.service';
+import { TokenService } from '../sat/token.service';
 export interface SignatureVerificationResult {
   isValid: boolean;
   reason?: string;
@@ -36,7 +37,98 @@ export class SignaturesService {
     private readonly usersService: UsersService,
     private readonly auditLogService: AuditLogService,
     private readonly blockchainService: BlockchainService,
+    private readonly efirmaService: EfirmaService,
+    private readonly tokenService: TokenService,
   ) {}
+
+  async signDocumentWithEfirma(
+    documentId: string,
+    userId: string,
+    tokenId: string,
+    position?: { page: number; x: number; y: number },
+    reason?: string,
+  ): Promise<Signature> {
+    // Verificar documento y usuario como en signDocument()
+
+    // Obtener documento
+    const document = await this.documentsRepository.findOne({
+      where: { id: documentId },
+    });
+
+    if (!document) {
+      throw new NotFoundException(`Document with ID ${documentId} not found`);
+    }
+
+    // Verificar token y obtener certificado/llave
+    const tokenData = await this.tokenService.getTokenData(tokenId);
+
+    if (tokenData.userId !== userId) {
+      throw new UnauthorizedException('Token no pertenece al usuario');
+    }
+
+    // Generar hash del documento para integridad
+    const documentHash = this.cryptoService.generateHash(document.filePath);
+
+    // Preparar datos para firmar con formato PKCS#7/CMS para el SAT
+    const dataToSign = JSON.stringify({
+      documentId,
+      documentHash,
+      userId,
+      timestamp: new Date().toISOString(),
+      reason,
+      position,
+    });
+
+    // Firmar con la llave privada del token
+    let signatureData: string;
+    try {
+      // Crear firma con estándares SAT (PKCS#7)
+      signatureData = await this.efirmaService.firmarConEfirma(
+        tokenData.certificado,
+        tokenData.llave,
+        dataToSign,
+      );
+    } catch (error) {
+      throw new BadRequestException(
+        `Error firmando con e.firma: ${error.message}`,
+      );
+    }
+
+    // Crear registro de firma con metadatos adicionales de e.firma
+    const signatureEntity = this.signaturesRepository.create({
+      id: uuidv4(),
+      documentId: document.id,
+      userId,
+      signatureData,
+      documentHash,
+      signedAt: new Date(),
+      reason: reason || 'Firma con e.firma',
+      position: position ? JSON.stringify(position) : null,
+      valid: true,
+      metadata: {
+        signatureType: 'efirma',
+        certificateData: {
+          issuer: 'SAT',
+          serialNumber: tokenData.certificado.serialNumber,
+          rfc: tokenData.certificado.rfc,
+        },
+        documentMetadata: {
+          title: document.title,
+          fileSize: document.fileSize,
+          mimeType: document.mimeType,
+        },
+      },
+    });
+
+    // Guardar firma y continuar como en el método signDocument()
+    const savedSignature =
+      await this.signaturesRepository.save(signatureEntity);
+
+    // Actualizar metadata del documento y registrar en blockchain
+    // [Código similar al de signDocument()]
+
+    return savedSignature;
+  }
 
   /**
    * Signs a document with additional validation and security

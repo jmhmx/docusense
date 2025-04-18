@@ -65,6 +65,13 @@ const DocumentSignature = ({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [drawSignature, setDrawSignature] = useState(false);
   const [showBiometricWorkflow, setShowBiometricWorkflow] = useState(false);
+  const [showEfirmaModal, setShowEfirmaModal] = useState(false);
+  const [certificados, setCertificados] = useState<any[]>([]);
+  const [llaves, setLlaves] = useState<any[]>([]);
+  const [selectedCertificado, setSelectedCertificado] = useState<string>('');
+  const [selectedLlave, setSelectedLlave] = useState<string>('');
+  const [efirmaPassword, setEfirmaPassword] = useState<string>('');
+  const [tokenId, setTokenId] = useState<string | null>(null);
 
 
   // Load current user
@@ -186,6 +193,89 @@ const DocumentSignature = ({
       }
     }
   }, [drawSignature, reason, currentUser]);
+
+
+  const fetchEfirmaCertificados = async () => {
+  try {
+    const response = await api.get('/api/sat/efirma/certificados');
+    setCertificados(response.data || []);
+  } catch (err) {
+    console.error('Error al cargar certificados:', err);
+  }
+};
+
+const fetchEfirmaLlaves = async () => {
+  try {
+    const response = await api.get('/api/sat/efirma/llaves');
+    setLlaves(response.data || []);
+  } catch (err) {
+    console.error('Error al cargar llaves:', err);
+  }
+  };
+  
+  const createEfirmaToken = async () => {
+  setIsLoading(true);
+  try {
+    const response = await api.post('/api/sat/efirma/crear-token', {
+      certificadoNombre: selectedCertificado,
+      llaveNombre: selectedLlave,
+      password: efirmaPassword
+    });
+    
+    setTokenId(response.data.tokenId);
+    return response.data.tokenId;
+  } catch (err: any) {
+    setError(err?.response?.data?.message || 'Error al crear token de e.firma');
+    return null;
+  } finally {
+    setIsLoading(false);
+  }
+};
+
+// Función para firmar con e.firma
+const handleSignWithEfirma = async () => {
+  if (!documentId || !signaturePosition) {
+    setError('Información de firma incompleta');
+    return;
+  }
+  
+  // Crear token primero
+  const newTokenId = await createEfirmaToken();
+  if (!newTokenId) return;
+  
+  try {
+    const response = await api.post(`/api/signatures/${documentId}/efirma`, {
+      tokenId: newTokenId,
+      position: signaturePosition,
+      reason: reason.trim() || 'Firma con e.firma'
+    });
+    
+    console.log('Firma con e.firma creada:', response.data);
+    
+    // Recargar firmas
+    const signaturesResponse = await api.get(`/api/signatures/document/${documentId}`);
+    setSignatures(signaturesResponse.data);
+    
+    // Resetear estado y cerrar modal
+    setShowEfirmaModal(false);
+    setSignaturePosition(null);
+    setReason('');
+    setDrawSignature(false);
+    setTokenId(null);
+    
+    // Mostrar mensaje de éxito
+    setSuccessMessage('Documento firmado exitosamente con e.firma');
+    
+    if (onSignSuccess) {
+      onSignSuccess();
+    }
+  } catch (err: any) {
+    console.error('Error firmando documento con e.firma:', err);
+    setError(err?.response?.data?.message || 'Error firmando documento');
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   // Verify document integrity
   const verifyDocumentIntegrity = async () => {
@@ -409,7 +499,20 @@ const DocumentSignature = ({
                 size="small"
                 title={cannotSignReason || (documentStatus !== 'completed' ? 'Document must be processed first' : '')}
               >
-                Sign with 2FA
+                Firmar con 2FA
+              </Button>
+
+              <Button 
+                onClick={() => {
+                  setShowEfirmaModal(true);
+                  fetchEfirmaCertificados();
+                  fetchEfirmaLlaves();
+                }}
+                variant="primary"
+                disabled={!canSign || documentStatus !== 'completed'}
+                size="small"
+              >
+                Firmar con e.firma
               </Button>
               
               <Button 
@@ -418,7 +521,7 @@ const DocumentSignature = ({
                 disabled={!canSign || documentStatus !== 'completed'}
                 size="small"
               >
-                Sign with Biometrics
+                Firmar con Biometrics
               </Button>
             </div>
           </div>
@@ -710,6 +813,148 @@ const DocumentSignature = ({
             )}
           </div>
           
+        </div>
+      )}
+
+      {/* Modal para firma con e.firma */}
+      {showEfirmaModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-600 bg-opacity-50">
+          <div className="w-full max-w-md p-8 bg-white rounded-lg">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-lg font-medium text-gray-900">Firmar con e.firma: {documentTitle}</h3>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowEfirmaModal(false);
+                  setError(null);
+                }}
+                className="text-gray-400 hover:text-gray-500"
+              >
+                <span className="sr-only">Cerrar</span>
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            
+            {error && (
+              <div className="p-4 mb-4 border-l-4 border-red-400 bg-red-50">
+                <div className="flex">
+                  <div className="flex-shrink-0">
+                    <svg className="w-5 h-5 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                  <div className="ml-3">
+                    <p className="text-sm text-red-700">{error}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            <div className="mb-4">
+              <label htmlFor="certificado" className="block mb-1 text-sm font-medium text-gray-700">
+                Certificado
+              </label>
+              <select
+                id="certificado"
+                value={selectedCertificado}
+                onChange={(e) => setSelectedCertificado(e.target.value)}
+                className="block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+              >
+                <option value="">Seleccione un certificado</option>
+                {certificados.map((cert) => (
+                  <option key={cert.id} value={cert.nombre}>
+                    {cert.nombre} - {cert.rfc}
+                  </option>
+                ))}
+              </select>
+            </div>
+            
+            <div className="mb-4">
+              <label htmlFor="llave" className="block mb-1 text-sm font-medium text-gray-700">
+                Llave privada
+              </label>
+              <select
+                id="llave"
+                value={selectedLlave}
+                onChange={(e) => setSelectedLlave(e.target.value)}
+                className="block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+              >
+                <option value="">Seleccione una llave</option>
+                {llaves.map((llave) => (
+                  <option key={llave.id} value={llave.nombre}>
+                    {llave.nombre}
+                  </option>
+                ))}
+              </select>
+            </div>
+            
+            <div className="mb-4">
+              <label htmlFor="efirma-password" className="block mb-1 text-sm font-medium text-gray-700">
+                Contraseña de llave privada
+              </label>
+              <input
+                type="password"
+                id="efirma-password"
+                value={efirmaPassword}
+                onChange={(e) => setEfirmaPassword(e.target.value)}
+                className="block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                placeholder="Contraseña de su llave privada"
+                required
+              />
+            </div>
+            
+            <div className="mb-4">
+              <label htmlFor="reason" className="block mb-1 text-sm font-medium text-gray-700">
+                Motivo de firma (opcional)
+              </label>
+              <input
+                type="text"
+                id="reason"
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                className="block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                placeholder="Ej. Aprobación, Revisión, Conformidad"
+              />
+            </div>
+            
+            <div className="mb-4">
+              <label className="block mb-1 text-sm font-medium text-gray-700">
+                Posición de firma
+              </label>
+              <div className="overflow-hidden border border-gray-300 rounded-md">
+                <canvas 
+                  ref={canvasRef}
+                  width={400}
+                  height={100}
+                  onClick={handleCanvasClick}
+                  className="w-full cursor-pointer"
+                ></canvas>
+              </div>
+              <p className="mt-1 text-xs text-gray-500">
+                Haga clic en el área para colocar su firma
+              </p>
+            </div>
+            
+            <div className="flex justify-end mt-6 space-x-3">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setShowEfirmaModal(false)}
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="button"
+                variant="primary"
+                onClick={handleSignWithEfirma}
+                disabled={isLoading || !selectedCertificado || !selectedLlave || !efirmaPassword || !drawSignature}
+              >
+                {isLoading ? 'Firmando...' : 'Firmar con e.firma'}
+              </Button>
+            </div>
+          </div>
         </div>
       )}
 

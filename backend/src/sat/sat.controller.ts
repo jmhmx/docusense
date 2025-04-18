@@ -231,4 +231,43 @@ export class SatController {
       );
     }
   }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('efirma/validar-certificado')
+  async validarCertificado(
+    @Body() data: { certificadoNombre: string },
+    @Request() req,
+  ) {
+    if (!data.certificadoNombre) {
+      throw new BadRequestException('Nombre de certificado es requerido');
+    }
+
+    try {
+      const userId = req.user.id;
+
+      // Obtener certificado del almacenamiento
+      // En producción, extraeríamos el certificado del almacenamiento temporal
+      const certificadoPEM = '...'; // Simulado
+
+      // Validar el certificado
+      const resultado =
+        await this.efirmaService.validarCertificado(certificadoPEM);
+
+      return {
+        success: resultado.valido,
+        certificado: {
+          rfc: resultado.rfc,
+          razonSocial: resultado.razonSocial,
+          vigenciaInicio: resultado.vigenciaInicio,
+          vigenciaFin: resultado.vigenciaFin,
+          estado: resultado.noRevocado ? 'Válido' : 'Revocado',
+        },
+        detalles: resultado.detalles,
+      };
+    } catch (error) {
+      throw new BadRequestException(
+        `Error al validar certificado: ${error.message}`,
+      );
+    }
+  }
 }

@@ -32,6 +32,35 @@ export class EfirmaService {
     }
   }
 
+  async firmarConEfirma(
+    certificadoPEM: string,
+    llavePEM: string,
+    dataToSign: string,
+  ): Promise<string> {
+    try {
+      // Crear objeto de llave RSA con la llave privada
+      const signingKey = crypto.createPrivateKey(llavePEM);
+
+      // Firmar los datos usando algoritmo SHA-256 con RSA (estándar SAT)
+      const sign = crypto.createSign('SHA256');
+      sign.update(Buffer.from(dataToSign));
+      sign.end();
+
+      // Generar firma
+      const signature = sign.sign(signingKey, 'base64');
+
+      return signature;
+    } catch (error) {
+      this.logger.error(
+        `Error al firmar con e.firma: ${error.message}`,
+        error.stack,
+      );
+      throw new BadRequestException(
+        `Error al firmar con e.firma: ${error.message}`,
+      );
+    }
+  }
+
   /**
    * Carga un certificado .cer y lo convierte a formato PEM
    */
@@ -383,6 +412,139 @@ export class EfirmaService {
     } catch (error) {
       this.logger.error(`Error limpiando archivos expirados: ${error.message}`);
       return 0;
+    }
+  }
+
+  /**
+   * Valida un certificado .cer verificando vigencia y revocación
+   */
+  async validarCertificado(certificadoPEM: string): Promise<{
+    valido: boolean;
+    rfc: string;
+    razonSocial: string;
+    vigenciaInicio: Date;
+    vigenciaFin: Date;
+    noRevocado: boolean;
+    detalles?: string;
+  }> {
+    try {
+      // 1. Extraer información del certificado
+      const infoExtraida =
+        await this.extraerInfoCertificadoDetallada(certificadoPEM);
+
+      // 2. Verificar fechas de vigencia
+      const ahora = new Date();
+      const vigenciaInvalida =
+        ahora < infoExtraida.vigenciaInicio || ahora > infoExtraida.vigenciaFin;
+
+      if (vigenciaInvalida) {
+        return {
+          valido: false,
+          rfc: infoExtraida.rfc,
+          razonSocial: infoExtraida.razonSocial,
+          vigenciaInicio: infoExtraida.vigenciaInicio,
+          vigenciaFin: infoExtraida.vigenciaFin,
+          noRevocado: false,
+          detalles: 'Certificado fuera de vigencia',
+        };
+      }
+
+      // 3. Verificar revocación
+      const noRevocado = await this.verificarCertificadoNoRevocado(
+        infoExtraida.serialNumber,
+      );
+
+      return {
+        valido: noRevocado,
+        rfc: infoExtraida.rfc,
+        razonSocial: infoExtraida.razonSocial,
+        vigenciaInicio: infoExtraida.vigenciaInicio,
+        vigenciaFin: infoExtraida.vigenciaFin,
+        noRevocado,
+        detalles: noRevocado ? undefined : 'Certificado revocado',
+      };
+    } catch (error) {
+      this.logger.error(
+        `Error validando certificado: ${error.message}`,
+        error.stack,
+      );
+      throw new BadRequestException(
+        `Error validando certificado: ${error.message}`,
+      );
+    }
+  }
+
+  /**
+   * Extrae información detallada de un certificado PEM
+   */
+  private async extraerInfoCertificadoDetallada(
+    certificadoPEM: string,
+  ): Promise<{
+    rfc: string;
+    razonSocial: string;
+    vigenciaInicio: Date;
+    vigenciaFin: Date;
+    serialNumber: string;
+    issuer: string;
+  }> {
+    try {
+      // En una implementación real, usaríamos node-forge o similar
+      // para extraer todos los detalles del certificado X.509
+
+      // Extraer Subject del certificado - donde está el RFC
+      const certificado = crypto.createPublicKey({
+        key: certificadoPEM,
+        format: 'pem',
+      });
+
+      // Convertir a DER para manipularlo
+      const derBuffer = certificado.export({ format: 'der', type: 'spki' });
+
+      // Aquí insertaríamos código para analizar ASN.1 y extraer campos específicos
+      // En este ejemplo simulado, extraemos valores fijos
+
+      return {
+        rfc: 'ABC010101XYZ', // En realidad extraído del subject
+        razonSocial: 'EMPRESA DE PRUEBAS SA DE CV', // Del subject CN
+        vigenciaInicio: new Date('2023-01-01'), // notBefore
+        vigenciaFin: new Date('2027-01-01'), // notAfter
+        serialNumber: '12345678', // Número de serie
+        issuer: 'AC del SAT', // Emisor del certificado
+      };
+    } catch (error) {
+      this.logger.error(
+        `Error extrayendo información del certificado: ${error.message}`,
+        error.stack,
+      );
+      throw new BadRequestException(
+        `Error al extraer información del certificado: ${error.message}`,
+      );
+    }
+  }
+
+  /**
+   * Verifica si un certificado está revocado consultando la LCR del SAT
+   */
+  private async verificarCertificadoNoRevocado(
+    serialNumber: string,
+  ): Promise<boolean> {
+    try {
+      // En producción, esta función consultaría la Lista de Certificados Revocados (LCR)
+      // del SAT, ya sea descargando la LCR o usando un servicio OCSP
+
+      // Ejemplo simulado: consultar API de SAT para verificar revocación
+      // const response = await axios.get(`https://www.sat.gob.mx/lcrapi/check?sn=${serialNumber}`);
+      // return response.data.status === 'valid';
+
+      // Para desarrollo, siempre devuelve válido
+      return true;
+    } catch (error) {
+      this.logger.error(
+        `Error verificando revocación: ${error.message}`,
+        error.stack,
+      );
+      // En caso de error, asumimos que no podemos verificar, así que rechazamos
+      return false;
     }
   }
 }

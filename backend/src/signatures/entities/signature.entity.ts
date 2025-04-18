@@ -55,4 +55,16 @@ export class Signature {
 
   @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
+
+  @Column({ nullable: true })
+  order: number; // Orden de firma en secuencia
+
+  @Column({ nullable: true })
+  requiredSigners: number; // Número de firmantes requeridos para validez
+
+  @Column({ type: 'simple-array', nullable: true })
+  pendingSigners: string[]; // IDs de usuarios pendientes de firmar
+
+  @Column({ default: false })
+  isComplete: boolean; // Indica si el proceso de múltiples firmas está completo
 }

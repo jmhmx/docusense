@@ -3,7 +3,6 @@ import { api } from '../api/client';
 import Button from './Button';
 import BiometricSignatureWorkflow from './BiometricSignatureWorkflow';
 
-
 interface SignaturePosition {
   page: number;
   x: number;
@@ -27,6 +26,7 @@ interface DocumentSignatureProps {
   documentTitle: string;
   documentStatus: string;
   onSignSuccess?: () => void;
+  multiSignatureEnabled?: boolean;
 }
 
 const DocumentSignature = ({ 

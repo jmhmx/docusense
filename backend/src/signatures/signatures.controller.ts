@@ -204,4 +204,117 @@ export class SignaturesController {
       );
     }
   }
+
+  @UseGuards(JwtAuthGuard)
+  @Post(':documentId/multi-init')
+  async initMultiSignatureProcess(
+    @Param('documentId') documentId: string,
+    @Body() initDto: { signerIds: string[]; requiredSigners?: number },
+    @Request() req,
+    @Ip() ip: string,
+    @Headers() headers,
+  ) {
+    try {
+      await this.signaturesService.initMultiSignatureProcess(
+        documentId,
+        req.user.id,
+        initDto.signerIds,
+        initDto.requiredSigners,
+        ip,
+        headers['user-agent'] || 'Unknown',
+      );
+
+      return {
+        success: true,
+        message: 'Proceso de firmas múltiples iniciado correctamente',
+      };
+    } catch (error) {
+      if (
+        error instanceof NotFoundException ||
+        error instanceof UnauthorizedException
+      ) {
+        throw error;
+      }
+      throw new BadRequestException(
+        `Error al iniciar proceso de firmas múltiples: ${error.message}`,
+      );
+    }
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post(':documentId/multi-cancel')
+  async cancelMultiSignatureProcess(
+    @Param('documentId') documentId: string,
+    @Request() req,
+  ) {
+    try {
+      await this.signaturesService.cancelMultiSignatureProcess(
+        documentId,
+        req.user.id,
+      );
+
+      return {
+        success: true,
+        message: 'Proceso de firmas múltiples cancelado correctamente',
+      };
+    } catch (error) {
+      if (
+        error instanceof NotFoundException ||
+        error instanceof UnauthorizedException
+      ) {
+        throw error;
+      }
+      throw new BadRequestException(
+        `Error al cancelar proceso de firmas múltiples: ${error.message}`,
+      );
+    }
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('document/:documentId/signature-status')
+  async getDocumentSignatureStatus(@Param('documentId') documentId: string) {
+    try {
+      return await this.signaturesService.getDocumentSignatureStatus(
+        documentId,
+      );
+    } catch (error) {
+      throw new BadRequestException(
+        `Error al obtener estado de firmas: ${error.message}`,
+      );
+    }
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post(':documentId/verify-all')
+  async verifyAllSignatures(
+    @Param('documentId') documentId: string,
+    @Request() req,
+  ) {
+    try {
+      const result =
+        await this.signaturesService.verifyAllSignatures(documentId);
+
+      // Registrar en auditoría
+      await this.auditLogService.log(
+        AuditAction.DOCUMENT_VERIFY,
+        req.user.id,
+        documentId,
+        {
+          action: 'verify_all_signatures',
+          verifiedCount: result.verifiedCount,
+          totalCount: result.totalCount,
+          quorumReached: result.quorumReached,
+        },
+      );
+
+      return result;
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new BadRequestException(
+        `Error verificando firmas: ${error.message}`,
+      );
+    }
+  }
 }

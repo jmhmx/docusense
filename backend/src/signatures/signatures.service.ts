@@ -133,7 +133,7 @@ export class SignaturesService {
   /**
    * Signs a document with additional validation and security
    */
-  async signDocument(
+  async originalSignDocument(
     documentId: string,
     userId: string,
     position?: { page: number; x: number; y: number },
@@ -1015,5 +1015,468 @@ export class SignaturesService {
       );
       throw error;
     }
+  }
+
+  async initMultiSignatureProcess(
+    documentId: string,
+    ownerUserId: string,
+    signerIds: string[],
+    requiredSigners?: number, // Opcional, para quórum
+  ): Promise<void> {
+    const document = await this.documentsRepository.findOne({
+      where: { id: documentId },
+    });
+
+    if (!document) {
+      throw new NotFoundException(`Documento no encontrado: ${documentId}`);
+    }
+
+    // Verificar que el solicitante es el dueño
+    if (document.userId !== ownerUserId) {
+      throw new UnauthorizedException(
+        'Solo el propietario puede iniciar firmas múltiples',
+      );
+    }
+
+    // Actualizar metadatos del documento
+    document.metadata = {
+      ...document.metadata,
+      multiSignatureProcess: true,
+      pendingSigners: signerIds,
+      requiredSigners: requiredSigners || signerIds.length, // Por defecto, todos deben firmar
+      initiatedAt: new Date().toISOString(),
+    };
+
+    await this.documentsService.update(documentId, document);
+
+    // Registrar en blockchain
+    await this.blockchainService.updateDocumentRecord(
+      documentId,
+      this.cryptoService.generateHash(document.filePath),
+      'MULTI_SIGNATURE_INIT',
+      ownerUserId,
+      {
+        signerIds,
+        requiredSigners,
+      },
+    );
+  }
+
+  async validateSignatureQuorum(documentId: string): Promise<boolean> {
+    const document = await this.documentsRepository.findOne({
+      where: { id: documentId },
+    });
+
+    if (!document?.metadata?.multiSignatureProcess) {
+      return true; // No es proceso multi-firma
+    }
+
+    const signatures = await this.signaturesRepository.find({
+      where: { documentId, valid: true },
+    });
+
+    const requiredSigners = document.metadata.requiredSigners || 0;
+
+    return signatures.length >= requiredSigners;
+  }
+
+  /**
+   * Cancela un proceso de firmas múltiples
+   */
+  async cancelMultiSignatureProcess(
+    documentId: string,
+    userId: string,
+  ): Promise<void> {
+    // Verificar documento
+    const document = await this.documentsRepository.findOne({
+      where: { id: documentId },
+    });
+
+    if (!document) {
+      throw new NotFoundException(`Documento no encontrado: ${documentId}`);
+    }
+
+    // Verificar que el solicitante es el dueño
+    if (document.userId !== userId) {
+      throw new UnauthorizedException(
+        'Solo el propietario puede cancelar firmas múltiples',
+      );
+    }
+
+    // Verificar que existe un proceso activo
+    if (!document.metadata?.multiSignatureProcess) {
+      throw new BadRequestException(
+        'No hay un proceso de firmas múltiples activo para este documento',
+      );
+    }
+
+    // Actualizar metadatos del documento
+    const updatedMetadata = { ...document.metadata };
+    delete updatedMetadata.multiSignatureProcess;
+    delete updatedMetadata.pendingSigners;
+    delete updatedMetadata.requiredSigners;
+    delete updatedMetadata.initiatedAt;
+    delete updatedMetadata.completedSigners;
+
+    document.metadata = updatedMetadata;
+
+    await this.documentsService.update(documentId, document);
+
+    // Registrar en blockchain
+    await this.blockchainService.updateDocumentRecord(
+      documentId,
+      this.cryptoService.generateHash(document.filePath),
+      'MULTI_SIGNATURE_CANCELLED',
+      userId,
+      {
+        timestamp: new Date().toISOString(),
+      },
+    );
+
+    // Registrar en auditoría
+    await this.auditLogService.log(
+      AuditAction.DOCUMENT_UPDATE,
+      userId,
+      documentId,
+      {
+        action: 'multi_signature_cancel',
+        title: document.title,
+      },
+    );
+  }
+
+  /**
+   * Obtiene el estado actual del proceso de firmas de un documento
+   */
+  async getDocumentSignatureStatus(documentId: string): Promise<any> {
+    // Obtener documento
+    const document = await this.documentsRepository.findOne({
+      where: { id: documentId },
+    });
+
+    if (!document) {
+      throw new NotFoundException(`Documento no encontrado: ${documentId}`);
+    }
+
+    // Obtener todas las firmas del documento
+    const signatures = await this.signaturesRepository.find({
+      where: { documentId, valid: true },
+    });
+
+    // Si no es un proceso de firmas múltiples, devolver info básica
+    if (!document.metadata?.multiSignatureProcess) {
+      return {
+        multiSignatureProcess: false,
+        signatureCount: signatures.length,
+        isSigned: signatures.length > 0,
+      };
+    }
+
+    // Procesar datos de firmas múltiples
+    const pendingSigners = document.metadata.pendingSigners || [];
+    const requiredSigners = document.metadata.requiredSigners || 0;
+
+    // Determinar quiénes han completado su firma
+    const completedSigners = signatures
+      .map((sig) => sig.userId)
+      .filter((userId) => pendingSigners.includes(userId));
+
+    // Verificar si el proceso está completo (quórum alcanzado)
+    const isComplete = completedSigners.length >= requiredSigners;
+
+    // Si el proceso está completo pero no se ha marcado como tal en el documento
+    if (isComplete && !document.metadata.processCompleted) {
+      // Actualizar documento
+      document.metadata = {
+        ...document.metadata,
+        processCompleted: true,
+        completedAt: new Date().toISOString(),
+      };
+
+      await this.documentsService.update(documentId, document);
+
+      // Registrar en blockchain
+      await this.blockchainService.updateDocumentRecord(
+        documentId,
+        this.cryptoService.generateHash(document.filePath),
+        'MULTI_SIGNATURE_COMPLETED',
+        'system',
+        {
+          completedSigners,
+          timestamp: new Date().toISOString(),
+        },
+      );
+    }
+
+    return {
+      multiSignatureProcess: true,
+      initiatedAt: document.metadata.initiatedAt,
+      pendingSigners,
+      completedSigners,
+      requiredSigners,
+      totalSigners: pendingSigners.length,
+      isComplete,
+      processCompleted: document.metadata.processCompleted || false,
+      completedAt: document.metadata.completedAt,
+    };
+  }
+
+  /**
+   * Método sobrecargado para firmar que verifica si el documento está en un proceso
+   * de firmas múltiples y actualiza el estado del proceso
+   */
+  async signDocument(
+    documentId: string,
+    userId: string,
+    position?: { page: number; x: number; y: number },
+    reason?: string,
+    ipAddress?: string,
+    userAgent?: string,
+  ): Promise<Signature> {
+    // Firma normal del documento (usando código existente)
+    const signature = await this.originalSignDocument(
+      documentId,
+      userId,
+      position,
+      reason,
+      ipAddress,
+      userAgent,
+    );
+
+    // Verificar si el documento está en un proceso de firmas múltiples
+    const document = await this.documentsRepository.findOne({
+      where: { id: documentId },
+    });
+
+    if (document?.metadata?.multiSignatureProcess) {
+      // Actualizar estado del proceso
+      const pendingSigners = document.metadata.pendingSigners || [];
+
+      // Verificar si este usuario está en la lista de firmantes pendientes
+      if (pendingSigners.includes(userId)) {
+        // Obtener lista actual de completados o crear una nueva
+        const completedSigners = document.metadata.completedSigners || [];
+
+        // Añadir este firmante si no está ya
+        if (!completedSigners.includes(userId)) {
+          completedSigners.push(userId);
+
+          // Actualizar documento
+          document.metadata = {
+            ...document.metadata,
+            completedSigners,
+          };
+
+          await this.documentsService.update(documentId, document);
+
+          // Verificar si se ha alcanzado el quórum
+          const requiredSigners =
+            document.metadata.requiredSigners || pendingSigners.length;
+          if (
+            completedSigners.length >= requiredSigners &&
+            !document.metadata.processCompleted
+          ) {
+            // Marcar proceso como completo
+            document.metadata = {
+              ...document.metadata,
+              processCompleted: true,
+              completedAt: new Date().toISOString(),
+            };
+
+            await this.documentsService.update(documentId, document);
+
+            // Registrar en blockchain
+            await this.blockchainService.updateDocumentRecord(
+              documentId,
+              this.cryptoService.generateHash(document.filePath),
+              'MULTI_SIGNATURE_QUORUM_REACHED',
+              'system',
+              {
+                requiredSigners,
+                totalSigners: completedSigners.length,
+                timestamp: new Date().toISOString(),
+              },
+            );
+
+            // Notificar al dueño del documento
+            this.notifyDocumentOwner(
+              documentId,
+              completedSigners.length,
+              requiredSigners,
+            );
+          }
+        }
+      }
+    }
+
+    return signature;
+  }
+
+  /**
+   * Notifica al propietario del documento que se ha alcanzado el quórum de firmas
+   */
+  private async notifyDocumentOwner(
+    documentId: string,
+    completedSignatures: number,
+    requiredSignatures: number,
+  ): Promise<void> {
+    try {
+      const document = await this.documentsRepository.findOne({
+        where: { id: documentId },
+      });
+
+      if (!document) return;
+
+      // Aquí implementaríamos la notificación
+      // Podría ser por email, push notification, o un registro en el sistema
+      this.logger.log(
+        `Notificando al propietario ${document.userId} que su documento ${documentId} 
+      ha alcanzado el quórum de firmas (${completedSignatures}/${requiredSignatures})`,
+      );
+
+      // Registrar en la auditoría
+      await this.auditLogService.log(
+        AuditAction.DOCUMENT_UPDATE,
+        'system',
+        documentId,
+        {
+          action: 'quorum_reached_notification',
+          completedSignatures,
+          requiredSignatures,
+        },
+      );
+    } catch (error) {
+      this.logger.error(
+        `Error al notificar al propietario del documento: ${error.message}`,
+        error.stack,
+      );
+    }
+  }
+
+  /**
+   * Verifica todas las firmas de un documento y evalúa si se cumple el quórum
+   */
+  async verifyAllSignatures(documentId: string): Promise<{
+    verifiedCount: number;
+    invalidCount: number;
+    totalCount: number;
+    quorumReached: boolean;
+    requiredSigners: number;
+    signatures: Array<{
+      id: string;
+      userId: string;
+      userName?: string;
+      signedAt: Date;
+      isValid: boolean;
+      reason?: string;
+    }>;
+  }> {
+    // Verificar que el documento existe
+    const document = await this.documentsRepository.findOne({
+      where: { id: documentId },
+    });
+
+    if (!document) {
+      throw new NotFoundException(`Documento no encontrado: ${documentId}`);
+    }
+
+    // Obtener todas las firmas
+    const signatures = await this.signaturesRepository.find({
+      where: { documentId },
+      relations: ['user'],
+    });
+
+    if (signatures.length === 0) {
+      return {
+        verifiedCount: 0,
+        invalidCount: 0,
+        totalCount: 0,
+        quorumReached: false,
+        requiredSigners: document.metadata?.requiredSigners || 0,
+        signatures: [],
+      };
+    }
+
+    // Verificar cada firma
+    const verificationResults = await Promise.all(
+      signatures.map(async (signature) => {
+        try {
+          const verificationResult = await this.verifySignature(signature.id);
+
+          return {
+            id: signature.id,
+            userId: signature.userId,
+            userName: signature.user?.name,
+            signedAt: signature.signedAt,
+            isValid: verificationResult.isValid,
+            reason: verificationResult.reason,
+          };
+        } catch (error) {
+          this.logger.error(
+            `Error verificando firma ${signature.id}: ${error.message}`,
+            error.stack,
+          );
+
+          return {
+            id: signature.id,
+            userId: signature.userId,
+            userName: signature.user?.name,
+            signedAt: signature.signedAt,
+            isValid: false,
+            reason: `Error en verificación: ${error.message}`,
+          };
+        }
+      }),
+    );
+
+    // Contar firmas válidas e inválidas
+    const verifiedCount = verificationResults.filter((r) => r.isValid).length;
+    const invalidCount = verificationResults.length - verifiedCount;
+
+    // Determinar si se cumple el quórum
+    let requiredSigners = 0;
+    let quorumReached = false;
+
+    if (document.metadata?.multiSignatureProcess) {
+      requiredSigners = document.metadata.requiredSigners || 0;
+
+      // En proceso multifirma, el quórum se basa en el número de firmas requeridas
+      quorumReached = verifiedCount >= requiredSigners;
+
+      // Si se ha alcanzado el quórum pero no está marcado como completado, actualizarlo
+      if (quorumReached && !document.metadata.processCompleted) {
+        document.metadata = {
+          ...document.metadata,
+          processCompleted: true,
+          completedAt: new Date().toISOString(),
+        };
+
+        await this.documentsService.update(documentId, document);
+
+        // Registrar en blockchain
+        await this.blockchainService.updateDocumentRecord(
+          documentId,
+          this.cryptoService.generateHash(document.filePath),
+          'SIGNATURES_VERIFIED_QUORUM_REACHED',
+          'system',
+          {
+            verifiedSignatures: verifiedCount,
+            requiredSigners,
+          },
+        );
+      }
+    } else {
+      // En firma única, cualquier firma válida es suficiente
+      quorumReached = verifiedCount > 0;
+    }
+
+    return {
+      verifiedCount,
+      invalidCount,
+      totalCount: verificationResults.length,
+      quorumReached,
+      requiredSigners,
+      signatures: verificationResults,
+    };
   }
 }

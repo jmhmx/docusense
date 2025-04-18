@@ -8,6 +8,7 @@ import DocumentSharing from '../components/DocumentSharing';
 import DocumentComments from '../components/DocumentComments';
 import PDFViewer from '../components/PDFViewer';
 import DocumentBlockchainVerification from '../components/DocumentBlockchainVerification';
+import MultiSignatureManager from '../components/MultiSignatureManager';
 
 
 interface DocumentType {
@@ -320,6 +321,27 @@ const fetchUnreadComments = async () => {
 
     return (
       <div className="mt-4">
+
+        {/* Componente de gestión de firmas múltiples */}
+        {multiSignatureEnabled && (
+          <MultiSignatureManager 
+            documentId={id}
+            documentTitle={document.title}
+            onUpdate={() => {
+              // Recargar firmas cuando se actualice el estado de firmas múltiples
+              const fetchSignatures = async () => {
+                try {
+                  const response = await api.get(`/api/signatures/document/${id}`);
+                  setSignatures(response.data);
+                } catch (err) {
+                  console.error('Error loading signatures:', err);
+                }
+              };
+              fetchSignatures();
+            }}
+          />
+        )}
+
         <DocumentSignature 
           documentId={id}
           documentTitle={document.title}

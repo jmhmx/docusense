@@ -6,6 +6,10 @@ import { SatResponse } from './entities/sat-response.entity';
 import { EmailService } from '../email/email.service';
 import { WebsocketGateway } from '../websocket/websocket.gateway';
 import { UsersService } from '../users/users.service';
+import {
+  SatTransaction,
+  TransactionStatus,
+} from './entities/sat-transaction.entity';
 
 @Injectable()
 export class SatNotificationService {

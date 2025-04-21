@@ -33,7 +33,7 @@ export class EfirmaService {
   }
 
   async firmarConEfirma(
-    certificadoPEM: string,
+    certificadoPEM: object,
     llavePEM: string,
     dataToSign: string,
   ): Promise<string> {

@@ -12,19 +12,31 @@ import {
   Param,
   Delete,
   UnauthorizedException,
+  NotFoundException,
+  Res,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { SatService } from './sat.service';
 import { EfirmaService } from './efirma.service';
 import { TokenService } from './token.service';
+import { SatTransactionService } from './sat-transaction.service';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { SatResponse } from './entities/sat-response.entity';
+import { SatAcuse } from './entities/sat-acuse.entity';
 
 @Controller('api/sat')
 export class SatController {
   constructor(
+    @InjectRepository(SatResponse)
+    private satResponseRepository: Repository<SatResponse>,
+    @InjectRepository(SatAcuse)
+    private satAcuseRepository: Repository<SatAcuse>,
     private readonly satService: SatService,
     private readonly efirmaService: EfirmaService,
     private readonly tokenService: TokenService,
+    private readonly satTransactionService: SatTransactionService,
   ) {}
 
   @UseGuards(JwtAuthGuard)

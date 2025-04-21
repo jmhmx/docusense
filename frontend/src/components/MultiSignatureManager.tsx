@@ -15,7 +15,7 @@ interface MultiSignatureManagerProps {
   onUpdate: () => void;
 }
 
-const MultiSignatureManager = ({ documentId, documentTitle, onUpdate }: MultiSignatureManagerProps) => {
+const MultiSignatureManager = ({ documentId, onUpdate }: MultiSignatureManagerProps) => {
   const { user: currentUser } = useAuth();
   const [isOwner, setIsOwner] = useState(false);
   const [isLoading, setIsLoading] = useState(false);

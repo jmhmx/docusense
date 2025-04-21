@@ -71,6 +71,7 @@ const DocumentSignature = ({
   const [selectedCertificado, setSelectedCertificado] = useState<string>('');
   const [selectedLlave, setSelectedLlave] = useState<string>('');
   const [efirmaPassword, setEfirmaPassword] = useState<string>('');
+  //@ts-ignore
   const [tokenId, setTokenId] = useState<string | null>(null);
 
 

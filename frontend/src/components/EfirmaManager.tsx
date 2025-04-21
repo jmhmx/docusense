@@ -1,5 +1,5 @@
 // frontend/src/components/EfirmaManager.tsx
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { api } from '../api/client';
 import Button from './Button';
 

@@ -7,7 +7,10 @@ import * as path from 'path';
 
 interface TokenData {
   userId: string;
-  certificado: string;
+  certificado: {
+    serialNumber: string;
+    rfc: string;
+  };
   llave: string;
   expiresAt: number;
 }
@@ -59,7 +62,10 @@ export class TokenService {
       // Datos a cifrar
       const tokenData: TokenData = {
         userId,
-        certificado,
+        certificado: {
+          serialNumber: '123456',
+          rfc: 'ABC123456XYZ',
+        },
         llave,
         expiresAt: Date.now() + this.tokenExpirationMinutes * 60 * 1000,
       };

@@ -1,7 +1,7 @@
 // frontend/src/components/SatResponsesList.tsx
 import { useState, useEffect } from 'react';
 import { api } from '../api/client';
-import useSatNotifications from '../hooks/useSatNotifications';
+import useSatNotifications from '../hooks/UseSatNotifications';
 
 interface SatResponse {
   id: string;
@@ -72,14 +72,14 @@ const SatResponsesList = () => {
   };
 
   const getStatusText = (status: string) => {
-    const statuses = {
+    const statuses: Record<string, string> = {
       'received': 'Recibido',
       'processing': 'En Procesamiento',
       'accepted': 'Aceptado',
-      'rejected': 'Rechazado',
-      'cancelled': 'Cancelado',
+      'rejected': 'Rechazado', 
+      'cancelled': 'Cancelado'
     };
-    return statuses[status] || status;
+    return statuses[status] || status
   };
 
   const getStatusClass = (status: string) => {

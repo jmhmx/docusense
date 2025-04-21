@@ -16,10 +16,14 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { SignaturesService } from './signatures.service';
 import { CreateSignatureDto } from './dto/create-signature.dto';
 import { CreateSignatureWithBiometricDto } from './dto/create-signature-with-biometric.dto';
+import { AuditLogService, AuditAction } from '../audit/audit-log.service';
 
 @Controller('api/signatures')
 export class SignaturesController {
-  constructor(private readonly signaturesService: SignaturesService) {}
+  constructor(
+    private readonly signaturesService: SignaturesService,
+    private readonly auditLogService: AuditLogService,
+  ) {}
 
   @UseGuards(JwtAuthGuard)
   @Post(':documentId')
@@ -220,8 +224,8 @@ export class SignaturesController {
         req.user.id,
         initDto.signerIds,
         initDto.requiredSigners,
-        ip,
-        headers['user-agent'] || 'Unknown',
+        //ip,
+        //headers['user-agent'] || 'Unknown',
       );
 
       return {
@@ -296,7 +300,7 @@ export class SignaturesController {
 
       // Registrar en auditoría
       await this.auditLogService.log(
-        AuditAction.DOCUMENT_VERIFY,
+        AuditAction.DOCUMENT_VIEW, // o añade DOCUMENT_VERIFY al enum
         req.user.id,
         documentId,
         {

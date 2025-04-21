@@ -15,6 +15,7 @@ import { SatTransactionService } from './sat-transaction.service';
 import { TokenService } from './token.service';
 import { EmailModule } from '../email/email.module';
 import { WebsocketModule } from '../websocket/websocket.module';
+import { UsersModule } from '../users/users.module'; // Añadido UsersModule
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { WebsocketModule } from '../websocket/websocket.module';
     TypeOrmModule.forFeature([SatTransaction, SatResponse, SatAcuse]),
     EmailModule,
     WebsocketModule,
+    UsersModule, // Importamos UsersModule para tener acceso a UsersService
   ],
   controllers: [SatController],
   providers: [

@@ -9,6 +9,7 @@ import { UsersModule } from '../users/users.module';
 import { AuditModule } from '../audit/audit.module';
 import { Document } from '../documents/entities/document.entity';
 import { BlockchainModule } from '../blockchain/blockchain.module';
+import { SatModule } from '../sat/sat.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { BlockchainModule } from '../blockchain/blockchain.module';
     UsersModule,
     AuditModule,
     forwardRef(() => BlockchainModule),
+    SatModule,
   ],
   controllers: [SignaturesController],
   providers: [SignaturesService],

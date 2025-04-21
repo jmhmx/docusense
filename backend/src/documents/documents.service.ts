@@ -276,10 +276,9 @@ export class DocumentsService {
     console.log('Buscando documento con ID:', id);
     console.log('ID de usuario:', userId);
 
-    const queryOptions: any = { where: { id } };
-
     try {
-      const document = await this.documentsRepository.findOne(queryOptions);
+      // Usar findOneBy en lugar de findOne con opciones
+      const document = await this.documentsRepository.findOneBy({ id });
 
       console.log('Documento encontrado:', document);
 
@@ -300,6 +299,21 @@ export class DocumentsService {
           console.error('Acceso denegado');
           throw new NotFoundException(`Documento con ID ${id} no encontrado`);
         }
+      }
+
+      // Registrar la visualización si hay información de IP y userAgent
+      if (userId && ipAddress && userAgent && this.auditLogService) {
+        await this.auditLogService.log(
+          AuditAction.DOCUMENT_VIEW,
+          userId,
+          document.id,
+          {
+            title: document.title,
+            filename: document.filename,
+          },
+          ipAddress,
+          userAgent,
+        );
       }
 
       return document;

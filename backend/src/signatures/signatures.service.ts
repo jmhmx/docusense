@@ -48,11 +48,9 @@ export class SignaturesService {
     position?: { page: number; x: number; y: number },
     reason?: string,
   ): Promise<Signature> {
-    // Verificar documento y usuario como en signDocument()
-
-    // Obtener documento
-    const document = await this.documentsRepository.findOne({
-      where: { id: documentId },
+    // Verificar documento
+    const document = await this.documentsRepository.findOneBy({
+      id: documentId,
     });
 
     if (!document) {
@@ -120,12 +118,32 @@ export class SignaturesService {
       },
     });
 
-    // Guardar firma y continuar como en el método signDocument()
+    // Guardar firma
     const savedSignature =
       await this.signaturesRepository.save(signatureEntity);
 
-    // Actualizar metadata del documento y registrar en blockchain
-    // [Código similar al de signDocument()]
+    // Actualizar metadata del documento
+    document.metadata = {
+      ...document.metadata,
+      isSigned: true,
+      lastSignedAt: new Date().toISOString(),
+      signaturesCount: (document.metadata?.signaturesCount || 0) + 1,
+      hasEfirmaSignatures: true,
+    };
+
+    await this.documentsService.update(documentId, document);
+
+    // Registrar en blockchain
+    await this.blockchainService.updateDocumentRecord(
+      documentId,
+      documentHash,
+      'SIGNATURE_EFIRMA',
+      userId,
+      {
+        signatureId: savedSignature.id,
+        timestamp: savedSignature.signedAt.toISOString(),
+      },
+    );
 
     return savedSignature;
   }
@@ -1021,10 +1039,10 @@ export class SignaturesService {
     documentId: string,
     ownerUserId: string,
     signerIds: string[],
-    requiredSigners?: number, // Opcional, para quórum
+    requiredSigners?: number,
   ): Promise<void> {
-    const document = await this.documentsRepository.findOne({
-      where: { id: documentId },
+    const document = await this.documentsRepository.findOneBy({
+      id: documentId,
     });
 
     if (!document) {

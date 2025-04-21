@@ -25,6 +25,19 @@ interface DocumentType {
   updatedAt: string;
 }
 
+interface Signature {
+  id: string;
+  userId: string;
+  signedAt: string;
+  reason?: string;
+  valid: boolean;
+  position?: string;
+  user?: {
+    name: string;
+    email: string;
+  };
+}
+
 const DocumentViewer = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -35,7 +48,11 @@ const DocumentViewer = () => {
   const [activeTab, setActiveTab] = useState<'preview' | 'metadata' | 'content' | 'analysis' | 'signatures' | 'sharing' | 'comments' | 'blockchain'>('preview');
   const [processingDocument, setProcessingDocument] = useState<boolean>(false);
   const [unreadComments, setUnreadComments] = useState(0);
+  //@ts-ignore
   const [multiSignatureEnabled, setMultiSignatureEnabled] = useState(true);
+  //@ts-ignore
+  const [signatures, setSignatures] = useState<Signature[]>([]);
+
 
 
   // Añadir esta función
@@ -331,6 +348,9 @@ const fetchUnreadComments = async () => {
             documentId={id}
             documentTitle={document.title}
             onUpdate={() => {
+              // Usar fetchDocument para actualizar toda la información del documento
+              fetchDocument();
+              // O cargar solamente las firmas
               const fetchSignatures = async () => {
                 try {
                   const response = await api.get(`/api/signatures/document/${id}`);
@@ -339,7 +359,6 @@ const fetchUnreadComments = async () => {
                   console.error('Error loading signatures:', err);
                 }
               };
-              // Recargar firmas cuando se actualice el estado de firmas múltiples
               fetchSignatures();
             }}
           />

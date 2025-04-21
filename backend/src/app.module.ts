@@ -12,6 +12,9 @@ import { SignaturesModule } from './signatures/signatures.module';
 import { SharingModule } from './sharing/sharing.module';
 import { BiometryModule } from './biometry/biometry.module';
 import { BlockchainModule } from './blockchain/blockchain.module';
+import { SatModule } from './sat/sat.module';
+import { EmailModule } from './email/email.module';
+import { WebsocketModule } from './websocket/websocket.module';
 
 @Module({
   controllers: [HealthController],
@@ -48,6 +51,9 @@ import { BlockchainModule } from './blockchain/blockchain.module';
     SharingModule,
     BiometryModule,
     BlockchainModule,
+    SatModule,
+    EmailModule,
+    WebsocketModule,
   ],
 })
 export class AppModule {}

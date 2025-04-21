@@ -10,7 +10,6 @@ import PDFViewer from '../components/PDFViewer';
 import DocumentBlockchainVerification from '../components/DocumentBlockchainVerification';
 import MultiSignatureManager from '../components/MultiSignatureManager';
 
-
 interface DocumentType {
   id: string;
   title: string;
@@ -36,6 +35,8 @@ const DocumentViewer = () => {
   const [activeTab, setActiveTab] = useState<'preview' | 'metadata' | 'content' | 'analysis' | 'signatures' | 'sharing' | 'comments' | 'blockchain'>('preview');
   const [processingDocument, setProcessingDocument] = useState<boolean>(false);
   const [unreadComments, setUnreadComments] = useState(0);
+  const [multiSignatureEnabled, setMultiSignatureEnabled] = useState(true);
+
 
   // Añadir esta función
 const fetchUnreadComments = async () => {
@@ -316,6 +317,8 @@ const fetchUnreadComments = async () => {
     );
   };
 
+  
+
   const renderSignaturesTab = () => {
     if (!document || !id) return null;
 
@@ -328,7 +331,6 @@ const fetchUnreadComments = async () => {
             documentId={id}
             documentTitle={document.title}
             onUpdate={() => {
-              // Recargar firmas cuando se actualice el estado de firmas múltiples
               const fetchSignatures = async () => {
                 try {
                   const response = await api.get(`/api/signatures/document/${id}`);
@@ -337,6 +339,7 @@ const fetchUnreadComments = async () => {
                   console.error('Error loading signatures:', err);
                 }
               };
+              // Recargar firmas cuando se actualice el estado de firmas múltiples
               fetchSignatures();
             }}
           />

@@ -7,7 +7,7 @@ import SignatureAnimation from './SignatureAnimation';
 
 interface SignatureUIProps {
   documentTitle: string;
-  onSign: (type: string, reason: string, position: any, sealData?: any) => void;
+  onSign: (type: string, reason: string, position?: any, sealData?: any) => void;
   onCancel: () => void;
   documentPreviewUrl: string;
   currentPage?: number;
@@ -114,6 +114,20 @@ const SignatureUI = ({
   // Manejar selección de tipo de firma
   const handleSelectType = (type: 'standard' | 'biometric' | 'efirma') => {
     setSignatureType(type);
+  };
+  
+  // Manejar confirmación de firma (llamada desde signaturePositioning)
+  const handleConfirmSignature = () => {
+    if (!position) {
+      setError('Debe seleccionar una posición para la firma');
+      return;
+    }
+    
+    if (signatureType === 'standard') {
+      setStep('customize');
+    } else {
+      handleFinalizeSignature();
+    }
   };
   
   // Manejar selección de posición
@@ -360,5 +374,7 @@ const SignatureUI = ({
         </div>
       </div>
     </div>
-  )
-}
+  );
+};
+
+export default SignatureUI;

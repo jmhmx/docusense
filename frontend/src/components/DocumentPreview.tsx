@@ -1,27 +1,33 @@
-import React, { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+
+interface Signature {
+  id: string;
+  position: {
+    page: number;
+    x: number;
+    y: number;
+    width?: number;
+    height?: number;
+  };
+  user: {
+    name: string;
+    email?: string;
+  };
+  signedAt: string;
+  valid: boolean;
+  reason?: string;
+}
 
 interface DocumentPreviewProps {
   documentId: string;
   documentUrl: string;
-  signatures: Array<{
-    id: string;
-    position: {
-      page: number;
-      x: number;
-      y: number;
-    };
-    user: {
-      name: string;
-      email?: string;
-    };
-    signedAt: string;
-    valid: boolean;
-  }>;
+  signatures: Signature[];
   currentPage: number;
   totalPages: number;
   onPageChange: (page: number) => void;
   onSignatureClick?: (signatureId: string) => void;
+  highlightedSignature?: string;
 }
 
 const DocumentPreview = ({
@@ -31,16 +37,25 @@ const DocumentPreview = ({
   currentPage,
   totalPages,
   onPageChange,
-  onSignatureClick
+  onSignatureClick,
+  highlightedSignature
 }: DocumentPreviewProps) => {
   const [scale, setScale] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
-  const [showSignatureInfo, setShowSignatureInfo] = useState<string | null>(null);
+  const [error, setError] = useState('');
   const [hoveredSignature, setHoveredSignature] = useState<string | null>(null);
   const [isFullScreen, setIsFullScreen] = useState(false);
+  const [rotation, setRotation] = useState(0);
+  const [showSignatures, setShowSignatures] = useState(true);
   
   const containerRef = useRef<HTMLDivElement>(null);
-  const documentRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  
+  // Filtrar firmas por página
+  const pageSignatures = useMemo(() => 
+    signatures.filter(sig => sig.position.page === currentPage),
+    [signatures, currentPage]
+  );
   
   // Cargar documento
   useEffect(() => {
@@ -49,16 +64,13 @@ const DocumentPreview = ({
     const image = new Image();
     image.src = `${documentUrl}?page=${currentPage}`;
     
-    image.onload = () => {
-      setIsLoading(false);
-    };
-    
+    image.onload = () => setIsLoading(false);
     image.onerror = () => {
       setIsLoading(false);
-      // Manejar error
+      setError('No se pudo cargar la página del documento');
     };
     
-    // Entrar/salir de pantalla completa
+    // Detectar cambios de pantalla completa
     const handleFullScreenChange = () => {
       setIsFullScreen(!!document.fullscreenElement);
     };
@@ -72,30 +84,36 @@ const DocumentPreview = ({
   
   // Funciones para zoom
   const handleZoomIn = () => {
-    setScale(prevScale => Math.min(prevScale + 0.25, 3));
+    setScale(prev => Math.min(prev + 0.25, 3));
   };
   
   const handleZoomOut = () => {
-    setScale(prevScale => Math.max(prevScale - 0.25, 0.5));
+    setScale(prev => Math.max(prev - 0.25, 0.5));
   };
   
   const handleZoomReset = () => {
     setScale(1);
+    setRotation(0);
   };
   
-  // Función para navegar entre páginas
+  // Función para rotar el documento
+  const handleRotate = () => {
+    setRotation(prev => (prev + 90) % 360);
+  };
+  
+  // Navegar entre páginas
   const goToPage = (page: number) => {
     if (page >= 1 && page <= totalPages) {
       onPageChange(page);
     }
   };
   
-  // Función para entrar/salir de pantalla completa
+  // Entrar/salir de pantalla completa
   const toggleFullScreen = () => {
-    if (!documentRef.current) return;
+    if (!contentRef.current) return;
     
     if (!document.fullscreenElement) {
-      documentRef.current.requestFullscreen().catch(err => {
+      contentRef.current.requestFullscreen().catch(err => {
         console.error(`Error al intentar activar pantalla completa: ${err.message}`);
       });
     } else {
@@ -115,18 +133,15 @@ const DocumentPreview = ({
     });
   };
   
-  // Filtrar firmas por página actual
-  const pageSignatures = signatures.filter(sig => sig.position.page === currentPage);
-  
   return (
-    <div className="flex flex-col h-full" ref={documentRef}>
-      {/* Barra de herramientas */}
-      <div className="flex items-center justify-between p-2 bg-white border-b rounded-t-lg shadow-sm">
+    <div className="flex flex-col h-full rounded-lg shadow-md bg-gray-50" ref={contentRef}>
+      {/* Barra de herramientas superior */}
+      <div className="flex items-center justify-between p-2 bg-white border-b">
         <div className="flex items-center space-x-2">
           <button
             onClick={() => goToPage(currentPage - 1)}
             disabled={currentPage <= 1}
-            className="p-1 text-gray-700 border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50"
+            className="p-1 text-gray-700 border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
             title="Página anterior"
           >
             <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
@@ -150,7 +165,7 @@ const DocumentPreview = ({
           <button
             onClick={() => goToPage(currentPage + 1)}
             disabled={currentPage >= totalPages}
-            className="p-1 text-gray-700 border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50"
+            className="p-1 text-gray-700 border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
             title="Página siguiente"
           >
             <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
@@ -193,6 +208,26 @@ const DocumentPreview = ({
           </button>
           
           <button
+            onClick={handleRotate}
+            className="p-1 text-gray-700 border border-gray-300 rounded hover:bg-gray-100"
+            title="Rotar"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M15.312 11.424a5.5 5.5 0 01-9.201 2.466l-.312-.311h2.433a.75.75 0 000-1.5H3.989a.75.75 0 00-.75.75v4.242a.75.75 0 001.5 0v-2.43l.31.31a7 7 0 0011.712-3.138.75.75 0 00-1.449-.39zm1.23-3.723a.75.75 0 00.219-.53V2.929a.75.75 0 00-.75-.75H11.77a.75.75 0 000 1.5h2.43l-.31.31a7 7 0 00-11.712 3.138.75.75 0 001.449.39 5.5 5.5 0 019.201-2.466l.312.311h-2.433a.75.75 0 000 1.5h4.243a.75.75 0 00.53-.219z" clipRule="evenodd" />
+            </svg>
+          </button>
+          
+          <button
+            onClick={() => setShowSignatures(!showSignatures)}
+            className={`p-1 border rounded ${showSignatures ? 'text-blue-600 border-blue-300 bg-blue-50' : 'text-gray-700 border-gray-300 hover:bg-gray-100'}`}
+            title={showSignatures ? "Ocultar firmas" : "Mostrar firmas"}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+            </svg>
+          </button>
+          
+          <button
             onClick={toggleFullScreen}
             className="p-1 text-gray-700 border border-gray-300 rounded hover:bg-gray-100"
             title={isFullScreen ? "Salir de pantalla completa" : "Pantalla completa"}
@@ -211,46 +246,68 @@ const DocumentPreview = ({
       </div>
       
       {/* Contenedor del documento */}
-      <div className="relative flex-1 overflow-auto" ref={containerRef}>
+      <div 
+        className="relative flex-1 overflow-auto bg-gray-200" 
+        ref={containerRef}
+      >
         {isLoading ? (
           <div className="flex items-center justify-center h-full">
             <div className="w-16 h-16 border-4 border-blue-500 rounded-full border-t-transparent animate-spin"></div>
           </div>
+        ) : error ? (
+          <div className="flex flex-col items-center justify-center h-full">
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-12 h-12 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <p className="mt-2 text-red-600">{error}</p>
+          </div>
         ) : (
-          <div className="relative">
+          <div className="flex items-center justify-center min-h-full p-4">
             <div 
-              className="relative transition-transform duration-200 ease-in-out origin-top-left transform"
-              style={{ transform: `scale(${scale})` }}
+              className="relative transition-all duration-300 origin-center bg-white shadow-lg"
+              style={{ 
+                transform: `scale(${scale}) rotate(${rotation}deg)`,
+                transformOrigin: 'center',
+              }}
             >
               <img 
                 src={`${documentUrl}?page=${currentPage}`} 
                 alt={`Página ${currentPage} del documento`}
-                className="shadow-md"
+                className="max-w-full"
               />
               
               {/* Renderizar firmas */}
-              {pageSignatures.map(signature => (
+              {showSignatures && pageSignatures.map(signature => (
                 <motion.div
                   key={signature.id}
                   className={`absolute border-2 rounded shadow-sm cursor-pointer ${
                     signature.valid 
-                      ? 'border-green-500 bg-green-50 bg-opacity-70' 
-                      : 'border-red-500 bg-red-50 bg-opacity-70'
-                  } ${hoveredSignature === signature.id ? 'z-10' : 'z-0'}`}
+                      ? 'border-green-500 bg-green-50 bg-opacity-80' 
+                      : 'border-red-500 bg-red-50 bg-opacity-80'
+                  } ${
+                    hoveredSignature === signature.id || highlightedSignature === signature.id
+                      ? 'z-10 ring-2 ring-offset-1 ring-blue-500' 
+                      : 'z-0'
+                  }`}
                   style={{
                     left: `${signature.position.x}px`,
                     top: `${signature.position.y}px`,
-                    width: '300px',
-                    height: '100px'
+                    width: signature.position.width || '200px',
+                    height: signature.position.height || '100px',
+                    transformOrigin: 'center',
+                    transform: `rotate(${-rotation}deg)`, // Contrarresta la rotación para que la firma siempre esté orientada correctamente
                   }}
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ 
+                    opacity: 1, 
+                    scale: highlightedSignature === signature.id ? 1.05 : 1,
+                    boxShadow: highlightedSignature === signature.id ? "0 4px 12px rgba(0,0,0,0.15)" : "0 2px 4px rgba(0,0,0,0.1)"
+                  }}
+                  transition={{ duration: 0.3 }}
                   onClick={() => onSignatureClick && onSignatureClick(signature.id)}
                   onMouseEnter={() => setHoveredSignature(signature.id)}
                   onMouseLeave={() => setHoveredSignature(null)}
-                  whileHover={{ scale: 1.02, boxShadow: "0 4px 8px rgba(0,0,0,0.1)" }}
-                  animate={{
-                    scale: hoveredSignature === signature.id ? 1.05 : 1,
-                    opacity: hoveredSignature === signature.id || !hoveredSignature ? 1 : 0.7
-                  }}
+                  whileHover={{ scale: 1.05, boxShadow: "0 4px 12px rgba(0,0,0,0.15)" }}
                 >
                   <div className="relative flex items-center p-2">
                     <div className="flex items-center justify-center w-8 h-8 mr-2 bg-blue-100 rounded-full">
@@ -261,6 +318,9 @@ const DocumentPreview = ({
                     <div className="flex flex-col text-xs">
                       <span className="font-medium text-gray-900">Firmado por: {signature.user.name}</span>
                       <span className="text-gray-600">Fecha: {formatDate(signature.signedAt)}</span>
+                      {signature.reason && (
+                        <span className="text-gray-600">Motivo: {signature.reason}</span>
+                      )}
                     </div>
                     
                     {/* Indicador de validez */}
@@ -279,35 +339,42 @@ const DocumentPreview = ({
                     </div>
                   </div>
                   
-                  {/* Tooltip de información detallada */}
+                  {/* Tooltip detallado */}
                   <AnimatePresence>
                     {hoveredSignature === signature.id && (
                       <motion.div
-                        className="absolute left-0 z-20 p-3 mb-2 bg-white border border-gray-200 rounded-lg shadow-lg bottom-full"
+                        className="absolute left-0 z-30 p-3 bg-white border border-gray-200 rounded-md shadow-xl bottom-full"
                         initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
+                        animate={{ opacity: 1, y: -10 }}
                         exit={{ opacity: 0, y: 10 }}
                         transition={{ duration: 0.2 }}
-                        style={{ width: '250px' }}
+                        style={{ width: '240px', transform: `rotate(${-rotation}deg)` }}
                       >
-                        <h4 className="mb-2 text-sm font-semibold text-gray-900">Detalles de la firma</h4>
-                        <p className="mb-1 text-xs text-gray-700">
-                          <span className="font-medium">Firmante:</span> {signature.user.name}
-                        </p>
-                        {signature.user.email && (
-                          <p className="mb-1 text-xs text-gray-700">
-                            <span className="font-medium">Email:</span> {signature.user.email}
+                        <h4 className="text-sm font-semibold text-gray-900">Detalles de la firma</h4>
+                        <div className="mt-2 space-y-1">
+                          <p className="text-xs text-gray-700">
+                            <span className="font-medium">Firmante:</span> {signature.user.name}
                           </p>
-                        )}
-                        <p className="mb-1 text-xs text-gray-700">
-                          <span className="font-medium">Fecha:</span> {formatDate(signature.signedAt)}
-                        </p>
-                        <p className="mb-1 text-xs text-gray-700">
-                          <span className="font-medium">Estado:</span> 
-                          <span className={signature.valid ? 'text-green-600' : 'text-red-600'}>
-                            {signature.valid ? ' Válida' : ' Inválida'}
-                          </span>
-                        </p>
+                          {signature.user.email && (
+                            <p className="text-xs text-gray-700">
+                              <span className="font-medium">Email:</span> {signature.user.email}
+                            </p>
+                          )}
+                          <p className="text-xs text-gray-700">
+                            <span className="font-medium">Fecha:</span> {formatDate(signature.signedAt)}
+                          </p>
+                          {signature.reason && (
+                            <p className="text-xs text-gray-700">
+                              <span className="font-medium">Motivo:</span> {signature.reason}
+                            </p>
+                          )}
+                          <p className="text-xs text-gray-700">
+                            <span className="font-medium">Estado:</span> 
+                            <span className={signature.valid ? 'text-green-600' : 'text-red-600'}>
+                              {signature.valid ? ' Válida' : ' Inválida'}
+                            </span>
+                          </p>
+                        </div>
                         <div className="pt-2 mt-2 border-t border-gray-200">
                           <button
                             onClick={(e) => {
@@ -330,9 +397,9 @@ const DocumentPreview = ({
       </div>
       
       {/* Información y leyenda de firmas */}
-      {pageSignatures.length > 0 && (
+      {pageSignatures.length > 0 && showSignatures && (
         <div className="p-2 text-xs text-gray-500 border-t bg-gray-50">
-          <div className="flex items-center space-x-4">
+          <div className="flex flex-wrap items-center gap-x-4">
             <span className="font-medium">Firmas en esta página: {pageSignatures.length}</span>
             <div className="flex items-center">
               <span className="inline-block w-3 h-3 mr-1 bg-green-500 rounded-full"></span>
@@ -341,6 +408,10 @@ const DocumentPreview = ({
             <div className="flex items-center">
               <span className="inline-block w-3 h-3 mr-1 bg-red-500 rounded-full"></span>
               <span>Inválida</span>
+            </div>
+            <div className="flex items-center">
+              <span className="inline-block w-3 h-3 mr-1 bg-blue-500 rounded-full"></span>
+              <span>Seleccionada</span>
             </div>
           </div>
         </div>

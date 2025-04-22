@@ -2,6 +2,10 @@ import { useState, useRef, useEffect } from 'react';
 import { api } from '../api/client';
 import Button from './Button';
 import BiometricSignatureWorkflow from './BiometricSignatureWorkflow';
+import SignatureUI from './SignatureUI';
+import SignaturePositioning from './SignaturePositioning';
+import CustomSignatureSeal from './CustomSignatureSeal';
+import DocumentPreview from './DocumentPreview';
 
 interface SignaturePosition {
   page: number;
@@ -673,147 +677,13 @@ const handleSignWithEfirma = async () => {
       {/* Signature Modal */}
       {showSignModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-600 bg-opacity-50">
-          <div className="w-full max-w-md p-8 bg-white rounded-lg">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-medium text-gray-900">Sign Document: {documentTitle}</h3>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowSignModal(false);
-                  setShowVerification(false);
-                  setVerificationCode('');
-                  setError(null);
-                  setDrawSignature(false);
-                }}
-                className="text-gray-400 hover:text-gray-500"
-              >
-                <span className="sr-only">Close</span>
-                <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
-            {error && (
-              <div className="p-4 mb-4 border-l-4 border-red-400 bg-red-50">
-                <div className="flex">
-                  <div className="flex-shrink-0">
-                    <svg className="w-5 h-5 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                    </svg>
-                  </div>
-                  <div className="ml-3">
-                    <p className="text-sm text-red-700">{error}</p>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {!showVerification ? (
-              <div>
-                <div className="mb-4">
-                  <label htmlFor="reason" className="block mb-1 text-sm font-medium text-gray-700">
-                    Reason for signing (optional)
-                  </label>
-                  <input
-                    type="text"
-                    id="reason"
-                    value={reason}
-                    onChange={(e) => setReason(e.target.value)}
-                    className="block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                    placeholder="E.g., Approval, Review, Agreement"
-                  />
-                </div>
-                
-                <div className="mb-4">
-                  <label className="block mb-1 text-sm font-medium text-gray-700">
-                    Signature position
-                  </label>
-                  <div className="overflow-hidden border border-gray-300 rounded-md">
-                    <canvas 
-                      ref={canvasRef}
-                      width={400}
-                      height={100}
-                      onClick={handleCanvasClick}
-                      className="w-full cursor-pointer"
-                    ></canvas>
-                  </div>
-                  <p className="mt-1 text-xs text-gray-500">
-                    Click in the area to place your signature
-                  </p>
-                </div>
-                
-                <div className="flex justify-end mt-6 space-x-3">
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={() => setShowSignModal(false)}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="primary"
-                    onClick={requestVerificationCode}
-                    disabled={isLoading || !drawSignature}
-                  >
-                    {isLoading ? 'Processing...' : 'Continue'}
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <div>
-                <div className="p-4 mb-6 rounded-md bg-blue-50">
-                  <p className="text-sm text-blue-700">
-                    For security, two-factor verification is required.
-                    We've sent a code to your email address.
-                  </p>
-                </div>
-                
-                <div className="mb-4">
-                  <label htmlFor="verification-code" className="block mb-1 text-sm font-medium text-gray-700">
-                    Verification code
-                  </label>
-                  <input
-                    type="text"
-                    id="verification-code"
-                    value={verificationCode}
-                    onChange={(e) => setVerificationCode(e.target.value)}
-                    className="block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                    placeholder="Enter 6-digit code"
-                    maxLength={6}
-                  />
-                  {verificationId && (
-                    <p className="mt-1 text-xs text-gray-500">
-                      For testing purposes, the code is: {verificationId}
-                    </p>
-                  )}
-                </div>
-                
-                <div className="flex justify-end mt-6 space-x-3">
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={() => {
-                      setShowVerification(false);
-                      setVerificationCode('');
-                    }}
-                  >
-                    Atrás
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="primary"
-                    onClick={verifyCode}
-                    disabled={isLoading || verificationCode.length !== 6}
-                  >
-                    {isLoading ? 'Verifying...' : 'Sign Document'}
-                  </Button>
-                </div>
-              </div>
-            )}
-          </div>
-          
+          <SignatureUI
+            documentTitle={documentTitle}
+            onSign={handleConfirmSignature}
+            onCancel={() => setShowSignModal(false)}
+            documentPreviewUrl={`/api/documents/${documentId}/view`}
+            currentPage={currentPage}
+          />
         </div>
       )}
 

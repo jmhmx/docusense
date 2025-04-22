@@ -16,6 +16,7 @@
     "@types/node": "^22.13.14",
     "axios": "^1.8.4",
     "face-api.js": "^0.22.2",
+    "framer-motion": "^12.7.4",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-pdf": "^6.2.2",

@@ -256,7 +256,7 @@ const SignatureUI = ({
           <CustomSignatureSeal
             name={currentUserName}
             date={new Date().toLocaleDateString()}
-            reason={reason || undefined}
+            reason={reason || ""}
             onSave={handleSealSaved}
             onCancel={goToPreviousStep}
           />

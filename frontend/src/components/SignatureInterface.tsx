@@ -11,6 +11,13 @@ interface SignatureInterfaceProps {
   signatureTypes?: string[];
 }
 
+interface SignatureOption {
+  icon: string;
+  title: string;
+  description: string;
+  detail: string;
+}
+
 const SignatureInterface = ({
   documentTitle,
   documentPreviewUrl,
@@ -25,7 +32,7 @@ const SignatureInterface = ({
   const [step, setStep] = useState(1);
   const [showPreview, setShowPreview] = useState(false);
   
-  const signatureOptions = {
+  const signatureOptions: { [key: string]: SignatureOption } = {
     standard: {
       icon: "🔑",
       title: "Firma Estándar",

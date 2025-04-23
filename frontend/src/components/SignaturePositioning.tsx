@@ -1,6 +1,19 @@
 import { useState, useRef, useEffect } from 'react';
 import Button from './Button';
 
+interface SignaturePositioningProps {
+  documentId: string;
+  currentPage?: number;
+  totalPages?: number;
+  onPositionSelected: (position: {page: number, x: number, y: number, width: number, height: number}) => void;
+  onCancel: () => void;
+  signatureData?: {
+    name: string;
+    date: string;
+    reason?: string;
+  };
+}
+
 const SignaturePositioning = ({ 
   documentId, 
   currentPage = 1, 
@@ -36,14 +49,14 @@ const SignaturePositioning = ({
   }, []);
   
   // Manejar evento de mouse down en la firma
-  const handleMouseDown = (e) => {
+  const handleMouseDown = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     setIsDragging(true);
   };
   
   // Manejar movimiento del mouse
-  const handleMouseMove = (e) => {
+  const handleMouseMove = (e: React.MouseEvent) => {
     if (!isDragging || !containerRef.current) return;
     
     const container = containerRef.current.getBoundingClientRect();
@@ -254,7 +267,7 @@ const SignaturePositioning = ({
         </div>
       </div>
       
-      <style jsx>{`
+      <style>{`
         .bg-grid {
           background-size: 20px 20px;
           background-image: 

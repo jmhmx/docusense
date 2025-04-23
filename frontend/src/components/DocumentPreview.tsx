@@ -20,7 +20,6 @@ interface Signature {
 }
 
 interface DocumentPreviewProps {
-  documentId: string;
   documentUrl: string;
   signatures: Signature[];
   currentPage: number;
@@ -31,7 +30,6 @@ interface DocumentPreviewProps {
 }
 
 const DocumentPreview = ({
-  documentId,
   documentUrl,
   signatures,
   currentPage,

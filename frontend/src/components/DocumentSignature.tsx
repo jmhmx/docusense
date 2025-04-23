@@ -3,9 +3,9 @@ import { api } from '../api/client';
 import Button from './Button';
 import BiometricSignatureWorkflow from './BiometricSignatureWorkflow';
 import SignatureUI from './SignatureUI';
-import SignaturePositioning from './SignaturePositioning';
-import CustomSignatureSeal from './CustomSignatureSeal';
-import DocumentPreview from './DocumentPreview';
+//import SignaturePositioning from './SignaturePositioning';
+//import CustomSignatureSeal from './CustomSignatureSeal';
+//import DocumentPreview from './DocumentPreview';
 
 interface SignaturePosition {
   page: number;
@@ -45,8 +45,11 @@ const DocumentSignature = ({
   const [reason, setReason] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // @ts-ignore
   const [showVerification, setShowVerification] = useState(false);
+  // @ts-ignore
   const [verificationCode, setVerificationCode] = useState('');
+  // @ts-ignore
   const [verificationId, setVerificationId] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [canSign, setCanSign] = useState(true);
@@ -77,6 +80,8 @@ const DocumentSignature = ({
   const [efirmaPassword, setEfirmaPassword] = useState<string>('');
   //@ts-ignore
   const [tokenId, setTokenId] = useState<string | null>(null);
+  //@ts-ignore
+  const [currentPage, setCurrentPage] = useState(1);
 
 
   // Load current user
@@ -480,6 +485,16 @@ const handleSignWithEfirma = async () => {
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
   };
+
+  const handleConfirmSignature = () => {
+    if (!signaturePosition) {
+      setError('Debe seleccionar una posición para la firma');
+      return;
+    }
+    
+    requestVerificationCode();
+  };
+
 
   return (
     <div className="mt-6">

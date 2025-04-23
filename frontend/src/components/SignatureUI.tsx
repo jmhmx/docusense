@@ -117,7 +117,7 @@ const SignatureUI = ({
   };
   
   // Manejar confirmación de firma (llamada desde signaturePositioning)
-  const _handleConfirmSignature = () => {
+  /* const _handleConfirmSignature = () => {
     if (!position) {
       setError('Debe seleccionar una posición para la firma');
       return;
@@ -128,7 +128,7 @@ const SignatureUI = ({
     } else {
       handleFinalizeSignature();
     }
-  };
+  }; */
   
   // Manejar selección de posición
   const handlePositionSelected = (pos: SignaturePosition) => {
@@ -246,7 +246,7 @@ const SignatureUI = ({
             signatureData={{
               name: currentUserName,
               date: new Date().toLocaleDateString(),
-              reason: reason || undefined
+              reason: reason || ""
             }}
           />
         );

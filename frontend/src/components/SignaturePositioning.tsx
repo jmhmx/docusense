@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import Button from './Button';
 
-/* interface SignaturePositioningProps {
+interface SignaturePositioningProps {
   documentId: string;
   currentPage?: number;
   totalPages?: number;
@@ -12,7 +12,7 @@ import Button from './Button';
     date: string;
     reason?: string;
   };
-} */
+}
 
 const SignaturePositioning = ({ 
   documentId, 
@@ -25,7 +25,7 @@ const SignaturePositioning = ({
     date: new Date().toLocaleDateString(),
     reason: 'Aprobación del documento'
   }
-}) => {
+}: SignaturePositioningProps) => {
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [signatureSize, setSignatureSize] = useState({ width: 200, height: 100 });
@@ -83,17 +83,37 @@ const SignaturePositioning = ({
   // Efectos para agregar/remover listeners globales
   useEffect(() => {
   if (isDragging) {
-    window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('mouseup', handleMouseUp);
-  } else {
-    window.removeEventListener('mousemove', handleMouseMove);
-    window.removeEventListener('mouseup', handleMouseUp);
-  }
+    const handleMouseMoveGlobal = (e: MouseEvent) => {
+      if (!containerRef.current) return;
   
-  return () => {
-    window.removeEventListener('mousemove', handleMouseMove);
-    window.removeEventListener('mouseup', handleMouseUp);
-  };
+      const container = containerRef.current.getBoundingClientRect();
+      const signature = signatureRef.current?.getBoundingClientRect();
+      
+      if (!signature) return;
+        
+      // Calcular nuevas coordenadas relativas al contenedor
+      let newX = e.clientX - container.left - signature.width / 2;
+      let newY = e.clientY - container.top - 20;
+      
+      // Limitar al área del contenedor
+      newX = Math.max(0, Math.min(newX, container.width - signature.width));
+      newY = Math.max(0, Math.min(newY, container.height - signature.height));
+      
+      setPosition({ x: newX, y: newY });
+    };
+    
+    const handleMouseUpGlobal = () => {
+      setIsDragging(false);
+    };
+    
+    window.addEventListener('mousemove', handleMouseMoveGlobal);
+    window.addEventListener('mouseup', handleMouseUpGlobal);
+    
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMoveGlobal);
+      window.removeEventListener('mouseup', handleMouseUpGlobal);
+    };
+  }
 }, [isDragging]);
   
   // Cambio de página
@@ -211,7 +231,10 @@ const SignaturePositioning = ({
               touchAction: 'none'
             }}
             onMouseDown={handleMouseDown}
-            onTouchStart={handleMouseDown}
+            onTouchStart={(e) => {
+              e.preventDefault();
+              setIsDragging(true);
+            }}
           >
             {/* Vista previa de la firma */}
             <div className="flex flex-col">

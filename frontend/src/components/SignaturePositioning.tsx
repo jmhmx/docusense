@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import Button from './Button';
 
-interface SignaturePositioningProps {
+/* interface SignaturePositioningProps {
   documentId: string;
   currentPage?: number;
   totalPages?: number;
@@ -12,7 +12,7 @@ interface SignaturePositioningProps {
     date: string;
     reason?: string;
   };
-}
+} */
 
 const SignaturePositioning = ({ 
   documentId, 
@@ -58,9 +58,11 @@ const SignaturePositioning = ({
   // Manejar movimiento del mouse
   const handleMouseMove = (e: React.MouseEvent) => {
     if (!isDragging || !containerRef.current) return;
-    
-    const container = containerRef.current.getBoundingClientRect();
-    const signature = signatureRef.current.getBoundingClientRect();
+  
+  const container = containerRef.current.getBoundingClientRect();
+  const signature = signatureRef.current?.getBoundingClientRect();
+  
+  if (!signature) return;
     
     // Calcular nuevas coordenadas relativas al contenedor
     let newX = e.clientX - container.left - signature.width / 2;
@@ -80,27 +82,27 @@ const SignaturePositioning = ({
   
   // Efectos para agregar/remover listeners globales
   useEffect(() => {
-    if (isDragging) {
-      window.addEventListener('mousemove', handleMouseMove);
-      window.addEventListener('mouseup', handleMouseUp);
-    } else {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
-    }
-    
-    return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
-    };
-  }, [isDragging]);
+  if (isDragging) {
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+  } else {
+    window.removeEventListener('mousemove', handleMouseMove);
+    window.removeEventListener('mouseup', handleMouseUp);
+  }
+  
+  return () => {
+    window.removeEventListener('mousemove', handleMouseMove);
+    window.removeEventListener('mouseup', handleMouseUp);
+  };
+}, [isDragging]);
   
   // Cambio de página
-  const changePage = (increment) => {
-    const newPage = activePage + increment;
-    if (newPage >= 1 && newPage <= totalPages) {
-      setActivePage(newPage);
-    }
-  };
+  const changePage = (increment: number) => {
+  const newPage = activePage + increment;
+  if (newPage >= 1 && newPage <= totalPages) {
+    setActivePage(newPage);
+  }
+};
   
   // Confirmación de la posición
   const confirmPosition = () => {

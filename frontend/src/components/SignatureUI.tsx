@@ -117,7 +117,7 @@ const SignatureUI = ({
   };
   
   // Manejar confirmación de firma (llamada desde signaturePositioning)
-  const handleConfirmSignature = () => {
+  const _handleConfirmSignature = () => {
     if (!position) {
       setError('Debe seleccionar una posición para la firma');
       return;

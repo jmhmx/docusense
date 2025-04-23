@@ -154,7 +154,7 @@ const SignatureAnimation = ({
               </motion.p>
               
               <div className="flex items-center w-full max-w-md mt-6">
-                {processingSteps.map((step, index) => (
+                {processingSteps.map((_stepText, index) => (
                   <div key={index} className="flex-1">
                     <div 
                       className={`h-1 mx-2 rounded-full ${

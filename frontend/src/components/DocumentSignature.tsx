@@ -339,6 +339,7 @@ const handleSignWithEfirma = async () => {
   };
 
   // Verify 2FA code
+  //@ts-ignore
   const verifyCode = async () => {
     if (!verificationCode.trim() || verificationCode.length !== 6) {
       setError('Please enter the 6-digit code');

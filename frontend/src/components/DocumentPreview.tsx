@@ -314,7 +314,7 @@ const DocumentPreview = ({
                       </span>
                     </div>
                     <div className="flex flex-col text-xs">
-                      <span className="font-medium text-gray-900">Firmado por: {signature.user.name}</span>
+                      <span className="text-sm font-medium text-gray-900">Firmado por: {signature.user?.name || 'Usuario'}</span>
                       <span className="text-gray-600">Fecha: {formatDate(signature.signedAt)}</span>
                       {signature.reason && (
                         <span className="text-gray-600">Motivo: {signature.reason}</span>

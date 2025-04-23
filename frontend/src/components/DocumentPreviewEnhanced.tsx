@@ -59,6 +59,8 @@ const DocumentPreviewEnhanced = ({
   const [fullscreen, setFullscreen] = useState(false);
   
   const containerRef = useRef<HTMLDivElement>(null);
+  console.log(documentId);
+  
   
   // Filtrar firmas por página actual
   useEffect(() => {

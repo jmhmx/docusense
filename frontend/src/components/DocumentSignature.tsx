@@ -3,6 +3,7 @@ import { api } from '../api/client';
 import Button from './Button';
 //import BiometricSignatureWorkflow from './BiometricSignatureWorkflow';
 import SignatureUI from './SignatureUI';
+import TwoFactorVerification from './TwoFactorVerification';
 
 interface SignaturePosition {
   page: number;
@@ -66,6 +67,13 @@ const DocumentSignature = ({
   //@ts-ignore
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [showTwoFactorModal, setShowTwoFactorModal] = useState(false);
+  const [pendingSignatureData, setPendingSignatureData] = useState<{
+    type: string;
+    reason: string;
+    position?: SignaturePosition;
+    sealData?: any;
+  } | null>(null);
   
   // Cargar información del usuario actual
   useEffect(() => {
@@ -179,84 +187,112 @@ const DocumentSignature = ({
 
   // Manejar solicitud de firma con diferentes métodos
   const handleSignRequest = async (
-    signatureType: string, 
-    reason: string, 
-    position?: SignaturePosition, 
-    sealData?: any
-  ) => {
-    if (!position) {
-      setError('Posición de firma no especificada');
-      return;
-    }
+  signatureType: string, 
+  reason: string, 
+  position?: SignaturePosition, 
+  sealData?: any
+) => {
+  if (!position) {
+    setError('Posición de firma no especificada');
+    return;
+  }
 
-    setIsLoading(true);
-    setError(null);
+  setIsLoading(true);
+  setError(null);
+  
+  try {
+    // Primero, almacenar todos los datos pendientes
+    const signatureData = {
+      type: signatureType,
+      reason: reason.trim() || 'Firma de documento',
+      position,
+      sealData
+    };
     
-    try {
-      let response;
-      
-      switch (signatureType) {
-        case 'standard':
-          // Firmar con 2FA
-          response = await api.post('/api/auth/2fa/generate');
-          const verificationId = response.data.code;
-          
-          // Simular verificación (en un caso real, el usuario tendría que ingresar el código)
-          await api.post('/api/auth/2fa/verify', { code: verificationId });
-          
-          // Firmar el documento
-          response = await api.post(`/api/signatures/${documentId}`, {
-            position,
-            reason: reason.trim() || 'Firma de documento',
-            sealData
-          });
-          break;
-          
-        case 'biometric':
-          // En un caso real, esto debería integrarse con el flujo biométrico
-          // Para este ejemplo, simularemos una respuesta exitosa
-          response = await api.post(`/api/signatures/${documentId}/biometric`, {
-            position,
-            reason: reason.trim() || 'Firma con verificación biométrica'
-          });
-          break;
-          
-        case 'efirma':
-          // Aquí iría la lógica para firmar con e.firma
-          // Para este ejemplo, simularemos una respuesta exitosa
-          response = await api.post(`/api/signatures/${documentId}/efirma`, {
-            position,
-            reason: reason.trim() || 'Firma con e.firma'
-          });
-          break;
-          
-        default:
-          throw new Error('Tipo de firma no válido');
-      }
-
-      // Actualizar lista de firmas
-      const signaturesResponse = await api.get(`/api/signatures/document/${documentId}`);
-      setSignatures(signaturesResponse.data);
-      
-      // Mostrar mensaje de éxito
-      setSuccessMessage(`Documento firmado exitosamente con ${
-        signatureType === 'standard' ? 'autenticación 2FA' : 
-        signatureType === 'biometric' ? 'verificación biométrica' : 
-        'e.firma'
-      }`);
-      
-      setShowSignModal(false);
-      
-      if (onSignSuccess) {
-        onSignSuccess();
-      }
-    } catch (err: any) {
-      console.error('Error al firmar documento:', err);
-      setError(err?.response?.data?.message || 'Error al firmar documento');
-    } finally {
+    // Manejar según el tipo de firma
+    switch (signatureType) {
+      case 'standard':
+        // Con firma estándar, guardar los datos pendientes y mostrar modal 2FA
+        setPendingSignatureData(signatureData);
+        setShowTwoFactorModal(true);
+        setShowSignModal(false); // Cerrar el modal de firma
+        break;
+        
+      case 'biometric':
+        // En un caso real, esto debería integrarse con el flujo biométrico
+        const bioResponse = await api.post(`/api/signatures/${documentId}/biometric`, {
+          position,
+          reason: reason.trim() || 'Firma con verificación biométrica'
+        });
+        handleSignatureSuccess();
+        break;
+        
+      case 'efirma':
+        // Aquí iría la lógica para firmar con e.firma
+        const efirmaResponse = await api.post(`/api/signatures/${documentId}/efirma`, {
+          position,
+          reason: reason.trim() || 'Firma con e.firma'
+        });
+        handleSignatureSuccess();
+        break;
+        
+      default:
+        throw new Error('Tipo de firma no válido');
+    }
+  } catch (err: any) {
+    console.error('Error al firmar documento:', err);
+    setError(err?.response?.data?.message || 'Error al firmar documento');
+  } finally {
+    if (signatureType !== 'standard') {
       setIsLoading(false);
     }
+  }
   };
+  
+  const handleTwoFactorSuccess = async () => {
+  if (!pendingSignatureData) {
+    setError('No hay datos de firma pendientes');
+    return;
+  }
+  
+  setIsLoading(true);
+  
+  try {
+    // Ahora realizar la firma con los datos almacenados
+    const response = await api.post(`/api/signatures/${documentId}`, {
+      position: pendingSignatureData.position,
+      reason: pendingSignatureData.reason,
+      sealData: pendingSignatureData.sealData
+    });
+    
+    handleSignatureSuccess();
+  } catch (err: any) {
+    console.error('Error al firmar documento después de verificación 2FA:', err);
+    setError(err?.response?.data?.message || 'Error al firmar documento');
+  } finally {
+    setIsLoading(false);
+    setShowTwoFactorModal(false);
+    setPendingSignatureData(null);
+  }
+  };
+  
+  const handleSignatureSuccess = async () => {
+  // Actualizar lista de firmas
+  const signaturesResponse = await api.get(`/api/signatures/document/${documentId}`);
+  setSignatures(signaturesResponse.data);
+  
+  // Mostrar mensaje de éxito
+  setSuccessMessage(`Documento firmado exitosamente con ${
+    pendingSignatureData?.type === 'standard' ? 'autenticación 2FA' : 
+    pendingSignatureData?.type === 'biometric' ? 'verificación biométrica' : 
+    'e.firma'
+  }`);
+  
+  if (onSignSuccess) {
+    onSignSuccess();
+  }
+  };
+  
 
   // Verificar una firma específica
   const verifySignature = async (signatureId: string) => {
@@ -529,6 +565,23 @@ const DocumentSignature = ({
           />
         </div>
       )}
+      {showTwoFactorModal && (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-600 bg-opacity-50">
+    <TwoFactorVerification
+      onVerificationSuccess={handleTwoFactorSuccess}
+      onVerificationFailure={(errorMsg) => {
+        setError(errorMsg);
+        setShowTwoFactorModal(false);
+        setPendingSignatureData(null);
+      }}
+      onCancel={() => {
+        setShowTwoFactorModal(false);
+        setPendingSignatureData(null);
+      }}
+    />
+  </div>
+      )}
+      
     </div>
   );
 };

@@ -33,8 +33,8 @@ const SignaturePositioning = ({
   const [scale, setScale] = useState(1);
   const [showGrid, setShowGrid] = useState(true);
   
-  const containerRef = useRef(null);
-  const signatureRef = useRef(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const signatureRef = useRef<HTMLDivElement>(null);
   
   // Inicializar la posición
   useEffect(() => {
@@ -53,31 +53,6 @@ const SignaturePositioning = ({
     e.preventDefault();
     e.stopPropagation();
     setIsDragging(true);
-  };
-  
-  // Manejar movimiento del mouse
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (!isDragging || !containerRef.current) return;
-  
-  const container = containerRef.current.getBoundingClientRect();
-  const signature = signatureRef.current?.getBoundingClientRect();
-  
-  if (!signature) return;
-    
-    // Calcular nuevas coordenadas relativas al contenedor
-    let newX = e.clientX - container.left - signature.width / 2;
-    let newY = e.clientY - container.top - 20;
-    
-    // Limitar al área del contenedor
-    newX = Math.max(0, Math.min(newX, container.width - signature.width));
-    newY = Math.max(0, Math.min(newY, container.height - signature.height));
-    
-    setPosition({ x: newX, y: newY });
-  };
-  
-  // Manejar soltar el mouse
-  const handleMouseUp = () => {
-    setIsDragging(false);
   };
   
   // Efectos para agregar/remover listeners globales

@@ -1,0 +1,118 @@
+
+erDiagram
+    USER {
+        int userId PK
+        string username
+        string email
+        string password
+        datetime createdAt
+        datetime updatedAt
+    }
+    DOCUMENT {
+        int documentId PK
+        int userId FK
+        string name
+        string path
+        datetime createdAt
+        datetime updatedAt
+        string content
+    }
+    SIGNATURE {
+        int signatureId PK
+        int documentId FK
+        int userId FK
+        string signatureData
+        datetime signedAt
+        int positionX
+        int positionY
+        int width
+        int height
+    }
+    BIOMETRICDATA {
+        int biometricDataId PK
+        int userId FK
+        string template
+        datetime createdAt
+        datetime updatedAt
+    }
+    CERTIFICATE {
+      int certificateId PK
+      int userId FK
+      string certificateData
+      string publicKey
+      string privateKey
+      datetime createdAt
+      datetime updatedAt
+      boolean isRevoked
+    }
+    AUDITLOG {
+      int auditId PK
+      int userId FK
+      string action
+      datetime createdAt
+      string resource
+      string description
+    }
+    DOCUMENTCOMMENT{
+      int commentId PK
+      int documentId FK
+      int userId FK
+      string content
+      datetime createdAt
+      datetime updatedAt
+    }
+    DOCUMENTPERMISSION{
+      int permissionId PK
+      int documentId FK
+      int userId FK
+      string role
+      datetime grantedAt
+      datetime expiration
+    }
+    SHARELINK{
+      int shareLinkId PK
+      int documentId FK
+      string link
+      datetime createdAt
+      datetime expiration
+    }
+    SATTRANSACTION{
+      int transactionId PK
+      int documentId FK
+      int userId FK
+      string status
+      string response
+      datetime createdAt
+      datetime updatedAt
+      string folio
+    }
+    SATACUSE{
+      int acuseId PK
+      int transactionId FK
+      string acuseData
+      datetime createdAt
+      datetime updatedAt
+    }
+    SATRESPONSE{
+      int responseId PK
+      int transactionId FK
+      string response
+      datetime createdAt
+      datetime updatedAt
+    }
+
+    USER ||--o{ DOCUMENT : "has"
+    USER ||--o{ SIGNATURE : "creates"
+    DOCUMENT ||--o{ SIGNATURE : "includes"
+    USER ||--o| BIOMETRICDATA : "has"
+    USER ||--o{ CERTIFICATE : "owns"
+    USER ||--o{ AUDITLOG : "performs"
+    DOCUMENT ||--o{ DOCUMENTCOMMENT : "contains"
+    USER ||--o{ DOCUMENTCOMMENT : "writes"
+    DOCUMENT ||--o{ DOCUMENTPERMISSION : "has"
+    USER ||--o{ DOCUMENTPERMISSION : "is granted"
+    DOCUMENT ||--o{ SHARELINK : "generates"
+    USER ||--o{ SATTRANSACTION : "performs"
+    DOCUMENT ||--o{ SATTRANSACTION : "is related"
+    SATTRANSACTION ||--o| SATACUSE : "has"
+    SATTRANSACTION ||--o| SATRESPONSE : "has"

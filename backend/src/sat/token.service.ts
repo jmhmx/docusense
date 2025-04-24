@@ -27,9 +27,10 @@ export class TokenService {
       'TOKENS_PATH',
       path.join(process.cwd(), 'tokens'),
     );
+    // Aumentar de 30 a 60 minutos por defecto
     this.tokenExpirationMinutes = this.configService.get<number>(
       'TOKEN_EXPIRATION_MINUTES',
-      30,
+      60,
     );
 
     // Obtener clave secreta para cifrar tokens
@@ -109,9 +110,12 @@ export class TokenService {
     try {
       const tokenFile = path.join(this.tokensPath, `${tokenId}.token`);
 
-      // Verificar que existe
+      // Verificar que existe con mensaje detallado
       if (!fs.existsSync(tokenFile)) {
-        throw new UnauthorizedException('Token no válido o expirado');
+        this.logger.warn(`Token no encontrado: ${tokenId}`);
+        throw new UnauthorizedException(
+          'Token no encontrado. Genera un nuevo token.',
+        );
       }
 
       // Leer y descifrar
@@ -136,11 +140,23 @@ export class TokenService {
 
       const tokenData: TokenData = JSON.parse(decrypted);
 
-      // Verificar expiración
+      // Verificar expiración con mensaje más específico
       if (tokenData.expiresAt < Date.now()) {
+        // Calcular cuánto tiempo ha pasado
+        const expirationTime = new Date(tokenData.expiresAt);
+        const currentTime = new Date();
+        const minutesExpired = Math.floor(
+          (currentTime.getTime() - expirationTime.getTime()) / 60000,
+        );
+
         // Eliminar token expirado
         fs.unlinkSync(tokenFile);
-        throw new UnauthorizedException('Token expirado');
+        this.logger.warn(
+          `Token expirado hace ${minutesExpired} minutos: ${tokenId}`,
+        );
+        throw new UnauthorizedException(
+          `Token expirado hace ${minutesExpired} minutos. Por favor genera un nuevo token.`,
+        );
       }
 
       return tokenData;
@@ -153,7 +169,9 @@ export class TokenService {
         `Error obteniendo datos del token: ${error.message}`,
         error.stack,
       );
-      throw new UnauthorizedException('Token inválido');
+      throw new UnauthorizedException(
+        'Token inválido. Por favor genera un nuevo token.',
+      );
     }
   }
 

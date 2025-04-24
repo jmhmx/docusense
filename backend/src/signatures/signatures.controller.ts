@@ -56,6 +56,55 @@ export class SignaturesController {
     }
   }
 
+  // Nuevo endpoint para firmar con e.firma
+  @UseGuards(JwtAuthGuard)
+  @Post(':documentId/efirma')
+  async signDocumentWithEfirma(
+    @Param('documentId') documentId: string,
+    @Body() signData: { tokenId: string; position?: any; reason?: string },
+    @Request() req,
+    @Headers() headers,
+    @Ip() ip: string,
+  ) {
+    try {
+      const signature = await this.signaturesService.signDocumentWithEfirma(
+        documentId,
+        req.user.id,
+        signData.tokenId,
+        signData.position,
+        signData.reason,
+      );
+
+      // Registrar en auditoría
+      await this.auditLogService.log(
+        AuditAction.DOCUMENT_SIGN,
+        req.user.id,
+        documentId,
+        {
+          title: 'Documento firmado con e.firma',
+          signatureId: signature.id,
+          signatureMethod: 'efirma',
+        },
+        ip,
+        headers['user-agent'] || 'Unknown',
+      );
+
+      return {
+        message: 'Documento firmado correctamente con e.firma',
+        signatureId: signature.id,
+        documentId: signature.documentId,
+        timestamp: signature.signedAt,
+      };
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new BadRequestException(
+        `No se pudo firmar el documento con e.firma: ${error.message}`,
+      );
+    }
+  }
+
   @UseGuards(JwtAuthGuard)
   @Get('document/:documentId')
   async getDocumentSignatures(@Param('documentId') documentId: string) {

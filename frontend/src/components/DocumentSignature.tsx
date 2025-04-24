@@ -352,7 +352,7 @@ const DocumentSignature = ({
   
   try {
     // Ahora realizar la firma con los datos almacenados
-    const response = await api.post(`/api/signatures/${documentId}`, {
+    await api.post(`/api/signatures/${documentId}`, {
       position: pendingSignatureData.position,
       reason: pendingSignatureData.reason,
       sealData: pendingSignatureData.sealData

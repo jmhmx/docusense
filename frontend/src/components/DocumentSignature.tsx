@@ -226,7 +226,7 @@ const DocumentSignature = ({
         setIsLoading(true);
         try {
           // Iniciar el proceso de firma biométrica
-          const biometricResponse = await api.post(`/api/signatures/${documentId}/biometric-init`, {
+          await api.post(`/api/signatures/${documentId}/biometric-init`, {
             position,
             reason: reason.trim() || 'Firma con verificación biométrica',
             sealData
@@ -249,7 +249,7 @@ const DocumentSignature = ({
             <BiometricSignatureWorkflow
               documentId={documentId}
               documentTitle={documentTitle}
-              onSuccess={(result) => {
+              onSuccess={() => {
                 // Desmontar componente y eliminar contenedor
                 root.unmount();
                 document.body.removeChild(bioModalContainer);
@@ -306,7 +306,7 @@ const DocumentSignature = ({
               documentTitle={documentTitle}
               position={position}
               reason={reason.trim() || 'Firma con e.firma (FIEL)'}
-              onSuccess={(result) => {
+              onSuccess={() => {
                 // Desmontar componente y eliminar contenedor
                 root.unmount();
                 document.body.removeChild(efirmaModalContainer);

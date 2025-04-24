@@ -11,18 +11,21 @@ import {
   BadRequestException,
   Headers,
   Ip,
+  Inject,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { SignaturesService } from './signatures.service';
 import { CreateSignatureDto } from './dto/create-signature.dto';
 import { CreateSignatureWithBiometricDto } from './dto/create-signature-with-biometric.dto';
 import { AuditLogService, AuditAction } from '../audit/audit-log.service';
+import { TokenService } from '../sat/token.service';
 
 @Controller('api/signatures')
 export class SignaturesController {
   constructor(
     private readonly signaturesService: SignaturesService,
     private readonly auditLogService: AuditLogService,
+    @Inject(TokenService) private readonly tokenService: TokenService,
   ) {}
 
   @UseGuards(JwtAuthGuard)
@@ -67,6 +70,10 @@ export class SignaturesController {
     @Ip() ip: string,
   ) {
     try {
+      // Ya no necesitamos validar credenciales aquí, pues tokenId ya debería ser un token válido
+      // En lugar de eso, verificamos que el token es válido y pertenece al usuario
+      await this.tokenService.getTokenData(signData.tokenId);
+
       const signature = await this.signaturesService.signDocumentWithEfirma(
         documentId,
         req.user.id,
@@ -90,6 +97,7 @@ export class SignaturesController {
       );
 
       return {
+        success: true,
         message: 'Documento firmado correctamente con e.firma',
         signatureId: signature.id,
         documentId: signature.documentId,

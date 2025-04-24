@@ -244,11 +244,18 @@ export class SignaturesController {
     @Ip() ip: string,
   ) {
     try {
+      // Log detallado para diagnóstico
+      this.logger.log(
+        `Iniciando firma biométrica para documento ${documentId}, usuario ${req.user.id}`,
+      );
+      this.logger.log(`Datos recibidos: ${JSON.stringify(createSignatureDto)}`);
+
       // Extraer la información biométrica
       const { position, reason, biometricVerification } = createSignatureDto;
 
       // Realizar validaciones adicionales de seguridad
       if (!biometricVerification || !biometricVerification.timestamp) {
+        this.logger.warn('Datos de verificación biométrica incompletos');
         throw new BadRequestException(
           'Información de verificación biométrica incompleta',
         );
@@ -260,6 +267,10 @@ export class SignaturesController {
       const timeDifference = now.getTime() - verificationTime.getTime();
       const maxDifference = 5 * 60 * 1000; // 5 minutos en milisegundos
 
+      this.logger.log(
+        `Diferencia de tiempo para verificación: ${timeDifference}ms (máx: ${maxDifference}ms)`,
+      );
+
       if (timeDifference > maxDifference) {
         throw new BadRequestException('La verificación biométrica ha expirado');
       }
@@ -269,10 +280,14 @@ export class SignaturesController {
         documentId,
         req.user.id,
         position,
-        reason,
+        reason || 'Firma con verificación biométrica',
         biometricVerification,
         ip,
         headers['user-agent'] || 'Unknown',
+      );
+
+      this.logger.log(
+        `Firma biométrica completada exitosamente: ${signature.id}`,
       );
 
       return {
@@ -283,6 +298,11 @@ export class SignaturesController {
         verificationMethod: 'biometric',
       };
     } catch (error) {
+      this.logger.error(
+        `Error en firma biométrica: ${error.message}`,
+        error.stack,
+      );
+
       if (error instanceof NotFoundException) {
         throw error;
       }

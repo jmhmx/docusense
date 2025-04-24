@@ -7,7 +7,7 @@ import { api } from '../api/client';
 interface BiometricSignatureWorkflowProps {
   documentId: string;
   documentTitle: string;
-  onSuccess: (result: any) => void;
+  onSuccess: (result?: any) => void;
   onCancel: () => void;
   navigateToRegistration: () => void;
 }
@@ -40,6 +40,7 @@ const BiometricSignatureWorkflow = ({
       try {
         const response = await api.get('/api/biometry/status');
         setHasBiometrics(response.data.registered);
+        console.log("Estado biométrico:", response.data);
       } catch (err) {
         console.error('Error al verificar estado biométrico:', err);
         setError('Error al verificar el estado biométrico');
@@ -52,22 +53,30 @@ const BiometricSignatureWorkflow = ({
   }, [user]);
 
   // Manejar éxito de captura biométrica
-  const handleBiometricSuccess = async (result: BiometricVerificationResult) => {
+  const handleBiometricSuccess = async (result: any) => {
+    console.log("Resultado biométrico:", result);
     setIsProcessing(true);
     setError(null);
     
     try {
+      // Extraer descriptor biométrico de los resultados
+      if (!result.descriptorData) {
+        throw new Error("Datos biométricos no disponibles");
+      }
+      
       // Construir payload con información biométrica
       const payload = {
         position: { page: 1, x: 100, y: 100 }, // Posición por defecto
         reason: 'Firma con verificación biométrica',
         biometricVerification: {
           timestamp: Date.now(),
-          challenge: result.challenge || 'blink',
+          challenge: result.challenge || 'head-turn',
           score: result.score || 0.9,
           method: 'facial-recognition'
         }
       };
+      
+      console.log("Enviando a API:", payload);
       
       // Llamar al endpoint específico para firma biométrica
       const response = await api.post(`/api/signatures/${documentId}/biometric`, payload);
@@ -87,13 +96,6 @@ const BiometricSignatureWorkflow = ({
       setStep('error');
     } finally {
       setIsProcessing(false);
-    }
-  };
-
-  // Redireccionar a registro biométrico
-  const handleSetupBiometrics = () => {
-    if (navigateToRegistration) {
-      navigateToRegistration();
     }
   };
 
@@ -140,7 +142,7 @@ const BiometricSignatureWorkflow = ({
                   Continuar con verificación biométrica
                 </Button>
               ) : (
-                <Button variant="primary" onClick={handleSetupBiometrics}>
+                <Button variant="primary" onClick={navigateToRegistration}>
                   Configurar biometría
                 </Button>
               )}
@@ -155,7 +157,7 @@ const BiometricSignatureWorkflow = ({
             <BiometricCapture 
               mode="verify"
               onSuccess={handleBiometricSuccess}
-              challengeType="blink"
+              challengeType="head-turn"
             />
             {isProcessing && (
               <div className="flex items-center justify-center mt-4">

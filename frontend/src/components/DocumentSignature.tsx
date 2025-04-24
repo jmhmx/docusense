@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { api } from '../api/client';
 import Button from './Button';
-//import BiometricSignatureWorkflow from './BiometricSignatureWorkflow';
+import BiometricSignatureWorkflow from './BiometricSignatureWorkflow';
 import SignatureUI from './SignatureUI';
 import TwoFactorVerification from './TwoFactorVerification';
 
@@ -219,12 +219,64 @@ const DocumentSignature = ({
         break;
         
       case 'biometric':
-        // En un caso real, esto debería integrarse con el flujo biométrico
-        const bioResponse = await api.post(`/api/signatures/${documentId}/biometric`, {
-          position,
-          reason: reason.trim() || 'Firma con verificación biométrica'
-        });
-        handleSignatureSuccess();
+        // Cerrar el modal de firma
+        setShowSignModal(false);
+        
+        // Mostrar el componente de flujo biométrico
+        setIsLoading(true);
+        try {
+          // Iniciar el proceso de firma biométrica
+          const biometricResponse = await api.post(`/api/signatures/${documentId}/biometric-init`, {
+            position,
+            reason: reason.trim() || 'Firma con verificación biométrica',
+            sealData
+          });
+          
+          // Crear contenedor para el flujo biométrico
+          const bioModalContainer = document.createElement('div');
+          bioModalContainer.id = 'biometric-workflow-container';
+          bioModalContainer.className = 'fixed inset-0 z-50 flex items-center justify-center bg-gray-600 bg-opacity-50';
+          document.body.appendChild(bioModalContainer);
+          
+          // Importar createRoot dinámicamente
+          const { createRoot } = await import('react-dom/client');
+          
+          // Crear la raíz de React
+          const root = createRoot(bioModalContainer);
+          
+          // Renderizar el componente de flujo biométrico
+          root.render(
+            <BiometricSignatureWorkflow
+              documentId={documentId}
+              documentTitle={documentTitle}
+              onSuccess={(result) => {
+                // Desmontar componente y eliminar contenedor
+                root.unmount();
+                document.body.removeChild(bioModalContainer);
+                
+                // Finalizar proceso de firma
+                handleSignatureSuccess();
+              }}
+              onCancel={() => {
+                // Desmontar componente y eliminar contenedor
+                root.unmount();
+                document.body.removeChild(bioModalContainer);
+              }}
+              navigateToRegistration={() => {
+                // Desmontar componente y eliminar contenedor
+                root.unmount();
+                document.body.removeChild(bioModalContainer);
+                
+                // Navegar a registro biométrico
+                window.location.href = '/biometric-registration';
+              }}
+            />
+          );
+        } catch (err: any) {
+          console.error('Error iniciando proceso de firma biométrica:', err);
+          setError(err?.response?.data?.message || 'Error al iniciar firma biométrica');
+          setIsLoading(false);
+        }
         break;
         
       case 'efirma':

@@ -280,12 +280,53 @@ const DocumentSignature = ({
         break;
         
       case 'efirma':
-        // Aquí iría la lógica para firmar con e.firma
-        const efirmaResponse = await api.post(`/api/signatures/${documentId}/efirma`, {
-          position,
-          reason: reason.trim() || 'Firma con e.firma'
-        });
-        handleSignatureSuccess();
+        // Cerrar el modal de firma
+        setShowSignModal(false);
+        
+        // Mostrar el modal de selección/validación de e.firma
+        setIsLoading(true);
+        try {
+          // Crear contenedor para el flujo de e.firma
+          const efirmaModalContainer = document.createElement('div');
+          efirmaModalContainer.id = 'efirma-workflow-container';
+          efirmaModalContainer.className = 'fixed inset-0 z-50 flex items-center justify-center bg-gray-600 bg-opacity-50';
+          document.body.appendChild(efirmaModalContainer);
+          
+          // Importar createRoot
+          const { createRoot } = await import('react-dom/client');
+          const root = createRoot(efirmaModalContainer);
+          
+          // Importar EfirmaSignatureWorkflow dinámicamente
+          const EfirmaSignatureWorkflow = await import('./EfirmaSignatureWorkflow').then(m => m.default);
+          
+          // Renderizar el componente de flujo de e.firma
+          root.render(
+            <EfirmaSignatureWorkflow
+              documentId={documentId}
+              documentTitle={documentTitle}
+              position={position}
+              reason={reason.trim() || 'Firma con e.firma (FIEL)'}
+              onSuccess={(result) => {
+                // Desmontar componente y eliminar contenedor
+                root.unmount();
+                document.body.removeChild(efirmaModalContainer);
+                
+                // Finalizar proceso de firma
+                handleSignatureSuccess();
+              }}
+              onCancel={() => {
+                // Desmontar componente y eliminar contenedor
+                root.unmount();
+                document.body.removeChild(efirmaModalContainer);
+                setIsLoading(false);
+              }}
+            />
+          );
+        } catch (err: any) {
+          console.error('Error iniciando proceso de firma con e.firma:', err);
+          setError(err?.response?.data?.message || 'Error al iniciar firma con e.firma');
+          setIsLoading(false);
+        }
         break;
         
       default:

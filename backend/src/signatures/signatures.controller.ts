@@ -19,9 +19,11 @@ import { CreateSignatureDto } from './dto/create-signature.dto';
 import { CreateSignatureWithBiometricDto } from './dto/create-signature-with-biometric.dto';
 import { AuditLogService, AuditAction } from '../audit/audit-log.service';
 import { TokenService } from '../sat/token.service';
+import { Logger } from '@nestjs/common';
 
 @Controller('api/signatures')
 export class SignaturesController {
+  private readonly logger = new Logger(SignaturesController.name);
   constructor(
     private readonly signaturesService: SignaturesService,
     private readonly auditLogService: AuditLogService,
@@ -70,16 +72,30 @@ export class SignaturesController {
     @Ip() ip: string,
   ) {
     try {
-      // Ya no necesitamos validar credenciales aquí, pues tokenId ya debería ser un token válido
-      // En lugar de eso, verificamos que el token es válido y pertenece al usuario
-      await this.tokenService.getTokenData(signData.tokenId);
+      if (!signData.tokenId) {
+        throw new BadRequestException(
+          'El tokenId es requerido para firmar con e.firma',
+        );
+      }
+
+      // Verificar que el token existe y pertenece al usuario antes de usarlo
+      const tokenData = await this.tokenService.getTokenData(signData.tokenId);
+
+      // Validar que el token pertenece al usuario actual
+      if (tokenData.userId !== req.user.id) {
+        throw new UnauthorizedException('Token no válido para este usuario');
+      }
+
+      this.logger.log(
+        `Firmando documento ${documentId} con e.firma usando token ${signData.tokenId}`,
+      );
 
       const signature = await this.signaturesService.signDocumentWithEfirma(
         documentId,
         req.user.id,
         signData.tokenId,
         signData.position,
-        signData.reason,
+        signData.reason || 'Firma con e.firma',
       );
 
       // Registrar en auditoría
@@ -104,9 +120,19 @@ export class SignaturesController {
         timestamp: signature.signedAt,
       };
     } catch (error) {
-      if (error instanceof NotFoundException) {
+      this.logger.error(
+        `Error al firmar con e.firma: ${error.message}`,
+        error.stack,
+      );
+
+      if (
+        error instanceof NotFoundException ||
+        error instanceof UnauthorizedException ||
+        error instanceof BadRequestException
+      ) {
         throw error;
       }
+
       throw new BadRequestException(
         `No se pudo firmar el documento con e.firma: ${error.message}`,
       );

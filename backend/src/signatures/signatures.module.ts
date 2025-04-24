@@ -19,7 +19,7 @@ import { SatModule } from '../sat/sat.module';
     UsersModule,
     AuditModule,
     forwardRef(() => BlockchainModule),
-    SatModule,
+    forwardRef(() => SatModule),
   ],
   controllers: [SignaturesController],
   providers: [SignaturesService],

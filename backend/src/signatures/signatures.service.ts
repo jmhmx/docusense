@@ -49,25 +49,37 @@ export class SignaturesService {
     reason?: string,
   ): Promise<Signature> {
     // Verificar documento
-    const document = await this.documentsRepository.findOneBy({
-      id: documentId,
+    const document = await this.documentsRepository.findOne({
+      where: { id: documentId },
     });
 
     if (!document) {
       throw new NotFoundException(`Document with ID ${documentId} not found`);
     }
 
-    // Verificar token y obtener certificado/llave
-    const tokenData = await this.tokenService.getTokenData(tokenId);
+    // Verificar token y obtener datos de certificado/llave
+    let tokenData: any;
+    try {
+      tokenData = await this.tokenService.getTokenData(tokenId);
+    } catch (error) {
+      throw new BadRequestException(`Error al validar token: ${error.message}`);
+    }
 
     if (tokenData.userId !== userId) {
       throw new UnauthorizedException('Token no pertenece al usuario');
     }
 
     // Generar hash del documento para integridad
-    const documentHash = this.cryptoService.generateHash(document.filePath);
+    let documentHash: string;
+    try {
+      documentHash = this.cryptoService.generateHash(document.filePath);
+    } catch (error) {
+      throw new BadRequestException(
+        `Error generando hash del documento: ${error.message}`,
+      );
+    }
 
-    // Preparar datos para firmar con formato PKCS#7/CMS para el SAT
+    // Preparar datos para firmar con formato para el SAT
     const dataToSign = JSON.stringify({
       documentId,
       documentHash,
@@ -80,13 +92,28 @@ export class SignaturesService {
     // Firmar con la llave privada del token
     let signatureData: string;
     try {
+      // Asegurarse de que recibimos el certificado y llave del tokenData
+      if (!tokenData.certificado || !tokenData.llave) {
+        throw new BadRequestException(
+          'Token no contiene datos válidos de certificado o llave',
+        );
+      }
+
+      this.logger.log('Iniciando proceso de firma con e.firma');
+
       // Crear firma con estándares SAT (PKCS#7)
       signatureData = await this.efirmaService.firmarConEfirma(
         tokenData.certificado,
         tokenData.llave,
         dataToSign,
       );
+
+      this.logger.log('Firma con e.firma completada exitosamente');
     } catch (error) {
+      this.logger.error(
+        `Error firmando con e.firma: ${error.message}`,
+        error.stack,
+      );
       throw new BadRequestException(
         `Error firmando con e.firma: ${error.message}`,
       );
@@ -119,33 +146,44 @@ export class SignaturesService {
     });
 
     // Guardar firma
-    const savedSignature =
-      await this.signaturesRepository.save(signatureEntity);
+    try {
+      const savedSignature =
+        await this.signaturesRepository.save(signatureEntity);
 
-    // Actualizar metadata del documento
-    document.metadata = {
-      ...document.metadata,
-      isSigned: true,
-      lastSignedAt: new Date().toISOString(),
-      signaturesCount: (document.metadata?.signaturesCount || 0) + 1,
-      hasEfirmaSignatures: true,
-    };
+      // Actualizar metadata del documento
+      document.metadata = {
+        ...document.metadata,
+        isSigned: true,
+        lastSignedAt: new Date().toISOString(),
+        signaturesCount: (document.metadata?.signaturesCount || 0) + 1,
+        hasEfirmaSignatures: true,
+      };
 
-    await this.documentsService.update(documentId, document);
+      await this.documentsService.update(documentId, document);
 
-    // Registrar en blockchain
-    await this.blockchainService.updateDocumentRecord(
-      documentId,
-      documentHash,
-      'SIGNATURE_EFIRMA',
-      userId,
-      {
-        signatureId: savedSignature.id,
-        timestamp: savedSignature.signedAt.toISOString(),
-      },
-    );
+      // Registrar en blockchain si está disponible
+      try {
+        await this.blockchainService.updateDocumentRecord(
+          documentId,
+          documentHash,
+          'SIGNATURE_EFIRMA',
+          userId,
+          {
+            signatureId: savedSignature.id,
+            timestamp: savedSignature.signedAt.toISOString(),
+          },
+        );
+      } catch (blockchainError) {
+        this.logger.warn(
+          `No se pudo registrar en blockchain: ${blockchainError.message}`,
+        );
+        // Continuamos a pesar del error de blockchain
+      }
 
-    return savedSignature;
+      return savedSignature;
+    } catch (error) {
+      throw new BadRequestException(`Error guardando firma: ${error.message}`);
+    }
   }
 
   /**

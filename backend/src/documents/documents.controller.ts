@@ -405,4 +405,22 @@ export class DocumentsController {
   async getBlockchainCertificate(@Param('id') id: string, @Request() req) {
     return this.documentsService.getBlockchainCertificate(id, req.user.id);
   }
+
+  @UseGuards(JwtAuthGuard)
+  @Get(':id/metadata')
+  async getDocumentMetadata(@Param('id') id: string, @Request() req) {
+    try {
+      const document = await this.documentsService.findOne(id, req.user.id);
+
+      // Si el documento no tiene metadata, devolver un objeto vacío
+      return document.metadata || {};
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new BadRequestException(
+        `Error al obtener metadata del documento: ${error.message}`,
+      );
+    }
+  }
 }

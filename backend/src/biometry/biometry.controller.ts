@@ -15,6 +15,8 @@ import {
   UnauthorizedException,
   Query,
   Logger,
+  NotFoundException,
+  InternalServerErrorException,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { BiometryService } from './biometry.service';

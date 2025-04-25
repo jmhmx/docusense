@@ -73,7 +73,7 @@ export class BiometryService {
 
       // Cifrar datos biométricos
       const { encryptedData, iv, authTag } =
-        this.encryptBiometricData(descriptorBuffer);
+        this.cryptoService.encryptDocument(descriptorBuffer);
 
       // Crear registro
       const biometricData = this.biometricDataRepository.create({

@@ -38,12 +38,23 @@ const BiometricSignatureWorkflow = ({
   useEffect(() => {
     const checkBiometrics = async () => {
       try {
+        setIsProcessing(true);
         const response = await api.get('/api/biometry/status');
-        setHasBiometrics(response.data.registered);
         console.log("Estado biométrico:", response.data);
+        
+        // Asegurarse de establecer el estado correctamente
+        setHasBiometrics(response.data.registered === true);
+        
+        // Si tiene biometría registrada, ir directamente al paso de captura
+        if (response.data.registered === true) {
+          setStep('capture');
+        }
+        
       } catch (err) {
         console.error('Error al verificar estado biométrico:', err);
         setError('Error al verificar el estado biométrico');
+      } finally {
+        setIsProcessing(false);
       }
     };
 

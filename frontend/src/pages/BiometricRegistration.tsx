@@ -64,14 +64,12 @@ const BiometricRegistration = () => {
     try {
       console.log("Completando registro biométrico para usuario:", user.id);
       
-      // La BiometricCapture ya realizó el registro biométrico,
-      // solo necesitamos completar el proceso en el perfil del usuario
       await api.post('/api/users/biometrics/setup-complete', {
         userId: user.id,
         setupMethod: 'facial'
       });
       
-      // Actualizar estado local
+      // Actualizar estado local - IMPORTANTE
       localStorage.setItem('hasBiometrics', 'true');
       if (updateUserBiometrics) {
         updateUserBiometrics(true);

@@ -12,14 +12,14 @@ interface BiometricSignatureWorkflowProps {
   navigateToRegistration: () => void;
 }
 
-interface BiometricVerificationResult {
+/* interface BiometricVerificationResult {
   verified: boolean;
   timestamp: string;
   userId: string;
   descriptorData?: string;
   challenge?: string;
   score?: number;
-}
+} */
 
 const BiometricSignatureWorkflow = ({ 
   documentId, 

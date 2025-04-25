@@ -6,7 +6,7 @@ import useAuth from '../hooks/UseAuth';
 import Button from '../components/Button';
 
 // Define los tipos necesarios
-interface BiometricRegistrationResult {
+/* interface BiometricRegistrationResult {
   success: boolean;
   message: string;
   id?: string;
@@ -14,7 +14,7 @@ interface BiometricRegistrationResult {
   timestamp?: string;
   descriptorData?: string;
   challenge?: string;
-}
+} */
 
 const BiometricRegistration = () => {
   const [loading, setLoading] = useState(false);

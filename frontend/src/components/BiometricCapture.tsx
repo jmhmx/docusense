@@ -146,9 +146,12 @@ const BiometricCapture = ({
   const lastBlinkStartTimeRef = useRef<number | null>(null);
   const blinkDetectedCountRef = useRef<number>(0);
   const blinkFeedbackTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const inconsistencyCountRef = useRef<number>(0);
+  //const inconsistencyCountRef = useRef<number>(0);
   const smileDurationRef = useRef<number>(0);
   const [blinkFeedback, setBlinkFeedback] = useState<boolean>(false);
+  //@ts-ignore
+  const [step, setStep] = useState<'waiting' | 'capture' | 'complete'>('waiting');
+
 
   const LANDMARK_DISTANCE_THRESHOLD = 0.5;
   const [showHeadTurnInstructions, setShowHeadTurnInstructions] = useState(false);

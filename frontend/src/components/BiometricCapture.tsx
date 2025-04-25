@@ -131,7 +131,7 @@ const BiometricCapture = ({
   // Referencias para contadores y análisis de liveness (evita re-renderizados)
   const frameCounterRef = useRef<number>(0);
   const positiveFramesRef = useRef<number>(0);
-  const totalFramesNeededRef = useRef<number>(20);
+  const totalFramesNeededRef = useRef<number>(10);
   const expressionHistoryRef = useRef<Array<faceapi.FaceExpressions>>([]);
   const lastBlinkStateRef = useRef<boolean>(false);
 
@@ -361,7 +361,7 @@ const checkLiveness = useCallback((face: DetectedFace) => {
           if (currentAsymmetry > 0.15) {
             // Detectamos giro significativo
             console.log('Giro de cabeza detectado, asimetría:', currentAsymmetry);
-            positiveFramesRef.current += 3; // Bonus por giro detectado
+            positiveFramesRef.current += 5; // Bonus por giro detectado
           }
         }
       }

@@ -23,7 +23,7 @@ interface FaceDescriptor {
 export class BiometryService {
   private readonly logger = new Logger(BiometryService.name);
   private readonly MATCH_THRESHOLD = 0.6; // Umbral de similitud por defecto
-  private readonly MIN_LIVENESS_SCORE = 0.75; // Puntuación mínima de liveness
+  private readonly MIN_LIVENESS_SCORE = 0.7; // Puntuación mínima de liveness
 
   constructor(
     @InjectRepository(BiometricData)
@@ -41,145 +41,65 @@ export class BiometryService {
     ipAddress?: string,
     userAgent?: string,
   ): Promise<BiometricData> {
-    // Verificar usuario
-    const user = await this.usersService.findOne(registerDto.userId);
-    if (!user) {
-      throw new NotFoundException(
-        `Usuario con ID ${registerDto.userId} no encontrado`,
-      );
-    }
+    try {
+      // Verificar usuario
+      const user = await this.usersService.findOne(registerDto.userId);
+      if (!user) {
+        throw new NotFoundException(
+          `Usuario con ID ${registerDto.userId} no encontrado`,
+        );
+      }
 
-    // Verificar si ya existe un registro biométrico activo
-    const existingData = await this.biometricDataRepository.findOne({
-      where: {
+      // Validar datos biométricos
+      if (!registerDto.descriptorData) {
+        throw new BadRequestException('Los datos biométricos son requeridos');
+      }
+
+      // Decodificar datos biométricos
+      let descriptorBuffer: Buffer;
+      try {
+        const descriptorData = Buffer.from(
+          registerDto.descriptorData,
+          'base64',
+        ).toString('utf-8');
+        const descriptorArray = JSON.parse(descriptorData);
+        this.validateFaceDescriptor(descriptorArray);
+        descriptorBuffer = Buffer.from(descriptorData);
+      } catch (error) {
+        throw new BadRequestException(
+          `Error al decodificar datos biométricos: ${error.message}`,
+        );
+      }
+
+      // Cifrar datos biométricos
+      const { encryptedData, iv, authTag } =
+        this.encryptBiometricData(descriptorBuffer);
+
+      // Crear registro
+      const biometricData = this.biometricDataRepository.create({
         userId: registerDto.userId,
-        active: true,
+        descriptorData: encryptedData,
+        iv,
+        authTag,
         type: registerDto.type,
-      },
-    });
-
-    if (existingData) {
-      // Desactivar el registro anterior
-      existingData.active = false;
-      existingData.metadata = {
-        ...existingData.metadata,
-        deactivatedAt: new Date().toISOString(),
-        deactivatedReason: 'replaced_by_new_registration',
-      };
-      await this.biometricDataRepository.save(existingData);
-
-      this.logger.log(
-        `Datos biométricos anteriores desactivados para usuario ${registerDto.userId}`,
-      );
-    }
-
-    // Verificar prueba de vida con método avanzado
-    const livenessVerified = await this.verifyLivenessAdvanced(
-      registerDto.livenessProof,
-    );
-
-    if (!livenessVerified.verified) {
-      throw new BadRequestException(
-        `Verificación de vida fallida: ${livenessVerified.reason}`,
-      );
-    }
-
-    // Decodificar datos biométricos
-    let descriptorBuffer: Buffer;
-    try {
-      const descriptorData = Buffer.from(
-        registerDto.descriptorData,
-        'base64',
-      ).toString('utf-8');
-      const descriptorArray = JSON.parse(descriptorData);
-
-      // Validar el descriptor
-      this.validateFaceDescriptor(descriptorArray);
-
-      descriptorBuffer = Buffer.from(descriptorData);
-    } catch (error) {
-      throw new BadRequestException(
-        `Error al decodificar datos biométricos: ${error.message}`,
-      );
-    }
-
-    // Cifrar datos biométricos con mayor seguridad
-    const { encryptedData, iv, authTag } =
-      this.cryptoService.encryptBiometricData(descriptorBuffer);
-
-    // Crear registro con metadatos completos
-    const biometricData = this.biometricDataRepository.create({
-      userId: registerDto.userId,
-      descriptorData: encryptedData,
-      iv,
-      authTag, // Añadir el authTag aquí
-      type: registerDto.type,
-      metadata: {
-        ...registerDto.metadata,
-        livenessVerification: {
-          method: livenessVerified.method,
-          score: livenessVerified.score,
-          verifiedAt: new Date().toISOString(),
+        active: true,
+        metadata: {
+          ...registerDto.metadata,
+          registrationDevice: {
+            ipAddress,
+            userAgent,
+            timestamp: new Date().toISOString(),
+          },
         },
-        registrationDevice: {
-          userAgent,
-          ipAddress,
-          timestamp: new Date().toISOString(),
-        },
-        securityLevel: 'high',
-      },
-      active: true,
-    });
+      });
 
-    // Guardar con manejo de errores
-    try {
-      const savedData = await this.biometricDataRepository.save(biometricData);
-
-      // Registrar en auditoría con detalles completos
-      await this.auditLogService.log(
-        AuditAction.USER_UPDATE,
-        registerDto.userId,
-        null,
-        {
-          action: 'biometric_registration',
-          type: registerDto.type,
-          success: true,
-          livenessScore: livenessVerified.score,
-          securityLevel: 'high',
-          biometricDataId: savedData.id,
-        },
-        ipAddress,
-        userAgent,
-      );
-
-      this.logger.log(
-        `Datos biométricos registrados exitosamente para usuario ${registerDto.userId}`,
-      );
-      return savedData;
+      return await this.biometricDataRepository.save(biometricData);
     } catch (error) {
       this.logger.error(
-        `Error al guardar datos biométricos: ${error.message}`,
+        `Error en registro biométrico: ${error.message}`,
         error.stack,
       );
-
-      // Registrar fallos en auditoría
-      await this.auditLogService.log(
-        AuditAction.USER_UPDATE,
-        registerDto.userId,
-        null,
-        {
-          action: 'biometric_registration',
-          type: registerDto.type,
-          success: false,
-          error: error.message,
-        },
-        ipAddress,
-        userAgent,
-      );
-
-      throw new BadRequestException(
-        `Error al registrar datos biométricos: ${error.message}`,
-      );
+      throw error; // Propagamos el error original para mejor diagnóstico
     }
   }
 
@@ -808,7 +728,7 @@ export class BiometryService {
       throw new BadRequestException('El descriptor facial debe ser un array');
     }
 
-    // Verificar longitud (típicamente 128 para FaceAPI.js)
+    // Para Face-API.js, los descriptores suelen ser arrays de 128 elementos
     if (descriptor.length !== 128) {
       throw new BadRequestException(
         'El descriptor facial debe tener 128 dimensiones',

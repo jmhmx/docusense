@@ -776,7 +776,7 @@ const CustomSignatureSeal = ({ name, date, reason, onSave, onCancel }: CustomSig
               <h3 className="text-lg font-medium text-gray-700">Opciones de contenido</h3>
               
               {/* Título personalizado */}
-              <div>
+               <div>
                 <label htmlFor="customTitle" className="block mb-1 text-sm font-medium">Título del sello</label>
                 <input
                   id="customTitle"
@@ -784,4 +784,352 @@ const CustomSignatureSeal = ({ name, date, reason, onSave, onCancel }: CustomSig
                   value={sealData.content.customTitle || ''}
                   onChange={(e) => handleContentChange('customTitle', e.target.value)}
                   placeholder="Título opcional del sello"
-                  className="block w-
+                  className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                />
+              </div>
+              
+              {/* Texto personalizado */}
+              <div>
+                <label htmlFor="customText" className="block mb-1 text-sm font-medium">Texto adicional</label>
+                <textarea
+                  id="customText"
+                  value={sealData.content.customText || ''}
+                  onChange={(e) => handleContentChange('customText', e.target.value)}
+                  placeholder="Texto adicional opcional"
+                  className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                  rows={2}
+                />
+              </div>
+              
+              {/* Elementos a mostrar */}
+              <div>
+                <h4 className="mb-2 text-sm font-medium">Elementos a mostrar</h4>
+                <div className="space-y-2">
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      id="showName"
+                      checked={sealData.content.showName}
+                      onChange={(e) => handleContentChange('showName', e.target.checked)}
+                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                    />
+                    <label htmlFor="showName" className="ml-2 text-sm">
+                      Mostrar nombre
+                    </label>
+                  </div>
+                  
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      id="showDate"
+                      checked={sealData.content.showDate}
+                      onChange={(e) => handleContentChange('showDate', e.target.checked)}
+                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                    />
+                    <label htmlFor="showDate" className="ml-2 text-sm">
+                      Mostrar fecha
+                    </label>
+                  </div>
+                  
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      id="showReason"
+                      checked={sealData.content.showReason}
+                      onChange={(e) => handleContentChange('showReason', e.target.checked)}
+                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                    />
+                    <label htmlFor="showReason" className="ml-2 text-sm">
+                      Mostrar motivo
+                    </label>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Disposición y alineación */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block mb-1 text-sm font-medium">Alineación</label>
+                  <select
+                    value={selectedPosition}
+                    onChange={(e) => {
+                      setSelectedPosition(e.target.value);
+                      handleContentChange('position', e.target.value as 'left' | 'center' | 'right');
+                    }}
+                    className="block w-full py-2 pl-3 pr-10 text-sm border border-gray-300 rounded focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="left">Izquierda</option>
+                    <option value="center">Centro</option>
+                    <option value="right">Derecha</option>
+                  </select>
+                </div>
+                
+                <div>
+                  <label className="block mb-1 text-sm font-medium">Disposición</label>
+                  <select
+                    value={sealData.content.layoutDirection}
+                    onChange={(e) => handleContentChange('layoutDirection', e.target.value as 'horizontal' | 'vertical')}
+                    className="block w-full py-2 pl-3 pr-10 text-sm border border-gray-300 rounded focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="vertical">Vertical</option>
+                    <option value="horizontal">Horizontal</option>
+                  </select>
+                </div>
+              </div>
+              
+              {/* Subir logo */}
+              <div>
+                <label className="block mb-1 text-sm font-medium">Logo o imagen (opcional)</label>
+                <div className="flex flex-col items-start space-y-2">
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    accept="image/*"
+                    onChange={handleLogoUpload}
+                    className="text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                  />
+                  
+                  {uploadedLogo && (
+                    <div className="flex items-center mt-2 space-x-2">
+                      <img 
+                        src={uploadedLogo} 
+                        alt="Logo"
+                        className="object-contain w-12 h-12 border border-gray-200 rounded"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleRemoveLogo}
+                        className="text-xs text-red-600 hover:text-red-800"
+                      >
+                        Eliminar
+                      </button>
+                      <div className="flex items-center">
+                        <input
+                          type="checkbox"
+                          id="showLogo"
+                          checked={sealData.content.showLogo}
+                          onChange={(e) => handleContentChange('showLogo', e.target.checked)}
+                          className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                        />
+                        <label htmlFor="showLogo" className="ml-2 text-xs">
+                          Mostrar en sello
+                        </label>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+              
+              {/* Firma manuscrita */}
+              <div>
+                <label className="block mb-1 text-sm font-medium">Firma manuscrita (opcional)</label>
+                <div className="p-1 mt-1 border border-gray-300 rounded-md">
+                  <canvas
+                    ref={signatureCanvasRef}
+                    width={300}
+                    height={100}
+                    className="block w-full bg-white border border-gray-200 rounded"
+                  />
+                  <div className="flex justify-between mt-1">
+                    <button
+                      type="button"
+                      onClick={clearSignature}
+                      className="text-xs text-gray-600 hover:text-gray-800"
+                    >
+                      Limpiar
+                    </button>
+                    <div className="flex items-center">
+                      <input
+                        type="checkbox"
+                        id="showSignature"
+                        checked={sealData.content.showSignature}
+                        onChange={(e) => handleContentChange('showSignature', e.target.checked)}
+                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      />
+                      <label htmlFor="showSignature" className="ml-2 text-xs">
+                        Mostrar en sello
+                      </label>
+                    </div>
+                  </div>
+                </div>
+                <p className="mt-1 text-xs text-gray-500">Dibuje su firma con el ratón o el dedo en pantallas táctiles</p>
+              </div>
+            </>
+          )}
+          
+          {activeTab === 'preview' && (
+            <>
+              <h3 className="text-lg font-medium text-gray-700">Vista previa</h3>
+              <p className="mb-4 text-sm text-gray-500">
+                Así se verá el sello de firma en el documento
+              </p>
+              
+              <div className="p-6 bg-gray-100 rounded-md">
+                <div 
+                  className="flex items-center justify-center max-w-full p-8 mx-auto bg-white"
+                >
+                  <div
+                    ref={previewRef}
+                    className="relative max-w-md px-4 py-3 border-2"
+                    style={{
+                      minWidth: '200px',
+                      minHeight: '100px',
+                    }}
+                  >
+                    <div className={`flex ${sealData.content.layoutDirection === 'horizontal' ? 'flex-row items-center' : 'flex-col'}`}>
+                      {/* Logo */}
+                      {sealData.content.showLogo && uploadedLogo && (
+                        <div className={`${sealData.content.layoutDirection === 'horizontal' ? 'mr-4' : 'mb-3'} flex-shrink-0`}>
+                          <img 
+                            src={uploadedLogo} 
+                            alt="Logo" 
+                            className="object-contain w-16 h-16"
+                          />
+                        </div>
+                      )}
+                      
+                      <div className="flex-1">
+                        {/* Título personalizado */}
+                        {sealData.content.customTitle && (
+                          <div className="mb-2 font-bold">
+                            {sealData.content.customTitle}
+                          </div>
+                        )}
+                        
+                        {/* Firma dibujada */}
+                        {sealData.content.showSignature && signatureDrawn && (
+                          <div className="mb-2">
+                            <img 
+                              src={signatureDrawn} 
+                              alt="Firma" 
+                              className="h-12"
+                            />
+                          </div>
+                        )}
+                        
+                        {/* Información principal */}
+                        <div>
+                          {sealData.content.showName && (
+                            <div className="font-medium">
+                              {name}
+                            </div>
+                          )}
+                          
+                          {sealData.content.showDate && (
+                            <div className="text-sm">
+                              Fecha: {date}
+                            </div>
+                          )}
+                          
+                          {sealData.content.showReason && reason && (
+                            <div className="text-sm">
+                              Motivo: {reason}
+                            </div>
+                          )}
+                          
+                          {/* Texto personalizado */}
+                          {sealData.content.customText && (
+                            <div className="mt-2 text-sm">
+                              {sealData.content.customText}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+        
+        {/* Vista previa en tiempo real */}
+        <div className={`${activeTab !== 'preview' ? 'block' : 'hidden'} p-4 bg-gray-50 rounded-lg border border-gray-200`}>
+          <h3 className="mb-3 text-sm font-medium text-gray-700">Vista previa</h3>
+          <div className="flex justify-center">
+            <div
+              ref={activeTab !== 'preview' ? previewRef : undefined}
+              className="relative max-w-full px-4 py-3 border-2"
+              style={{
+                minWidth: '200px',
+                minHeight: '100px',
+                maxWidth: '300px',
+              }}
+            >
+              <div className={`flex ${sealData.content.layoutDirection === 'horizontal' ? 'flex-row items-center' : 'flex-col'}`}>
+                {/* Logo */}
+                {sealData.content.showLogo && uploadedLogo && (
+                  <div className={`${sealData.content.layoutDirection === 'horizontal' ? 'mr-4' : 'mb-3'} flex-shrink-0`}>
+                    <img 
+                      src={uploadedLogo} 
+                      alt="Logo" 
+                      className="object-contain w-12 h-12"
+                    />
+                  </div>
+                )}
+                
+                <div className="flex-1">
+                  {/* Título personalizado */}
+                  {sealData.content.customTitle && (
+                    <div className="mb-1 text-sm font-bold">
+                      {sealData.content.customTitle}
+                    </div>
+                  )}
+                  
+                  {/* Firma dibujada */}
+                  {sealData.content.showSignature && signatureDrawn && (
+                    <div className="mb-1">
+                      <img 
+                        src={signatureDrawn} 
+                        alt="Firma" 
+                        className="h-8"
+                      />
+                    </div>
+                  )}
+                  
+                  {/* Información principal */}
+                  <div>
+                    {sealData.content.showName && (
+                      <div className="text-sm font-medium">
+                        {name}
+                      </div>
+                    )}
+                    
+                    {sealData.content.showDate && (
+                      <div className="text-xs">
+                        Fecha: {date}
+                      </div>
+                    )}
+                    
+                    {sealData.content.showReason && reason && (
+                      <div className="text-xs">
+                        Motivo: {reason}
+                      </div>
+                    )}
+                    
+                    {sealData.content.customText && (
+                      <div className="mt-1 text-xs truncate">
+                        {sealData.content.customText}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div className="flex justify-end mt-6 space-x-3">
+        <Button variant="secondary" onClick={onCancel}>
+          Cancelar
+        </Button>
+        <Button variant="primary" onClick={handleSave}>
+          Guardar sello
+        </Button>
+      </div>
+    </div>
+  );
+};
+
+export default CustomSignatureSeal;

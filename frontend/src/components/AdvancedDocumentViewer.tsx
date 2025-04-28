@@ -597,4 +597,4 @@ const AdvancedDocumentViewer = ({
                       />
                     </Document>
                     <div className="absolute bottom-0 right-0 px-1 text-xs text-white bg-gray-700 rounded-tl">
-                      {
+                      {index + 1}

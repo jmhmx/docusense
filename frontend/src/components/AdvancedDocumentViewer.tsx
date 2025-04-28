@@ -598,3 +598,186 @@ const AdvancedDocumentViewer = ({
                     </Document>
                     <div className="absolute bottom-0 right-0 px-1 text-xs text-white bg-gray-700 rounded-tl">
                       {index + 1}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        
+        {/* Panel de anotaciones */}
+        {showAnnotationPanel && (
+          <div className="w-64 p-2 overflow-y-auto border-r border-gray-200">
+            <h3 className="mb-2 text-sm font-medium text-gray-700">Anotaciones</h3>
+            {annotations.length === 0 && highlights.length === 0 ? (
+              <p className="text-sm text-gray-500">No hay anotaciones</p>
+            ) : (
+              <div className="space-y-3">
+                {highlights.map(highlight => (
+                  <div 
+                    key={highlight.id}
+                    className="p-2 border border-gray-200 rounded hover:bg-gray-50"
+                    onClick={() => {
+                      setPageNumber(highlight.page);
+                      setTimeout(() => {
+                        // Scroll hacia el highlight
+                        if (pageRefs.current[highlight.page]) {
+                          const highlightEl = document.getElementById(highlight.id);
+                          highlightEl?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        }
+                      }, 300);
+                    }}
+                  >
+                    <div className="flex items-start">
+                      <div 
+                        className="flex-shrink-0 w-3 h-3 mt-1 rounded-sm" 
+                        style={{ backgroundColor: highlight.color }}
+                      ></div>
+                      <div className="ml-2">
+                        <div className="text-xs font-medium">Resaltado en página {highlight.page}</div>
+                        <div className="mt-1 text-xs text-gray-600 line-clamp-2">{highlight.text}</div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                
+                {annotations.map(annotation => (
+                  <div 
+                    key={annotation.id}
+                    className="p-2 border border-gray-200 rounded hover:bg-gray-50"
+                    onClick={() => {
+                      setPageNumber(annotation.page);
+                      setSelectedAnnotation(annotation.id);
+                    }}
+                  >
+                    <div className="flex items-start">
+                      <div 
+                        className="flex-shrink-0 w-3 h-3 mt-1 rounded-full" 
+                        style={{ backgroundColor: annotation.color }}
+                      ></div>
+                      <div className="ml-2">
+                        <div className="text-xs font-medium">Nota en página {annotation.page}</div>
+                        <div className="mt-1 text-xs text-gray-600">{annotation.content}</div>
+                        <div className="mt-1 text-xs text-gray-400">
+                          {new Date(annotation.created).toLocaleDateString()}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+        
+        {/* Documento */}
+        <div className="relative flex-1 overflow-auto">
+          {loading && (
+            <div className="flex items-center justify-center h-full">
+              <div className="w-16 h-16 border-4 border-blue-500 rounded-full animate-spin border-t-transparent"></div>
+            </div>
+          )}
+          
+          {error && (
+            <div className="flex flex-col items-center justify-center h-full">
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-16 h-16 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              <p className="mt-4 text-lg font-medium text-gray-900">{error}</p>
+              <Button 
+                variant="primary"
+                onClick={() => window.open(`/api/documents/${documentId}/download`, '_blank')}
+                className="mt-4"
+              >
+                Descargar documento
+              </Button>
+            </div>
+          )}
+          
+          <div 
+            className="p-4 mx-auto"
+            onMouseUp={handleTextSelection}
+            onClick={(e) => {
+              // Si estamos en modo anotación y no estamos sobre una anotación existente
+              if (allowAnnotations && !isAddingAnnotation && e.target === e.currentTarget) {
+                startAddingAnnotation(e);
+              }
+            }}
+          >
+            <Document
+              file={{
+                url: `/api/documents/${documentId}/view`,
+                httpHeaders: { Authorization: `Bearer ${token}` }
+              }}
+              onLoadSuccess={onDocumentLoadSuccess}
+              onLoadError={onDocumentLoadError}
+              loading=""
+              options={{
+                cMapUrl: 'https://unpkg.com/pdfjs-dist@2.16.105/cmaps/',
+                cMapPacked: true,
+              }}
+              renderMode="canvas"
+            >
+              <div style={{ 
+                transform: `rotate(${rotation}deg)`,
+                transition: 'transform 0.3s ease'
+              }}>
+                <div ref={el => pageRefs.current[pageNumber] = el} className="relative">
+                  <Page
+                    key={`page_${pageNumber}_${scale}_${rotation}`}
+                    pageNumber={pageNumber}
+                    scale={scale}
+                    renderTextLayer={true}
+                    renderAnnotationLayer={true}
+                    onRenderSuccess={() => setRenderedScale(scale)}
+                    width={undefined}
+                    onGetTextSuccess={(textItems) => {
+                      // Podríamos usar esto para búsqueda de texto
+                    }}
+                  />
+                  {renderAnnotations(pageNumber)}
+                  {renderHighlights(pageNumber)}
+                </div>
+              </div>
+            </Document>
+          </div>
+        </div>
+      </div>
+      
+      {/* Modal para añadir anotación */}
+      {isAddingAnnotation && selectedAnnotation && (
+        <div className="absolute z-50 p-3 transform -translate-x-1/2 -translate-y-1/2 bg-white rounded-md shadow-lg w-72 top-1/2 left-1/2 ring-1 ring-black ring-opacity-5">
+          <h3 className="mb-2 text-sm font-medium text-gray-700">Añadir anotación</h3>
+          <textarea
+            value={newAnnotationText}
+            onChange={(e) => setNewAnnotationText(e.target.value)}
+            placeholder="Escribe tu anotación..."
+            className="w-full p-2 mb-3 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            rows={3}
+            autoFocus
+          />
+          <div className="flex justify-end space-x-2">
+            <Button
+              variant="secondary"
+              size="small"
+              onClick={cancelAddingAnnotation}
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="primary"
+              size="small"
+              onClick={saveAnnotation}
+              disabled={!newAnnotationText.trim()}
+            >
+              Guardar
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default AdvancedDocumentViewer;

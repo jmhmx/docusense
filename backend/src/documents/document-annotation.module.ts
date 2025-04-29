@@ -7,9 +7,10 @@ import { Document } from './entities/document.entity';
 import { DocumentsService } from './documents.service';
 import { CryptoModule } from 'src/crypto/crypto.module';
 import { AuditModule } from 'src/audit/audit.module';
+import { SharingModule } from '../sharing/sharing.module'; // Import SharingModule
 
 @Module({
-  imports: [TypeOrmModule.forFeature([DocumentAnnotation, Document]), CryptoModule, AuditModule],
+  imports: [TypeOrmModule.forFeature([DocumentAnnotation, Document]), CryptoModule, AuditModule, SharingModule], // Add SharingModule to imports
   providers: [DocumentAnnotationService, DocumentsService],
   controllers: [DocumentAnnotationController],
   exports: [DocumentAnnotationService]

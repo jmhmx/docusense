@@ -136,6 +136,10 @@ const DocumentSearch: React.FC<DocumentSearchProps> = ({
     }
   };
 
+  const isResultInCurrentPage = (result: SearchResult) => {
+    return result.pageNumber === currentPage;
+  };
+
   return (
     <div className="p-4 bg-white border rounded-lg shadow">
       <h3 className="mb-3 text-sm font-medium text-gray-700">Buscar en el documento</h3>
@@ -225,7 +229,9 @@ const DocumentSearch: React.FC<DocumentSearchProps> = ({
               {results.map((result, index) => (
                 <li 
                   key={`${result.pageNumber}-${result.matchIndex}`}
-                  className={`px-4 py-2 cursor-pointer hover:bg-gray-50 ${index === currentResultIndex ? 'bg-blue-50' : ''}`}
+                  className={`px-4 py-2 cursor-pointer hover:bg-gray-50 ${
+                    index === currentResultIndex ? 'bg-blue-50' : ''
+                  } ${isResultInCurrentPage(result) ? 'border-l-4 border-blue-500' : ''}`}
                   onClick={() => navigateToResult(index)}
                 >
                   <div className="flex items-center justify-between">

@@ -58,6 +58,17 @@ const DocumentAnnotations: React.FC<DocumentAnnotationsProps> = ({
     setEditContent('');
   };
 
+  const handleCreateNewAnnotation = () => {
+    // Crear una nueva anotación con valores por defecto
+    onCreateAnnotation({
+      type: 'note',
+      page: currentPage,
+      position: { x: 50, y: 50 },
+      content: 'Nueva nota',
+      color: '#ffeb3b'
+    });
+  };
+
   console.log(documentId);
   
 
@@ -66,6 +77,14 @@ const DocumentAnnotations: React.FC<DocumentAnnotationsProps> = ({
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-lg font-medium text-gray-900">Anotaciones</h3>
         <div className="flex space-x-2">
+          {/* Agregar botón de nueva anotación */}
+          <Button 
+            variant="primary" 
+            size="small" 
+            onClick={handleCreateNewAnnotation}
+          >
+            Nueva anotación
+          </Button>
           <select
             value={filterPage === 'all' ? 'all' : filterPage.toString()}
             onChange={(e) => setFilterPage(e.target.value === 'all' ? 'all' : parseInt(e.target.value))}

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import Button from './Button';
 
 export interface Annotation {
@@ -57,6 +57,9 @@ const DocumentAnnotations: React.FC<DocumentAnnotationsProps> = ({
     setEditingAnnotation(null);
     setEditContent('');
   };
+
+  console.log(documentId);
+  
 
   return (
     <div className="p-4 bg-white rounded-lg shadow">

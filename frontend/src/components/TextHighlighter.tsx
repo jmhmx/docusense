@@ -72,7 +72,7 @@ const TextHighlighter: React.FC<TextHighlighterProps> = ({
   const handleCreateHighlight = (color = highlightColor) => {
     if (!selectedText) return;
     
-    const { text, range, rects } = selectedText;
+    const { text, rects } = selectedText;
     
     const newHighlight: HighlightData = {
       id: `highlight-${Date.now()}`,

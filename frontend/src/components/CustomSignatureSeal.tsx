@@ -382,7 +382,7 @@ const CustomSignatureSeal = ({ name, date, reason, onSave, onCancel }: CustomSig
             ...prev.content,
             showLogo: true,
           },
-          image: event.target.result.toString(),
+          image: event.target?.result?.toString(),
         }));
       }
     };

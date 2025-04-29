@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
 import { pdfjs } from 'react-pdf';
-import Button from './Button';
 
 interface SearchResult {
   pageNumber: number;
@@ -42,6 +41,7 @@ const DocumentSearch: React.FC<DocumentSearchProps> = ({
     if (pdfDocument) {
       setTotalPages(pdfDocument.numPages);
     }
+    console.log(documentId)
   }, [pdfDocument]);
 
   // Función para extraer texto de contexto alrededor de un resultado

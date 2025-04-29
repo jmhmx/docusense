@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Document, Page, pdfjs } from 'react-pdf';
+import { Document, Page } from 'react-pdf';
 
 interface DocumentThumbnailsProps {
   documentId: string;
@@ -18,6 +18,7 @@ const DocumentThumbnails: React.FC<DocumentThumbnailsProps> = ({
 }) => {
   const [thumbnailsLoaded, setThumbnailsLoaded] = useState<{ [key: number]: boolean }>({});
   const [visibleRange, setVisibleRange] = useState<[number, number]>([1, 10]);
+  // @ts-ignore
   const [scrollPosition, setScrollPosition] = useState(0);
 
   // Calcular el rango visible basado en la posición de desplazamiento

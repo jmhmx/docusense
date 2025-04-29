@@ -28,6 +28,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
   const [scale, setScale] = useState<number>(1);
   const [rotation, setRotation] = useState<number>(0);
   const [isDocumentLoaded, setIsDocumentLoaded] = useState<boolean>(false);
+  // @ts-ignore
   const [selectedText, setSelectedText] = useState<{ text: string; start: number; end: number } | null>(null);
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
   const [isAnnotationModeActive, setIsAnnotationModeActive] = useState<boolean>(false);

@@ -458,8 +458,8 @@ export class DocumentsController {
   ) {
     return this.documentAnnotationController.update(
       annotationId,
-      updateAnnotationDto,
       req.user.id,
+      updateAnnotationDto,
       documentId,
     );
   }

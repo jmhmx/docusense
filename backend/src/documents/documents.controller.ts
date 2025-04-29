@@ -74,7 +74,6 @@ export class DocumentsController {
     private readonly documentAnalyzerService: DocumentAnalyzerService,
     private readonly cryptoService: CryptoService,
     private readonly auditLogService: AuditLogService,
-    private readonly documentAnnotationController: DocumentAnnotationController,
   ) {
     // Verificar que el servicio se está inyectando correctamente
     console.log(

@@ -21,7 +21,7 @@ import { AuditModule } from '../audit/audit.module';
       DocumentComment,
     ]),
     UsersModule,
-    forwardRef(() => DocumentsModule), // Usar forwardRef para evitar dependencia circular
+    forwardRef(() => DocumentsModule),
     AuditModule,
   ],
   controllers: [SharingController, CommentsController],

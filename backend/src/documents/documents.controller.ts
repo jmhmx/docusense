@@ -38,6 +38,9 @@ import { v4 as uuidv4 } from 'uuid';
 import { Response } from 'express';
 import { createReadStream } from 'fs';
 import { Readable } from 'stream';
+import { DocumentAnnotationController } from './document-annotation.controller';
+import { CreateAnnotationDto } from './dto/create-annotation.dto';
+import { UpdateAnnotationDto } from './dto/update-annotation.dto';
 
 const UPLOAD_DIR = 'uploads';
 // Asegurar que el directorio de carga existe
@@ -71,6 +74,7 @@ export class DocumentsController {
     private readonly documentAnalyzerService: DocumentAnalyzerService,
     private readonly cryptoService: CryptoService,
     private readonly auditLogService: AuditLogService,
+    private readonly documentAnnotationController: DocumentAnnotationController,
   ) {
     // Verificar que el servicio se está inyectando correctamente
     console.log(

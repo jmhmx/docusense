@@ -13,7 +13,7 @@ import { Certificate } from './entities/certificate.entity';
 import { AuditModule } from '../audit/audit.module';
 import { UsersModule } from '../users/users.module';
 
-@Global
+@Global()
 @Module({
   imports: [
     ConfigModule,

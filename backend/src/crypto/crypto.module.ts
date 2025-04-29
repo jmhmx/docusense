@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Global, Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { CryptoService } from './crypto.service';
@@ -13,6 +13,7 @@ import { Certificate } from './entities/certificate.entity';
 import { AuditModule } from '../audit/audit.module';
 import { UsersModule } from '../users/users.module';
 
+@Global
 @Module({
   imports: [
     ConfigModule,
@@ -20,7 +21,6 @@ import { UsersModule } from '../users/users.module';
     AuditModule,
     UsersModule,
   ],
-  controllers: [CertificateController, SecureCommunicationController],
   providers: [
     CryptoService,
     KeyStorageService,
@@ -28,12 +28,7 @@ import { UsersModule } from '../users/users.module';
     CertificateService,
     SecureCommunicationService,
   ],
-  exports: [
-    CryptoService,
-    KeyStorageService,
-    KeyRotationService,
-    CertificateService,
-    SecureCommunicationService,
-  ],
+  controllers: [CertificateController, SecureCommunicationController],
+  exports: [CryptoService, KeyStorageService],
 })
 export class CryptoModule {}

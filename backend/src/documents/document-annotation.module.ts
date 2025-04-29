@@ -16,5 +16,6 @@ import { DocumentAnalyzerService } from 'src/analyzers/document-analyzer.service
   imports: [TypeOrmModule.forFeature([DocumentAnnotation, Document])],
   controllers: [DocumentAnnotationController],
   providers: [DocumentAnnotationService, DocumentsService, CryptoService, AuditLogService, SharingService, BlockchainService, DocumentProcessorService, DocumentAnalyzerService],
+  exports: [DocumentAnnotationService]
 })
 export class DocumentAnnotationModule {}

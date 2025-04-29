@@ -13,8 +13,6 @@ import { DocumentAnalyzerService } from '../analyzers/document-analyzer.service'
 import { CryptoModule } from '../crypto/crypto.module';
 import { AuditModule } from '../audit/audit.module';
 import { SharingModule } from '../sharing/sharing.module';
-import { BlockchainModule } from '../blockchain/blockchain.module';
-import { SignaturesModule } from '../signatures/signatures.module';
 
 @Module({
   imports: [
@@ -22,9 +20,12 @@ import { SignaturesModule } from '../signatures/signatures.module';
     ScheduleModule.forRoot(),
     CryptoModule,
     AuditModule,
-    forwardRef(() => SharingModule), // Usar forwardRef para evitar dependencia circular
-    forwardRef(() => BlockchainModule),
-    forwardRef(() => SignaturesModule), // Añadimos la referencia a SignaturesModule
+    forwardRef(() => SharingModule)
+  ],
+  providers: [
+    DocumentsService,
+    DocumentProcessorService,
+    DocumentAnalyzerService,
   ],
   controllers: [
     DocumentsController,
@@ -32,11 +33,5 @@ import { SignaturesModule } from '../signatures/signatures.module';
     DocumentPermissionsController,
     DocumentSignatureController,
   ],
-  providers: [
-    DocumentsService,
-    DocumentProcessorService,
-    DocumentAnalyzerService,
-  ],
-  exports: [DocumentsService],
 })
 export class DocumentsModule {}

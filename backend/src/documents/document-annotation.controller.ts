@@ -8,6 +8,7 @@ import {
   Delete,
   UseGuards,
   Request,
+  NotFoundException,
 } from '@nestjs/common';
 import { DocumentAnnotationService } from './document-annotation.service';
 import { CreateAnnotationDto } from './dto/create-annotation.dto';
@@ -17,9 +18,7 @@ import { DocumentAnnotation } from './entities/document-annotation.entity';
 
 @Controller('api/documents/:documentId/annotations')
 export class DocumentAnnotationController {
-  constructor(
-    private readonly documentAnnotationService: DocumentAnnotationService,
-  ) {}
+  constructor(private readonly documentAnnotationService: DocumentAnnotationService) {}
 
   @UseGuards(JwtAuthGuard)
   @Get()
@@ -34,8 +33,8 @@ export class DocumentAnnotationController {
   @Post()
   create(
     @Param('documentId') documentId: string,
-    @Body() createAnnotationDto: CreateAnnotationDto,
     @Request() req,
+    @Body() createAnnotationDto: CreateAnnotationDto,
   ): Promise<DocumentAnnotation> {
     return this.documentAnnotationService.create(
       documentId,
@@ -47,30 +46,21 @@ export class DocumentAnnotationController {
   @UseGuards(JwtAuthGuard)
   @Patch(':annotationId')
   update(
-    @Param('documentId') documentId: string,
-    @Param('annotationId') annotationId: string,
+    @Param('annotationId') id: string,
     @Body() updateAnnotationDto: UpdateAnnotationDto,
     @Request() req,
+    @Param('documentId') documentId: string,
   ): Promise<DocumentAnnotation> {
-    return this.documentAnnotationService.update(
-      annotationId,
-      updateAnnotationDto,
-      req.user.id,
-      documentId,
-    );
+    return this.documentAnnotationService.update(id, updateAnnotationDto, req.user.id, documentId);
   }
 
   @UseGuards(JwtAuthGuard)
   @Delete(':annotationId')
   remove(
-    @Param('documentId') documentId: string,
-    @Param('annotationId') annotationId: string,
+    @Param('annotationId') id: string,
     @Request() req,
+    @Param('documentId') documentId: string,
   ): Promise<void> {
-    return this.documentAnnotationService.remove(
-      annotationId,
-      req.user.id,
-      documentId,
-    );
+    return this.documentAnnotationService.remove(id, req.user.id, documentId);
   }
 }

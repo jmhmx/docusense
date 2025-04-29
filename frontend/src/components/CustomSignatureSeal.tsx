@@ -428,19 +428,20 @@ const CustomSignatureSeal = ({ name, date, reason, onSave, onCancel }: CustomSig
   
   // Aplicar template
   const applyTemplate = (index: number) => {
-  const template = templates[index];
-  
+    const template = templates[index];
+    
     setSealData(prev => ({
       ...prev,
       style: {
         ...prev.style,
         ...template.style,
-        // Asegurar que shape es del tipo correcto
         shape: template.style.shape as 'rectangle' | 'round' | 'circle',
       },
       content: {
         ...prev.content,
         ...template.content,
+        position: template.content.position as 'left' | 'center' | 'right',
+        layoutDirection: template.content.layoutDirection as 'horizontal' | 'vertical'
       }
     }));
     

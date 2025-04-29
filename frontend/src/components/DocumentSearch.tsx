@@ -19,7 +19,6 @@ interface DocumentSearchProps {
   pdfDocument: pdfjs.PDFDocumentProxy | null;
   currentPage: number;
   onSearchResultClick: (result: SearchResult) => void;
-  token?: string;
 }
 
 const DocumentSearch: React.FC<DocumentSearchProps> = ({
@@ -27,7 +26,6 @@ const DocumentSearch: React.FC<DocumentSearchProps> = ({
   pdfDocument,
   currentPage,
   onSearchResultClick,
-  token,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
@@ -77,6 +75,7 @@ const DocumentSearch: React.FC<DocumentSearchProps> = ({
     const foundResults: SearchResult[] = [];
     
     try {
+
       // Buscar en cada página
       for (let i = 1; i <= pdfDocument.numPages; i++) {
         // Verificar si la búsqueda fue cancelada

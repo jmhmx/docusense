@@ -1,3 +1,4 @@
+// backend/src/sat/efirma.service.ts - Versión mejorada
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as fs from 'fs';

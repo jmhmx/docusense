@@ -34,7 +34,7 @@ export class TokenService {
 
     this.tokenExpirationMinutes = this.configService.get<number>(
       'TOKEN_EXPIRATION_MINUTES',
-      60,
+      30,
     );
 
     // Obtener clave secreta para cifrar tokens
@@ -163,12 +163,9 @@ export class TokenService {
 
       const tokenFile = path.join(this.tokensPath, `${tokenId}.token`);
 
-      // Verificar que existe con mensaje detallado
+      // Verificar que existe
       if (!fs.existsSync(tokenFile)) {
-        this.logger.warn(`Token no encontrado: ${tokenId}`);
-        throw new UnauthorizedException(
-          'Token no encontrado. Genera un nuevo token.',
-        );
+        throw new UnauthorizedException('Token no válido o expirado');
       }
 
       // Leer y descifrar
@@ -237,9 +234,7 @@ export class TokenService {
         `Error obteniendo datos del token: ${error.message}`,
         error.stack,
       );
-      throw new UnauthorizedException(
-        'Token inválido. Por favor genera un nuevo token.',
-      );
+      throw new UnauthorizedException('Token inválido');
     }
   }
 

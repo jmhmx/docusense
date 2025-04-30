@@ -1,31 +1,22 @@
 import { Module, forwardRef } from '@nestjs/common';
-import { TypeOrmModule } from '@nestjs/typeorm';
 import { SharingService } from './sharing.service';
 import { SharingController } from './sharing.controller';
-import { CommentsService } from './comments.service';
-import { CommentsController } from './comments.controller';
+import { TypeOrmModule } from '@nestjs/typeorm';
 import { DocumentPermission } from './entities/document-permission.entity';
 import { ShareLink } from './entities/share-link.entity';
-import { DocumentComment } from './entities/document-comment.entity';
-import { Document } from '../documents/entities/document.entity';
+import { DocumentsModule } from '../documents/documents.module'; // Import DocumentsModule
 import { UsersModule } from '../users/users.module';
-import { DocumentsModule } from '../documents/documents.module';
 import { AuditModule } from '../audit/audit.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([
-      DocumentPermission,
-      ShareLink,
-      Document,
-      DocumentComment,
-    ]),
+    TypeOrmModule.forFeature([DocumentPermission, ShareLink]),
     UsersModule,
-    forwardRef(() => DocumentsModule),
     AuditModule,
+    forwardRef(() => DocumentsModule), // Import DocumentsModule with forwardRef
   ],
-  controllers: [SharingController, CommentsController],
-  providers: [SharingService, CommentsService],
-  exports: [SharingService, CommentsService],
+  controllers: [SharingController],
+  providers: [SharingService],
+  exports: [SharingService],
 })
 export class SharingModule {}

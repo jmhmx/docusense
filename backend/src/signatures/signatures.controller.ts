@@ -215,8 +215,6 @@ export class SignaturesController {
     @Param('documentId') documentId: string,
     @Body() initDto: { signerIds: string[]; requiredSigners?: number },
     @Request() req,
-    @Ip() ip: string,
-    @Headers() headers,
   ) {
     try {
       await this.signaturesService.initMultiSignatureProcess(
@@ -224,8 +222,6 @@ export class SignaturesController {
         req.user.id,
         initDto.signerIds,
         initDto.requiredSigners,
-        //ip,
-        //headers['user-agent'] || 'Unknown',
       );
 
       return {
@@ -300,7 +296,7 @@ export class SignaturesController {
 
       // Registrar en auditoría
       await this.auditLogService.log(
-        AuditAction.DOCUMENT_VIEW, // o añade DOCUMENT_VERIFY al enum
+        AuditAction.DOCUMENT_VIEW,
         req.user.id,
         documentId,
         {

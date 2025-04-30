@@ -1,5 +1,5 @@
 // backend/src/documents/documents.module.ts
-import { Module, forwardRef } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ScheduleModule } from '@nestjs/schedule';
 import { DocumentsService } from './documents.service';
@@ -13,6 +13,7 @@ import { DocumentAnalyzerService } from '../analyzers/document-analyzer.service'
 import { CryptoModule } from '../crypto/crypto.module';
 import { AuditModule } from '../audit/audit.module';
 import { SharingModule } from '../sharing/sharing.module';
+import { BlockchainModule } from '../blockchain/blockchain.module'; // Import BlockchainModule
 
 @Module({
   imports: [
@@ -21,8 +22,13 @@ import { SharingModule } from '../sharing/sharing.module';
     CryptoModule,
     AuditModule,
     SharingModule,
+    BlockchainModule, // Add BlockchainModule to imports
   ],
-  providers: [DocumentsService, DocumentProcessorService, DocumentAnalyzerService],
+  providers: [
+    DocumentsService,
+    DocumentProcessorService,
+    DocumentAnalyzerService,
+  ],
   controllers: [
     DocumentsController,
     DocumentEncryptionController,

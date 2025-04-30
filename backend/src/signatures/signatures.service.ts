@@ -17,7 +17,6 @@ import { Document } from '../documents/entities/document.entity';
 import { BlockchainService } from '../blockchain/blockchain.service';
 import { EfirmaService } from '../sat/efirma.service';
 import { TokenService } from '../sat/token.service';
-import { log } from 'console';
 export interface SignatureVerificationResult {
   isValid: boolean;
   reason?: string;
@@ -50,37 +49,25 @@ export class SignaturesService {
     reason?: string,
   ): Promise<Signature> {
     // Verificar documento
-    const document = await this.documentsRepository.findOne({
-      where: { id: documentId },
+    const document = await this.documentsRepository.findOneBy({
+      id: documentId,
     });
 
     if (!document) {
       throw new NotFoundException(`Document with ID ${documentId} not found`);
     }
 
-    // Verificar token y obtener datos de certificado/llave
-    let tokenData: any;
-    try {
-      tokenData = await this.tokenService.getTokenData(tokenId);
-    } catch (error) {
-      throw new BadRequestException(`Error al validar token: ${error.message}`);
-    }
+    // Verificar token y obtener certificado/llave
+    const tokenData = await this.tokenService.getTokenData(tokenId);
 
     if (tokenData.userId !== userId) {
       throw new UnauthorizedException('Token no pertenece al usuario');
     }
 
     // Generar hash del documento para integridad
-    let documentHash: string;
-    try {
-      documentHash = this.cryptoService.generateHash(document.filePath);
-    } catch (error) {
-      throw new BadRequestException(
-        `Error generando hash del documento: ${error.message}`,
-      );
-    }
+    const documentHash = this.cryptoService.generateHash(document.filePath);
 
-    // Preparar datos para firmar con formato para el SAT
+    // Preparar datos para firmar con formato PKCS#7/CMS para el SAT
     const dataToSign = JSON.stringify({
       documentId,
       documentHash,
@@ -93,28 +80,13 @@ export class SignaturesService {
     // Firmar con la llave privada del token
     let signatureData: string;
     try {
-      // Asegurarse de que recibimos el certificado y llave del tokenData
-      if (!tokenData.certificado || !tokenData.llave) {
-        throw new BadRequestException(
-          'Token no contiene datos válidos de certificado o llave',
-        );
-      }
-
-      this.logger.log('Iniciando proceso de firma con e.firma');
-
       // Crear firma con estándares SAT (PKCS#7)
       signatureData = await this.efirmaService.firmarConEfirma(
         tokenData.certificado,
         tokenData.llave,
         dataToSign,
       );
-
-      this.logger.log('Firma con e.firma completada exitosamente');
     } catch (error) {
-      this.logger.error(
-        `Error firmando con e.firma: ${error.message}`,
-        error.stack,
-      );
       throw new BadRequestException(
         `Error firmando con e.firma: ${error.message}`,
       );
@@ -147,44 +119,33 @@ export class SignaturesService {
     });
 
     // Guardar firma
-    try {
-      const savedSignature =
-        await this.signaturesRepository.save(signatureEntity);
+    const savedSignature =
+      await this.signaturesRepository.save(signatureEntity);
 
-      // Actualizar metadata del documento
-      document.metadata = {
-        ...document.metadata,
-        isSigned: true,
-        lastSignedAt: new Date().toISOString(),
-        signaturesCount: (document.metadata?.signaturesCount || 0) + 1,
-        hasEfirmaSignatures: true,
-      };
+    // Actualizar metadata del documento
+    document.metadata = {
+      ...document.metadata,
+      isSigned: true,
+      lastSignedAt: new Date().toISOString(),
+      signaturesCount: (document.metadata?.signaturesCount || 0) + 1,
+      hasEfirmaSignatures: true,
+    };
 
-      await this.documentsService.update(documentId, document);
+    await this.documentsService.update(documentId, document);
 
-      // Registrar en blockchain si está disponible
-      try {
-        await this.blockchainService.updateDocumentRecord(
-          documentId,
-          documentHash,
-          'SIGNATURE_EFIRMA',
-          userId,
-          {
-            signatureId: savedSignature.id,
-            timestamp: savedSignature.signedAt.toISOString(),
-          },
-        );
-      } catch (blockchainError) {
-        this.logger.warn(
-          `No se pudo registrar en blockchain: ${blockchainError.message}`,
-        );
-        // Continuamos a pesar del error de blockchain
-      }
+    // Registrar en blockchain
+    await this.blockchainService.updateDocumentRecord(
+      documentId,
+      documentHash,
+      'SIGNATURE_EFIRMA',
+      userId,
+      {
+        signatureId: savedSignature.id,
+        timestamp: savedSignature.signedAt.toISOString(),
+      },
+    );
 
-      return savedSignature;
-    } catch (error) {
-      throw new BadRequestException(`Error guardando firma: ${error.message}`);
-    }
+    return savedSignature;
   }
 
   /**
@@ -922,55 +883,46 @@ export class SignaturesService {
     ipAddress?: string,
     userAgent?: string,
   ): Promise<Signature> {
-    // Verificación básica de entradas con logs detallados
+    // Verificación básica de entradas
     if (!documentId || !userId) {
-      this.logger.error('Faltan ID de documento o usuario');
       throw new BadRequestException('Document ID and User ID are required');
     }
 
     try {
-      this.logger.log(
-        `Iniciando firma biométrica: documento=${documentId}, usuario=${userId}`,
-      );
-
       // Verificar documento
       const document = await this.documentsRepository.findOne({
         where: { id: documentId },
       });
 
       if (!document) {
-        this.logger.warn(`Documento no encontrado: ${documentId}`);
         throw new NotFoundException(`Document with ID ${documentId} not found`);
       }
 
       // Verificar usuario
       const user = await this.usersService.findOne(userId);
       if (!user) {
-        this.logger.warn(`Usuario no encontrado: ${userId}`);
         throw new NotFoundException(`User with ID ${userId} not found`);
       }
 
       // Verificar estado del documento
       if (document.status !== 'completed' && document.status !== 'pending') {
-        this.logger.warn(`Documento en estado incorrecto: ${document.status}`);
         throw new BadRequestException(
           `Document is not ready for signing. Current status: ${document.status}`,
         );
       }
 
       // Verificar permisos
-      const canSign = await this.canUserSignDocument(documentId, userId);
-      if (!canSign.canSign) {
-        this.logger.warn(
-          `Usuario ${userId} no tiene permisos para firmar ${documentId}`,
-        );
-        throw new UnauthorizedException(
-          canSign.reason || 'No autorizado para firmar',
-        );
+      if (document.userId !== userId) {
+        const hasAccess = await this.canUserSignDocument(userId, documentId);
+        if (!hasAccess.canSign) {
+          throw new UnauthorizedException(
+            hasAccess.reason ||
+              'You do not have permission to sign this document',
+          );
+        }
       }
 
       // Generar hash del documento para integridad
-      this.logger.log(`Generando hash para documento ${document.filePath}`);
       const documentHash = this.cryptoService.generateHash(document.filePath);
 
       // Datos para firmar (incluye verificación biométrica)
@@ -983,28 +935,29 @@ export class SignaturesService {
         reason,
         position,
         biometricVerification: {
-          method: biometricVerification?.method || 'facial-recognition',
-          challenge: biometricVerification?.challenge || 'head-turn', // Usamos giro como predeterminado
+          method: biometricVerification?.method,
+          challenge: biometricVerification?.challenge,
           timestamp: biometricVerification?.timestamp,
         },
       });
 
-      // Verificar claves del usuario o generar nuevas
+      // Verificar claves del usuario
       let keyPair = await this.cryptoService.getUserKeyPair(userId);
       if (!keyPair) {
-        this.logger.log(`Generando nuevas claves para usuario ${userId}`);
+        this.logger.log(
+          `Generating new key pair for user ${user.name} (${userId})`,
+        );
         keyPair = await this.cryptoService.generateKeyPair(userId);
       }
 
-      // Firmar datos
-      this.logger.log('Firmando datos con clave privada del usuario');
+      // Firmar datos con seguridad adicional para biometría
       const signatureData = await this.cryptoService.signData(
         userId,
         dataToSign,
       );
 
       if (!signatureData) {
-        throw new BadRequestException('Error al generar firma digital');
+        throw new BadRequestException('Failed to generate digital signature');
       }
 
       // Crear registro de firma con metadatos biométricos
@@ -1015,7 +968,7 @@ export class SignaturesService {
         signatureData,
         documentHash,
         signedAt: new Date(),
-        reason: reason || 'Firma con verificación biométrica',
+        reason: reason || 'Document signature with biometric verification',
         position: position ? JSON.stringify(position) : null,
         valid: true,
         metadata: {
@@ -1023,9 +976,9 @@ export class SignaturesService {
           ipAddress: ipAddress || 'Unknown',
           dataToSign,
           biometricVerification: {
-            method: biometricVerification?.method || 'facial-recognition',
-            challenge: biometricVerification?.challenge || 'head-turn',
-            score: biometricVerification?.score || 0.9,
+            method: biometricVerification?.method || 'unknown',
+            challenge: biometricVerification?.challenge || 'unknown',
+            score: biometricVerification?.score || 0,
             timestamp: biometricVerification?.timestamp
               ? new Date(biometricVerification.timestamp).toISOString()
               : new Date().toISOString(),
@@ -1035,17 +988,15 @@ export class SignaturesService {
             fileSize: document.fileSize,
             mimeType: document.mimeType,
           },
-          securityLevel: 'high',
+          securityLevel: 'high', // Mayor nivel de seguridad con biometría
         },
       });
 
       // Guardar firma
-      this.logger.log('Guardando firma en base de datos');
       const savedSignature =
         await this.signaturesRepository.save(signatureEntity);
 
       // Actualizar metadatos del documento
-      this.logger.log(`Actualizando metadatos del documento ${documentId}`);
       document.metadata = {
         ...document.metadata,
         isSigned: true,
@@ -1054,10 +1005,9 @@ export class SignaturesService {
         hasBiometricSignatures: true,
       };
 
-      await this.documentsRepository.save(document);
+      await this.documentsService.update(documentId, document);
 
-      // Registrar en log de auditoría
-      this.logger.log('Registrando en auditoría');
+      // Registrar en log de auditoría con detalles biométricos
       await this.auditLogService.log(
         AuditAction.DOCUMENT_SIGN,
         userId,
@@ -1066,37 +1016,22 @@ export class SignaturesService {
           title: document.title,
           signatureId: savedSignature.id,
           signatureMethod: 'biometric',
-          biometricMethod:
-            biometricVerification?.method || 'facial-recognition',
-          challenge: biometricVerification?.challenge || 'head-turn',
+          biometricMethod: biometricVerification?.method || 'unknown',
         },
         ipAddress,
         userAgent,
       );
 
-      // Actualizar en blockchain si está disponible
-      try {
-        await this.blockchainService.updateDocumentRecord(
-          documentId,
-          documentHash,
-          'SIGNATURE_BIOMETRIC',
-          userId,
-          {
-            signatureId: savedSignature.id,
-            timestamp: savedSignature.signedAt.toISOString(),
-            method: biometricVerification?.method || 'facial-recognition',
-          },
-        );
-      } catch (blockchainError) {
-        this.logger.warn(
-          `No se pudo registrar en blockchain: ${blockchainError.message}`,
-        );
-      }
-
-      this.logger.log(`Firma biométrica completada: ${savedSignature.id}`);
+      this.logger.log(
+        `Document ${documentId} signed with biometrics by user ${userId}`,
+      );
       return savedSignature;
-    } catch {
-      this.logger.log(`error:`);
+    } catch (error) {
+      this.logger.error(
+        `Error en proceso de firma biométrica: ${error.message}`,
+        error.stack,
+      );
+      throw error;
     }
   }
 

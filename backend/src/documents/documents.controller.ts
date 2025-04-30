@@ -38,6 +38,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { Response } from 'express';
 import { createReadStream } from 'fs';
 import { Readable } from 'stream';
+
 const UPLOAD_DIR = 'uploads';
 // Asegurar que el directorio de carga existe
 if (!fs.existsSync(UPLOAD_DIR)) {
@@ -403,23 +404,5 @@ export class DocumentsController {
   @Get(':id/blockchain/certificate')
   async getBlockchainCertificate(@Param('id') id: string, @Request() req) {
     return this.documentsService.getBlockchainCertificate(id, req.user.id);
-  }
-
-  @UseGuards(JwtAuthGuard)
-  @Get(':id/metadata')
-  async getDocumentMetadata(@Param('id') id: string, @Request() req) {
-    try {
-      const document = await this.documentsService.findOne(id, req.user.id);
-
-      // Si el documento no tiene metadata, devolver un objeto vacío
-      return document.metadata || {};
-    } catch (error) {
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
-      throw new BadRequestException(
-        `Error al obtener metadata del documento: ${error.message}`,
-      );
-    }
   }
 }

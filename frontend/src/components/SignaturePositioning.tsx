@@ -32,9 +32,6 @@ const SignaturePositioning = ({
   const [activePage, setActivePage] = useState(currentPage);
   const [scale, setScale] = useState(1);
   const [showGrid, setShowGrid] = useState(true);
-  const [showGuides, setShowGuides] = useState(true);
-  const [snapToGrid, setSnapToGrid] = useState(true);
-  const [gridSize, setGridSize] = useState(20);
   
   const containerRef = useRef<HTMLDivElement>(null);
   const signatureRef = useRef<HTMLDivElement>(null);

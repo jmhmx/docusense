@@ -1,9 +1,5 @@
-import {
-  Injectable,
-  Logger,
-  UnauthorizedException,
-  BadRequestException,
-} from '@nestjs/common';
+// backend/src/sat/token.service.ts
+import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as crypto from 'crypto';
 import * as fs from 'fs';
@@ -31,10 +27,9 @@ export class TokenService {
       'TOKENS_PATH',
       path.join(process.cwd(), 'tokens'),
     );
-
     this.tokenExpirationMinutes = this.configService.get<number>(
       'TOKEN_EXPIRATION_MINUTES',
-      30,
+      60,
     );
 
     // Obtener clave secreta para cifrar tokens
@@ -50,35 +45,8 @@ export class TokenService {
     }
 
     // Crear directorio de tokens si no existe
-    this.ensureTokenDirectory();
-  }
-
-  /**
-   * Asegura que el directorio de tokens existe con los permisos adecuados
-   */
-  private ensureTokenDirectory(): void {
-    try {
-      if (!fs.existsSync(this.tokensPath)) {
-        fs.mkdirSync(this.tokensPath, { recursive: true, mode: 0o700 });
-        this.logger.log(`Directorio de tokens creado: ${this.tokensPath}`);
-      }
-
-      // Verificar permisos del directorio
-      const stats = fs.statSync(this.tokensPath);
-      if (!stats.isDirectory()) {
-        throw new Error(
-          `La ruta de tokens existe pero no es un directorio: ${this.tokensPath}`,
-        );
-      }
-
-      // Log de verificación
-      this.logger.log(`Directorio de tokens verificado: ${this.tokensPath}`);
-    } catch (error) {
-      this.logger.error(
-        `Error al verificar/crear directorio de tokens: ${error.message}`,
-        error.stack,
-      );
-      // No lanzar excepción para permitir que el servicio inicie, pero loguear el error
+    if (!fs.existsSync(this.tokensPath)) {
+      fs.mkdirSync(this.tokensPath, { recursive: true });
     }
   }
 
@@ -91,12 +59,6 @@ export class TokenService {
     llave: string,
   ): Promise<string> {
     try {
-      if (!userId || !certificado || !llave) {
-        throw new BadRequestException(
-          'userId, certificado y llave son requeridos',
-        );
-      }
-
       // Datos a cifrar
       const tokenData: TokenData = {
         userId,
@@ -122,17 +84,13 @@ export class TokenService {
 
       const authTag = cipher.getAuthTag();
 
-      // Asegurar que el directorio existe
-      this.ensureTokenDirectory();
-
       // Guardar token cifrado
       const tokenFile = path.join(this.tokensPath, `${tokenId}.token`);
 
       // Formato: iv + authTag + encryptedData
       const tokenBuffer = Buffer.concat([iv, authTag, encryptedData]);
 
-      fs.writeFileSync(tokenFile, tokenBuffer, { mode: 0o600 });
-      this.logger.log(`Token creado para usuario ${userId}: ${tokenId}`);
+      fs.writeFileSync(tokenFile, tokenBuffer);
 
       // Programar eliminación del token
       this.scheduleTokenDeletion(tokenId);
@@ -140,10 +98,7 @@ export class TokenService {
       return tokenId;
     } catch (error) {
       this.logger.error(`Error creando token: ${error.message}`, error.stack);
-      if (error instanceof BadRequestException) {
-        throw error;
-      }
-      throw new BadRequestException('No se pudo crear el token de sesión');
+      throw new Error('No se pudo crear el token de sesión');
     }
   }
 
@@ -151,16 +106,7 @@ export class TokenService {
    * Obtiene los datos de un token
    */
   async getTokenData(tokenId: string): Promise<TokenData> {
-    if (!tokenId) {
-      throw new BadRequestException('Se requiere tokenId');
-    }
-
     try {
-      // Validar formato de tokenId para evitar path traversal
-      if (!/^[a-f0-9]+$/.test(tokenId)) {
-        throw new BadRequestException('Formato de token inválido');
-      }
-
       const tokenFile = path.join(this.tokensPath, `${tokenId}.token`);
 
       // Verificar que existe
@@ -170,12 +116,6 @@ export class TokenService {
 
       // Leer y descifrar
       const tokenBuffer = fs.readFileSync(tokenFile);
-
-      // Verificar tamaño mínimo del buffer
-      if (tokenBuffer.length < 32) {
-        // 16 bytes IV + 16 bytes authTag mínimo
-        throw new BadRequestException('Archivo de token corrupto');
-      }
 
       // Extraer iv, authTag y datos cifrados
       const iv = tokenBuffer.slice(0, 16);
@@ -187,46 +127,25 @@ export class TokenService {
         this.secretKey,
         iv,
       );
+      decipher.setAuthTag(authTag);
 
-      try {
-        decipher.setAuthTag(authTag);
-        const decrypted = Buffer.concat([
-          decipher.update(encryptedData),
-          decipher.final(),
-        ]).toString('utf8');
+      const decrypted = Buffer.concat([
+        decipher.update(encryptedData),
+        decipher.final(),
+      ]).toString('utf8');
 
-        const tokenData: TokenData = JSON.parse(decrypted);
+      const tokenData: TokenData = JSON.parse(decrypted);
 
-        // Verificar expiración con mensaje más específico
-        if (tokenData.expiresAt < Date.now()) {
-          // Calcular cuánto tiempo ha pasado
-          const expirationTime = new Date(tokenData.expiresAt);
-          const currentTime = new Date();
-          const minutesExpired = Math.floor(
-            (currentTime.getTime() - expirationTime.getTime()) / 60000,
-          );
-
-          // Eliminar token expirado
-          fs.unlinkSync(tokenFile);
-          this.logger.warn(
-            `Token expirado hace ${minutesExpired} minutos: ${tokenId}`,
-          );
-          throw new UnauthorizedException(
-            `Token expirado hace ${minutesExpired} minutos. Por favor genera un nuevo token.`,
-          );
-        }
-
-        return tokenData;
-      } catch (cryptoError) {
-        throw new BadRequestException(
-          `Error al descifrar token: ${cryptoError.message}`,
-        );
+      // Verificar expiración
+      if (tokenData.expiresAt < Date.now()) {
+        // Eliminar token expirado
+        fs.unlinkSync(tokenFile);
+        throw new UnauthorizedException('Token expirado');
       }
+
+      return tokenData;
     } catch (error) {
-      if (
-        error instanceof UnauthorizedException ||
-        error instanceof BadRequestException
-      ) {
+      if (error instanceof UnauthorizedException) {
         throw error;
       }
 
@@ -242,36 +161,17 @@ export class TokenService {
    * Invalida un token
    */
   async invalidateToken(tokenId: string): Promise<void> {
-    if (!tokenId) {
-      throw new BadRequestException('Se requiere tokenId');
-    }
-
     try {
-      // Validar formato de tokenId para evitar path traversal
-      if (!/^[a-f0-9]+$/.test(tokenId)) {
-        throw new BadRequestException('Formato de token inválido');
-      }
-
       const tokenFile = path.join(this.tokensPath, `${tokenId}.token`);
 
       if (fs.existsSync(tokenFile)) {
         fs.unlinkSync(tokenFile);
         this.logger.log(`Token invalidado: ${tokenId}`);
-      } else {
-        this.logger.warn(
-          `Intento de invalidar un token inexistente: ${tokenId}`,
-        );
       }
     } catch (error) {
       this.logger.error(
         `Error invalidando token: ${error.message}`,
         error.stack,
-      );
-      if (error instanceof BadRequestException) {
-        throw error;
-      }
-      throw new BadRequestException(
-        `Error al invalidar token: ${error.message}`,
       );
     }
   }
@@ -282,11 +182,7 @@ export class TokenService {
   private scheduleTokenDeletion(tokenId: string): void {
     setTimeout(
       () => {
-        this.invalidateToken(tokenId).catch((err) =>
-          this.logger.error(
-            `Error en eliminación programada de token: ${err.message}`,
-          ),
-        );
+        this.invalidateToken(tokenId);
       },
       this.tokenExpirationMinutes * 60 * 1000,
     );
@@ -298,12 +194,6 @@ export class TokenService {
   async cleanupExpiredTokens(): Promise<number> {
     try {
       let deletedCount = 0;
-
-      // Verificar que el directorio existe
-      if (!fs.existsSync(this.tokensPath)) {
-        return 0;
-      }
-
       const files = fs.readdirSync(this.tokensPath);
 
       for (const file of files) {
@@ -320,7 +210,6 @@ export class TokenService {
         }
       }
 
-      this.logger.log(`Limpieza completada: ${deletedCount} tokens eliminados`);
       return deletedCount;
     } catch (error) {
       this.logger.error(

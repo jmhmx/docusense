@@ -15,7 +15,6 @@ import { BlockchainModule } from './blockchain/blockchain.module';
 import { SatModule } from './sat/sat.module';
 import { EmailModule } from './email/email.module';
 import { WebsocketModule } from './websocket/websocket.module';
-import { DocumentAnnotationModule } from './documents/document-annotation.module'; // Import DocumentAnnotationModule
 
 @Module({
   controllers: [HealthController],
@@ -55,7 +54,6 @@ import { DocumentAnnotationModule } from './documents/document-annotation.module
     SatModule,
     EmailModule,
     WebsocketModule,
-    DocumentAnnotationModule, // Add DocumentAnnotationModule to imports
   ],
 })
 export class AppModule {}

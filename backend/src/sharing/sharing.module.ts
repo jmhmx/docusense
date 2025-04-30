@@ -1,23 +1,31 @@
 import { Module, forwardRef } from '@nestjs/common';
+import { TypeOrmModule } from '@nestjs/typeorm';
 import { SharingService } from './sharing.service';
 import { SharingController } from './sharing.controller';
-import { TypeOrmModule } from '@nestjs/typeorm';
+import { CommentsService } from './comments.service';
+import { CommentsController } from './comments.controller';
 import { DocumentPermission } from './entities/document-permission.entity';
 import { ShareLink } from './entities/share-link.entity';
-import { DocumentsModule } from '../documents/documents.module'; // Import DocumentsModule
+import { DocumentComment } from './entities/document-comment.entity';
+import { Document } from '../documents/entities/document.entity';
 import { UsersModule } from '../users/users.module';
+import { DocumentsModule } from '../documents/documents.module';
 import { AuditModule } from '../audit/audit.module';
-import { Document } from '../documents/entities/document.entity'; // Import Document
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([DocumentPermission, ShareLink, Document]), // Import Document repository here
+    TypeOrmModule.forFeature([
+      DocumentPermission,
+      ShareLink,
+      Document,
+      DocumentComment,
+    ]),
     UsersModule,
+    forwardRef(() => DocumentsModule), // Usar forwardRef para evitar dependencia circular
     AuditModule,
-    forwardRef(() => DocumentsModule), // Import DocumentsModule with forwardRef
   ],
-  controllers: [SharingController],
-  providers: [SharingService],
-  exports: [SharingService],
+  controllers: [SharingController, CommentsController],
+  providers: [SharingService, CommentsService],
+  exports: [SharingService, CommentsService],
 })
 export class SharingModule {}

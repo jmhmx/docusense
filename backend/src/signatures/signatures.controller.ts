@@ -11,23 +11,18 @@ import {
   BadRequestException,
   Headers,
   Ip,
-  Inject,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { SignaturesService } from './signatures.service';
 import { CreateSignatureDto } from './dto/create-signature.dto';
 import { CreateSignatureWithBiometricDto } from './dto/create-signature-with-biometric.dto';
 import { AuditLogService, AuditAction } from '../audit/audit-log.service';
-import { TokenService } from '../sat/token.service';
-import { Logger } from '@nestjs/common';
 
 @Controller('api/signatures')
 export class SignaturesController {
-  private readonly logger = new Logger(SignaturesController.name);
   constructor(
     private readonly signaturesService: SignaturesService,
     private readonly auditLogService: AuditLogService,
-    @Inject(TokenService) private readonly tokenService: TokenService,
   ) {}
 
   @UseGuards(JwtAuthGuard)
@@ -57,84 +52,6 @@ export class SignaturesController {
       }
       throw new BadRequestException(
         `No se pudo firmar el documento: ${error.message}`,
-      );
-    }
-  }
-
-  // Nuevo endpoint para firmar con e.firma
-  @UseGuards(JwtAuthGuard)
-  @Post(':documentId/efirma')
-  async signDocumentWithEfirma(
-    @Param('documentId') documentId: string,
-    @Body() signData: { tokenId: string; position?: any; reason?: string },
-    @Request() req,
-    @Headers() headers,
-    @Ip() ip: string,
-  ) {
-    try {
-      if (!signData.tokenId) {
-        throw new BadRequestException(
-          'El tokenId es requerido para firmar con e.firma',
-        );
-      }
-
-      // Verificar que el token existe y pertenece al usuario antes de usarlo
-      const tokenData = await this.tokenService.getTokenData(signData.tokenId);
-
-      // Validar que el token pertenece al usuario actual
-      if (tokenData.userId !== req.user.id) {
-        throw new UnauthorizedException('Token no válido para este usuario');
-      }
-
-      this.logger.log(
-        `Firmando documento ${documentId} con e.firma usando token ${signData.tokenId}`,
-      );
-
-      const signature = await this.signaturesService.signDocumentWithEfirma(
-        documentId,
-        req.user.id,
-        signData.tokenId,
-        signData.position,
-        signData.reason || 'Firma con e.firma',
-      );
-
-      // Registrar en auditoría
-      await this.auditLogService.log(
-        AuditAction.DOCUMENT_SIGN,
-        req.user.id,
-        documentId,
-        {
-          title: 'Documento firmado con e.firma',
-          signatureId: signature.id,
-          signatureMethod: 'efirma',
-        },
-        ip,
-        headers['user-agent'] || 'Unknown',
-      );
-
-      return {
-        success: true,
-        message: 'Documento firmado correctamente con e.firma',
-        signatureId: signature.id,
-        documentId: signature.documentId,
-        timestamp: signature.signedAt,
-      };
-    } catch (error) {
-      this.logger.error(
-        `Error al firmar con e.firma: ${error.message}`,
-        error.stack,
-      );
-
-      if (
-        error instanceof NotFoundException ||
-        error instanceof UnauthorizedException ||
-        error instanceof BadRequestException
-      ) {
-        throw error;
-      }
-
-      throw new BadRequestException(
-        `No se pudo firmar el documento con e.firma: ${error.message}`,
       );
     }
   }
@@ -244,18 +161,11 @@ export class SignaturesController {
     @Ip() ip: string,
   ) {
     try {
-      // Log detallado para diagnóstico
-      this.logger.log(
-        `Iniciando firma biométrica para documento ${documentId}, usuario ${req.user.id}`,
-      );
-      this.logger.log(`Datos recibidos: ${JSON.stringify(createSignatureDto)}`);
-
       // Extraer la información biométrica
       const { position, reason, biometricVerification } = createSignatureDto;
 
       // Realizar validaciones adicionales de seguridad
       if (!biometricVerification || !biometricVerification.timestamp) {
-        this.logger.warn('Datos de verificación biométrica incompletos');
         throw new BadRequestException(
           'Información de verificación biométrica incompleta',
         );
@@ -267,10 +177,6 @@ export class SignaturesController {
       const timeDifference = now.getTime() - verificationTime.getTime();
       const maxDifference = 5 * 60 * 1000; // 5 minutos en milisegundos
 
-      this.logger.log(
-        `Diferencia de tiempo para verificación: ${timeDifference}ms (máx: ${maxDifference}ms)`,
-      );
-
       if (timeDifference > maxDifference) {
         throw new BadRequestException('La verificación biométrica ha expirado');
       }
@@ -280,14 +186,10 @@ export class SignaturesController {
         documentId,
         req.user.id,
         position,
-        reason || 'Firma con verificación biométrica',
+        reason,
         biometricVerification,
         ip,
         headers['user-agent'] || 'Unknown',
-      );
-
-      this.logger.log(
-        `Firma biométrica completada exitosamente: ${signature.id}`,
       );
 
       return {
@@ -298,11 +200,6 @@ export class SignaturesController {
         verificationMethod: 'biometric',
       };
     } catch (error) {
-      this.logger.error(
-        `Error en firma biométrica: ${error.message}`,
-        error.stack,
-      );
-
       if (error instanceof NotFoundException) {
         throw error;
       }
@@ -421,6 +318,40 @@ export class SignaturesController {
       }
       throw new BadRequestException(
         `Error verificando firmas: ${error.message}`,
+      );
+    }
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post(':documentId/efirma')
+  async signDocumentWithEfirma(
+    @Param('documentId') documentId: string,
+    @Body() signData: { tokenId: string; position?: any; reason?: string },
+    @Request() req,
+    @Headers() headers,
+    @Ip() ip: string,
+  ) {
+    try {
+      const signature = await this.signaturesService.signDocumentWithEfirma(
+        documentId,
+        req.user.id,
+        signData.tokenId,
+        signData.position,
+        signData.reason,
+      );
+
+      return {
+        message: 'Documento firmado correctamente con e.firma',
+        signatureId: signature.id,
+        documentId: signature.documentId,
+        timestamp: signature.signedAt,
+      };
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new BadRequestException(
+        `No se pudo firmar el documento con e.firma: ${error.message}`,
       );
     }
   }

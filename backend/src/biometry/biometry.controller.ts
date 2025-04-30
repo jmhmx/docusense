@@ -15,8 +15,6 @@ import {
   UnauthorizedException,
   Query,
   Logger,
-  NotFoundException,
-  InternalServerErrorException,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { BiometryService } from './biometry.service';
@@ -33,6 +31,7 @@ export class BiometryController {
   /**
    * Registra datos biométricos para un usuario
    */
+  @UseGuards(JwtAuthGuard)
   @Post('register')
   async register(
     @Body() registerDto: RegisterBiometryDto,
@@ -40,8 +39,22 @@ export class BiometryController {
     @Ip() ip: string,
     @Headers() headers,
   ) {
+    const userAgent = headers['user-agent'] || 'Unknown';
+    this.logger.log(
+      `Solicitud de registro biométrico para usuario ${registerDto.userId}`,
+    );
+
+    // Solo permitir registrar datos propios o con rol admin
+    if (req.user.id !== registerDto.userId && !req.user.isAdmin) {
+      this.logger.warn(
+        `Intento no autorizado de registro biométrico del usuario ${req.user.id} para ${registerDto.userId}`,
+      );
+      throw new UnauthorizedException(
+        'No tiene permisos para registrar datos biométricos de otro usuario',
+      );
+    }
+
     try {
-      const userAgent = headers['user-agent'] || 'Unknown';
       const biometricData = await this.biometryService.register(
         registerDto,
         ip,
@@ -56,19 +69,8 @@ export class BiometryController {
         type: biometricData.type,
       };
     } catch (error) {
-      this.logger.error(
-        `Error en registro biométrico: ${error.message}`,
-        error.stack,
-      );
-      if (
-        error instanceof NotFoundException ||
-        error instanceof BadRequestException
-      ) {
-        throw error;
-      }
-      throw new InternalServerErrorException(
-        `Error interno al registrar datos biométricos`,
-      );
+      this.logger.error(`Error en registro biométrico: ${error.message}`);
+      throw error;
     }
   }
 

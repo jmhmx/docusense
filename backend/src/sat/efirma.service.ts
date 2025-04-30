@@ -1,4 +1,3 @@
-// backend/src/sat/efirma.service.ts - Versión mejorada
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as fs from 'fs';
@@ -33,42 +32,13 @@ export class EfirmaService {
   }
 
   async firmarConEfirma(
-    certificadoPEM: any,
+    certificadoPEM: object,
     llavePEM: string,
     dataToSign: string,
   ): Promise<string> {
     try {
-      // Validaciones de entrada
-      if (!certificadoPEM) {
-        throw new BadRequestException('Certificado no proporcionado');
-      }
-
-      if (!llavePEM || typeof llavePEM !== 'string') {
-        throw new BadRequestException('Llave privada no válida');
-      }
-
-      if (!dataToSign) {
-        throw new BadRequestException('No hay datos para firmar');
-      }
-
-      this.logger.log('Iniciando proceso de firma con e.firma');
-
       // Crear objeto de llave RSA con la llave privada
-      let signingKey;
-      try {
-        signingKey = crypto.createPrivateKey({
-          key: llavePEM,
-          format: 'pem',
-          type: 'pkcs8',
-        });
-      } catch (keyError) {
-        this.logger.error(
-          `Error al preparar llave privada: ${keyError.message}`,
-        );
-        throw new BadRequestException(
-          'La llave privada no es válida o está dañada',
-        );
-      }
+      const signingKey = crypto.createPrivateKey(llavePEM);
 
       // Firmar los datos usando algoritmo SHA-256 con RSA (estándar SAT)
       const sign = crypto.createSign('SHA256');
@@ -76,30 +46,14 @@ export class EfirmaService {
       sign.end();
 
       // Generar firma
-      let signature;
-      try {
-        signature = sign.sign(signingKey, 'base64');
-      } catch (signError) {
-        this.logger.error(
-          `Error durante el proceso de firma: ${signError.message}`,
-        );
-        throw new BadRequestException(
-          `Error al generar firma: ${signError.message}`,
-        );
-      }
+      const signature = sign.sign(signingKey, 'base64');
 
-      this.logger.log('Firma generada exitosamente');
       return signature;
     } catch (error) {
       this.logger.error(
         `Error al firmar con e.firma: ${error.message}`,
         error.stack,
       );
-
-      if (error instanceof BadRequestException) {
-        throw error;
-      }
-
       throw new BadRequestException(
         `Error al firmar con e.firma: ${error.message}`,
       );

@@ -3,7 +3,6 @@ import * as faceapi from 'face-api.js';
 import { api } from '../api/client';
 import Button from './Button';
 import useAuth from '../hooks/UseAuth';
-import HeadTurnInstructions from './HeadTurnInstructions';
 
 const MODEL_URL = '/models';
 
@@ -131,7 +130,7 @@ const BiometricCapture = ({
   // Referencias para contadores y análisis de liveness (evita re-renderizados)
   const frameCounterRef = useRef<number>(0);
   const positiveFramesRef = useRef<number>(0);
-  const totalFramesNeededRef = useRef<number>(10);
+  const totalFramesNeededRef = useRef<number>(20);
   const expressionHistoryRef = useRef<Array<faceapi.FaceExpressions>>([]);
   const lastBlinkStateRef = useRef<boolean>(false);
 
@@ -146,16 +145,11 @@ const BiometricCapture = ({
   const lastBlinkStartTimeRef = useRef<number | null>(null);
   const blinkDetectedCountRef = useRef<number>(0);
   const blinkFeedbackTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  //const inconsistencyCountRef = useRef<number>(0);
+  const inconsistencyCountRef = useRef<number>(0);
   const smileDurationRef = useRef<number>(0);
   const [blinkFeedback, setBlinkFeedback] = useState<boolean>(false);
-  //@ts-ignore
-  const [step, setStep] = useState<'waiting' | 'capture' | 'complete'>('waiting');
-
 
   const LANDMARK_DISTANCE_THRESHOLD = 0.5;
-  const [showHeadTurnInstructions, setShowHeadTurnInstructions] = useState(false);
-
 
   const calculateLandmarkDistance = (landmarks1: faceapi.FaceLandmarks68, landmarks2: faceapi.FaceLandmarks68): number => {
     // Implementación simple para calcular distancia entre landmarks
@@ -265,8 +259,7 @@ useEffect(() => {
 }, [detectionStarted]);
   
   // Verificación de liveness memoizada para evitar recreación en cada render
-  // Modificar la función checkLiveness para mejorar detección del giro de cabeza
-const checkLiveness = useCallback((face: DetectedFace) => {
+  const checkLiveness = useCallback((face: DetectedFace) => {
   // Obtener expresiones faciales actuales
   const expressions = face.expressions;
   const history = expressionHistoryRef.current;
@@ -330,63 +323,44 @@ const checkLiveness = useCallback((face: DetectedFace) => {
       break;
       
     case 'head-turn':
-      // MEJORADO: Verificar giro de cabeza usando landmarks para detectar asimetría facial
+      // Verificar giro de cabeza - usando asimetría facial
       if (faceHistory.length > 2) {
         const currentLandmarks = face.landmarks;
         const prevLandmarks = faceHistory[faceHistory.length - 2].landmarks;
         
-        // Calcular asimetría actual y previa
+        // Calcular asimetría actual
         const leftEye = currentLandmarks.getLeftEye();
         const rightEye = currentLandmarks.getRightEye();
         const currentAsymmetry = calculateAsymmetry(leftEye, rightEye);
         
-        // Guardamos historial de asimetría
         asymmetryHistoryRef.current.push(currentAsymmetry);
         if (asymmetryHistoryRef.current.length > 10) {
           asymmetryHistoryRef.current.shift();
         }
         
-        // Calcular distancia entre landmarks actuales y anteriores (indica movimiento)
+        // Calcular distancia entre landmarks actuales y anteriores
         const landmarkDistance = calculateLandmarkDistance(currentLandmarks, prevLandmarks);
         
-        // MEJORADO: Detectar cambios de asimetría significativos (giro de cabeza)
-        // Si hay movimiento detectado Y cambio en la asimetría, probablemente es un giro de cabeza
-        if (landmarkDistance > LANDMARK_DISTANCE_THRESHOLD) {
-          console.log('Movimiento facial detectado:', landmarkDistance);
-          
-          // Incrementamos score al detectar movimiento significativo
-          positiveFramesRef.current += 2;
-          
-          // Umbral adaptado para mejor detección
-          if (currentAsymmetry > 0.15) {
-            // Detectamos giro significativo
-            console.log('Giro de cabeza detectado, asimetría:', currentAsymmetry);
-            positiveFramesRef.current += 5; // Bonus por giro detectado
-          }
+        // Verificar movimiento auténtico
+        if (landmarkDistance > LANDMARK_DISTANCE_THRESHOLD && 
+            landmarkDistance < LANDMARK_DISTANCE_THRESHOLD * 5) { // Evitar movimientos irreales
+          positiveFramesRef.current += 1;
+        } else {
+          inconsistencyCountRef.current += 0.1;
         }
       }
       break;
       
     case 'nod':
       // Implementación simplificada para el desafío de asentimiento
-      if (faceHistory.length > 2) {
-        const current = face.landmarks.getNose()[0].y;
-        const prev = faceHistory[faceHistory.length - 2].landmarks.getNose()[0].y;
-        
-        if (Math.abs(current - prev) > 5) {
-          positiveFramesRef.current += 1;
-        }
-      }
+      // En una implementación completa, analizaríamos el movimiento vertical de la cabeza
+      positiveFramesRef.current += 0.5; // Incremento pequeño por defecto
       break;
       
     case 'mouth-open':
-      // Simplificada: detectamos apertura de boca por distancia entre labios
-      const topLip = face.landmarks.getMouth()[14].y;
-      const bottomLip = face.landmarks.getMouth()[18].y;
-      
-      if (bottomLip - topLip > 10) {
-        positiveFramesRef.current += 1;
-      }
+      // Implementación simplificada para el desafío de abrir la boca
+      // En una implementación completa, detectaríamos la apertura de la boca
+      positiveFramesRef.current += 0.5; // Incremento pequeño por defecto
       break;
   }
   
@@ -415,14 +389,10 @@ const checkLiveness = useCallback((face: DetectedFace) => {
   // Verificar si se ha completado el desafío
   if (confidence >= 1.0) {
     setLivenessState('passed');
-  }
-}, [livenessChallenge, livenessState, progressPercentage]);
+    }
+    
   
-  useEffect(() => {
-  if (livenessChallenge === 'head-turn' && step === 'capture') {
-    setShowHeadTurnInstructions(true);
-  }
-}, [livenessChallenge, step]);
+}, [livenessChallenge, livenessState, progressPercentage]);
 
   const calculateEyeStatus = (face: DetectedFace): number => {
     const landmarks = face.landmarks;
@@ -806,26 +776,6 @@ const startVideo = useCallback(async () => {
               height="480"
               className="absolute top-0 left-0 z-10"
             />
-
-            {livenessChallenge === 'head-turn' && (
-              <div className="p-3 mt-4 rounded-md bg-blue-50">
-                <p className="flex items-center text-sm text-blue-700">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 mr-2 text-blue-500" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                  </svg>
-                  <span>
-                    <strong>Desafío de giro de cabeza:</strong> Gire suavemente su cabeza de izquierda a derecha para completar la verificación.
-                    <button 
-                      onClick={() => setShowHeadTurnInstructions(true)} 
-                      className="ml-2 text-blue-600 underline focus:outline-none"
-                    >
-                      Ver instrucciones
-                    </button>
-                  </span>
-                </p>
-              </div>
-            )}
-
             
             {/* Mensajes condicionales según el estado */}
             {modelsLoaded && !detectedFace && detectionStarted && (
@@ -912,15 +862,10 @@ const startVideo = useCallback(async () => {
           ¡Parpadeo detectado!
         </div>
       )}
-      <HeadTurnInstructions isVisible={showHeadTurnInstructions} />
     </div>
-
-    
   );
-  
 
 };
-
 
 // Exportar componente memoizado para evitar renderizados innecesarios
 export default BiometricCapture;

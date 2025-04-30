@@ -6,7 +6,7 @@ import useAuth from '../hooks/UseAuth';
 import Button from '../components/Button';
 
 // Define los tipos necesarios
-/* interface BiometricRegistrationResult {
+interface BiometricRegistrationResult {
   success: boolean;
   message: string;
   id?: string;
@@ -14,7 +14,7 @@ import Button from '../components/Button';
   timestamp?: string;
   descriptorData?: string;
   challenge?: string;
-} */
+}
 
 const BiometricRegistration = () => {
   const [loading, setLoading] = useState(false);
@@ -50,9 +50,7 @@ const BiometricRegistration = () => {
     setError(null);
   };
   
-  const handleRegistrationSuccess = async (result: any) => {
-    console.log("Resultado del registro biométrico:", result);
-    
+  const handleRegistrationSuccess = async (_result: BiometricRegistrationResult) => {
     if (!user?.id) {
       setError('Usuario no identificado. Por favor, inicia sesión nuevamente.');
       return;
@@ -62,14 +60,14 @@ const BiometricRegistration = () => {
     setError(null);
     
     try {
-      console.log("Completando registro biométrico para usuario:", user.id);
-      
+      // La BiometricCapture ya realizó el registro biométrico,
+      // solo necesitamos completar el proceso en el perfil del usuario
       await api.post('/api/users/biometrics/setup-complete', {
         userId: user.id,
         setupMethod: 'facial'
       });
       
-      // Actualizar estado local - IMPORTANTE
+      // Actualizar estado local
       localStorage.setItem('hasBiometrics', 'true');
       if (updateUserBiometrics) {
         updateUserBiometrics(true);
@@ -110,7 +108,7 @@ const BiometricRegistration = () => {
           </p>
           <ul className="mb-6 ml-6 text-gray-700 list-disc">
             <li className="mb-2">Posicione su rostro frente a la cámara</li>
-            <li className="mb-2">Siga las instrucciones para completar el desafío (giro de cabeza)</li>
+            <li className="mb-2">Siga las instrucciones para completar el desafío (parpadeo)</li>
             <li className="mb-2">Confirme y guarde sus datos biométricos</li>
           </ul>
           <div className="p-4 mb-6 rounded-md bg-blue-50">
@@ -134,7 +132,7 @@ const BiometricRegistration = () => {
         <BiometricCapture 
           mode="register" 
           onSuccess={handleRegistrationSuccess}
-          challengeType="head-turn"
+          challengeType="blink"
         />
       )}
       

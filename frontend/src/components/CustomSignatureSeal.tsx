@@ -127,14 +127,7 @@ const CustomSignatureSeal = ({ name, date, reason, onSave, onCancel }: CustomSig
     reader.onload = (event) => {
       if (event.target?.result) {
         setUploadedLogo(event.target.result.toString());
-        setSealData(prev => ({
-          ...prev,
-          content: {
-            ...prev.content,
-            showLogo: true,
-          },
-          image: event.target.result.toString(),
-        }));
+        handleContentChange('showLogo', true);
       }
     };
     reader.readAsDataURL(file);
@@ -147,47 +140,6 @@ const CustomSignatureSeal = ({ name, date, reason, onSave, onCancel }: CustomSig
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
-  };
-  
-  // Limpiar canvas de firma
-  const clearSignature = () => {
-    if (!signatureCanvasRef.current) return;
-    
-    const canvas = signatureCanvasRef.current;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    setSignatureDrawn(null);
-    
-    setSealData(prev => ({
-      ...prev,
-      content: {
-        ...prev.content,
-        showSignature: false,
-        signatureData: undefined,
-      }
-    }));
-  };
-  
-  // Aplicar template
-  const applyTemplate = (index: number) => {
-    const template = templates[index];
-    
-    setSealData(prev => ({
-      ...prev,
-      style: {
-        ...prev.style,
-        ...template.style,
-      },
-      content: {
-        ...prev.content,
-        ...template.content,
-      }
-    }));
-    
-    setSelectedFontSize(template.style.fontSize);
-    setSelectedPosition(template.content.position);
   };
   
   // Guardar sello
@@ -446,20 +398,31 @@ const CustomSignatureSeal = ({ name, date, reason, onSave, onCancel }: CustomSig
                   <div className="mt-1 text-sm">{sealData.content.customText}</div>
                 )}
               </div>
-            </>
-          )}
+            </div>
+          </div>
           
-          {activeTab === 'content' && (
-            <>
-              <h3 className="text-lg font-medium text-gray-700">Opciones de contenido</h3>
-              
-              {/* Título personalizado */}
-              <div>
-                <label htmlFor="customTitle" className="block mb-1 text-sm font-medium">Título del sello</label>
-                <input
-                  id="customTitle"
-                  type="text"
-                  value={sealData.content.customTitle || ''}
-                  onChange={(e) => handleContentChange('customTitle', e.target.value)}
-                  placeholder="Título opcional del sello"
-                  className="block w-
+          <div className="mt-4 text-xs text-gray-500">
+            Esta es una vista previa aproximada. El aspecto final puede variar ligeramente.
+          </div>
+        </div>
+      </div>
+      
+      <div className="flex justify-end space-x-3">
+        <Button
+          variant="secondary"
+          onClick={onCancel}
+        >
+          Cancelar
+        </Button>
+        <Button
+          variant="primary"
+          onClick={handleSave}
+        >
+          Guardar sello
+        </Button>
+      </div>
+    </div>
+  );
+};
+
+export default CustomSignatureSeal;

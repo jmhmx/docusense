@@ -77,7 +77,7 @@ const EfirmaSignatureWorkflow = ({
     
     try {
       const response = await api.post(`/api/signatures/${documentId}/efirma`, {
-        tokenId: selectedCertificate,
+        certificateId: selectedCertificate,
         password,
         position,
         reason

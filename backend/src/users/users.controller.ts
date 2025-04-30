@@ -96,4 +96,17 @@ export class UsersController {
       );
     }
   }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('available-signers')
+  async getAvailableSigners() {
+    try {
+      const users = await this.usersService.findAll();
+      return users;
+    } catch (error) {
+      throw new BadRequestException(
+        `Error al obtener usuarios disponibles: ${error.message}`,
+      );
+    }
+  }
 }

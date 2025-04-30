@@ -8,8 +8,8 @@ import DocumentSharing from '../components/DocumentSharing';
 import DocumentComments from '../components/DocumentComments';
 import PDFViewer from '../components/PDFViewer';
 import DocumentBlockchainVerification from '../components/DocumentBlockchainVerification';
-import MultiSignatureManager from './MultiSignatureManager';
-import MultiSignatureVerification from './MultiSignatureVerification';
+import MultiSignatureManager from '../components/MultiSignatureManager';
+import MultiSignatureVerification from '../components/MultiSignatureVerification';
 
 interface DocumentType {
   id: string;

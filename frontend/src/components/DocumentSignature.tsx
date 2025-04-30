@@ -4,8 +4,6 @@ import Button from './Button';
 import BiometricSignatureWorkflow from './BiometricSignatureWorkflow';
 import SignatureUI from './SignatureUI';
 import TwoFactorVerification from './TwoFactorVerification';
-import MultiSignatureManager from './MultiSignatureManager';
-import MultiSignatureVerification from './MultiSignatureVerification';
 
 interface SignaturePosition {
   page: number;

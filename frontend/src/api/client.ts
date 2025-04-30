@@ -69,3 +69,33 @@ export const downloadFile = async (url: string, filename: string) => {
     return false;
   }
 };
+
+// Funciones para gestión de firmas múltiples
+export const signatures = {
+  // Iniciar proceso de firmas múltiples
+  startMultiSignatureProcess: (
+    documentId: string,
+    signerIds: string[],
+    requiredSigners?: number,
+  ) => {
+    return api.post(`/api/signatures/${documentId}/multi-init`, {
+      signerIds,
+      requiredSigners,
+    });
+  },
+
+  // Cancelar proceso de firmas múltiples
+  cancelMultiSignatureProcess: (documentId: string) => {
+    return api.post(`/api/signatures/${documentId}/multi-cancel`);
+  },
+
+  // Verificar todas las firmas
+  verifyAllSignatures: (documentId: string) => {
+    return api.post(`/api/signatures/${documentId}/verify-all`);
+  },
+
+  // Obtener estado de firmas
+  getDocumentSignatureStatus: (documentId: string) => {
+    return api.get(`/api/documents/${documentId}/signature-status`);
+  },
+};

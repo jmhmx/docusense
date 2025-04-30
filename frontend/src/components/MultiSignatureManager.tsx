@@ -282,7 +282,7 @@ const MultiSignatureManager = ({ documentId, documentTitle, onUpdate }: MultiSig
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-600 bg-opacity-50">
           <div className="w-full max-w-md p-6 bg-white rounded-lg shadow-xl">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-medium text-gray-900">Seleccionar firmantes</h3>
+              <h3 className="text-lg font-medium text-gray-900">Seleccionar firmantes para { documentTitle}</h3>
               <button 
                 onClick={() => setShowUserSelector(false)}
                 className="text-gray-400 hover:text-gray-500"

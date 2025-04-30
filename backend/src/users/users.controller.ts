@@ -37,6 +37,22 @@ export class UsersController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @Get('available-signers')
+  async getAvailableSigners() {
+    try {
+      console.log('Iniciando búsqueda de firmantes disponibles');
+      const users = await this.usersService.findAll();
+      console.log('Usuarios encontrados:', users.length);
+      return users;
+    } catch (error) {
+      console.error('Error detallado al obtener usuarios:', error);
+      throw new BadRequestException(
+        `Error al obtener usuarios disponibles: ${error.message}`,
+      );
+    }
+  }
+
+  @UseGuards(JwtAuthGuard)
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.usersService.findOne(id);
@@ -97,16 +113,5 @@ export class UsersController {
     }
   }
 
-  @UseGuards(JwtAuthGuard)
-  @Get('available-signers')
-  async getAvailableSigners() {
-    try {
-      const users = await this.usersService.findAll();
-      return users;
-    } catch (error) {
-      throw new BadRequestException(
-        `Error al obtener usuarios disponibles: ${error.message}`,
-      );
-    }
-  }
+  
 }

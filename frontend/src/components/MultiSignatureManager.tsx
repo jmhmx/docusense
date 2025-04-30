@@ -37,8 +37,12 @@ const MultiSignatureManager = ({ documentId, documentTitle, onUpdate }: MultiSig
 
   const checkOwnership = async () => {
     try {
-      const response = await api.get(`/api/documents/${documentId}/permissions`);
-      setIsOwner(response.data.isOwner || false);
+      // Obtener el documento para verificar si el usuario actual es el propietario
+      const docResponse = await api.get(`/api/documents/${documentId}`);
+      const currentUserId = currentUser?.id;
+      
+      // Comparar el userId del documento con el ID del usuario actual
+      setIsOwner(docResponse.data.userId === currentUserId);
     } catch (err) {
       console.error('Error verificando propiedad:', err);
     }

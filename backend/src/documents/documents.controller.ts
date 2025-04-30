@@ -405,4 +405,14 @@ export class DocumentsController {
   async getBlockchainCertificate(@Param('id') id: string, @Request() req) {
     return this.documentsService.getBlockchainCertificate(id, req.user.id);
   }
+
+  @UseGuards(JwtAuthGuard)
+  @Get(':id/metadata')
+  async getDocumentMetadata(@Param('id') id: string, @Request() req) {
+    const document = await this.documentsService.findOne(id, req.user.id);
+    return {
+      pageCount: document.metadata?.pageCount || 1,
+      // otros metadatos relevantes
+    };
+  }
 }

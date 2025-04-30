@@ -13,7 +13,6 @@ import { DocumentAnalyzerService } from '../analyzers/document-analyzer.service'
 import { CryptoModule } from '../crypto/crypto.module';
 import { AuditModule } from '../audit/audit.module';
 import { SharingModule } from '../sharing/sharing.module';
-import { BlockchainModule } from '../blockchain/blockchain.module';
 
 @Module({
   imports: [
@@ -21,20 +20,14 @@ import { BlockchainModule } from '../blockchain/blockchain.module';
     ScheduleModule.forRoot(),
     CryptoModule,
     AuditModule,
-    forwardRef(() => SharingModule),
-    BlockchainModule,
+    SharingModule,
   ],
-  providers: [
-    DocumentsService,
-    DocumentProcessorService,
-    DocumentAnalyzerService,
-  ],
+  providers: [DocumentsService, DocumentProcessorService, DocumentAnalyzerService],
   controllers: [
     DocumentsController,
     DocumentEncryptionController,
     DocumentPermissionsController,
     DocumentSignatureController,
   ],
-  exports: [DocumentsService],
 })
 export class DocumentsModule {}

@@ -8,17 +8,11 @@ import { DocumentsService } from './documents.service';
 import { CryptoModule } from 'src/crypto/crypto.module';
 import { AuditModule } from 'src/audit/audit.module';
 import { SharingModule } from '../sharing/sharing.module';
-import { BlockchainModule } from '../blockchain/blockchain.module';
+
 @Module({
-  imports: [
-    TypeOrmModule.forFeature([DocumentAnnotation, Document]),
-    CryptoModule,
-    AuditModule,
-    SharingModule,
-    BlockchainModule, // Añadir el módulo aquí
-  ],
-  providers: [DocumentAnnotationService, DocumentsService],
+  imports: [TypeOrmModule.forFeature([DocumentAnnotation, Document]), CryptoModule, AuditModule, SharingModule],
+  providers: [DocumentAnnotationService, DocumentsService], // DocumentsService is needed by DocumentAnnotationService
   controllers: [DocumentAnnotationController],
-  exports: [DocumentAnnotationService],
+  exports: [DocumentAnnotationService, DocumentAnnotationController], // Export the controller and service
 })
 export class DocumentAnnotationModule {}

@@ -310,6 +310,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
             pdfDocument={pdfDocument}
             currentPage={currentPage}
             onSearchResultClick={handleSearchResultClick}
+            token={token}
           />
         </div>
       )}      

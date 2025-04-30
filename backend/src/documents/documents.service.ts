@@ -1,37 +1,36 @@
 import {
   Injectable,
-  Logger,
   NotFoundException,
   BadRequestException,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Like, ILike } from 'typeorm';
-import { Document, DocumentStatus } from './entities/document.entity';
+import { Repository } from 'typeorm';
+import * as fs from 'fs';
+import * as path from 'path';
+import { ConfigService } from '@nestjs/config';
+
+import { Document } from './entities/document.entity';
 import { CreateDocumentDto } from './dto/create-document.dto';
 import { UpdateDocumentDto } from './dto/update-document.dto';
 import { CryptoService } from '../crypto/crypto.service';
 import { AuditLogService, AuditAction } from '../audit/audit-log.service';
 import { SharingService } from '../sharing/sharing.service';
-import * as fs from 'fs';
-import * as path from 'path';
 import { BlockchainService } from '../blockchain/blockchain.service';
 
 @Injectable()
 export class DocumentsService {
-  private readonly logger = new Logger(DocumentsService.name);
   constructor(
     @InjectRepository(Document)
-    private readonly documentsRepository: Repository<Document>,
+    private readonly documentRepository: Repository<Document>,
     private readonly cryptoService: CryptoService,
     private readonly auditLogService: AuditLogService,
+    @Inject(forwardRef(() => SharingService))
     private readonly sharingService: SharingService,
     private readonly blockchainService: BlockchainService,
-  ) {
-    // Verificar servicios
-    console.log('CryptoService disponible:', !!this.cryptoService);
-    console.log('AuditLogService disponible:', !!this.auditLogService);
-    console.log('SharingService disponible:', !!this.sharingService);
-  }
+    private readonly configService: ConfigService,
+  ) {}
 
   async create(
     createDocumentDto: CreateDocumentDto,

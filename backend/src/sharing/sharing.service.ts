@@ -29,7 +29,6 @@ import {
   ShareDocumentDto,
   CreateShareLinkDto,
   AccessShareLinkDto,
-  UpdatePermissionDto,
 } from './dto/share-document.dto';
 
 @Injectable()
@@ -38,13 +37,13 @@ export class SharingService {
 
   constructor(
     @InjectRepository(DocumentPermission)
-    private readonly permissionsRepository: Repository<DocumentPermission>,
+    private readonly documentPermissionRepository: Repository<DocumentPermission>,
     @InjectRepository(ShareLink)
-    private readonly shareLinksRepository: Repository<ShareLink>,
+    private readonly shareLinkRepository: Repository<ShareLink>,
     @InjectRepository(Document)
-    private readonly documentsRepository: Repository<Document>,
+    private readonly documentRepository: Repository<Document>,
     private readonly usersService: UsersService,
-    @Inject(forwardRef(() => DocumentsService))
+    @Inject(forwardRef(() => DocumentsService)) //Add forward ref here
     private readonly documentsService: DocumentsService,
     private readonly auditLogService: AuditLogService,
     private readonly dataSource: DataSource,

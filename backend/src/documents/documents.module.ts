@@ -1,5 +1,5 @@
 // backend/src/documents/documents.module.ts
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ScheduleModule } from '@nestjs/schedule';
 import { DocumentsService } from './documents.service';
@@ -21,7 +21,7 @@ import { BlockchainModule } from '../blockchain/blockchain.module'; // Import Bl
     ScheduleModule.forRoot(),
     CryptoModule,
     AuditModule,
-    SharingModule,
+    forwardRef(() => SharingModule), // Add forwardRef here
     BlockchainModule, // Add BlockchainModule to imports
   ],
   providers: [
@@ -35,5 +35,6 @@ import { BlockchainModule } from '../blockchain/blockchain.module'; // Import Bl
     DocumentPermissionsController,
     DocumentSignatureController,
   ],
+  exports: [DocumentsService],
 })
 export class DocumentsModule {}

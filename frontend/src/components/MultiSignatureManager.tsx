@@ -1,8 +1,11 @@
+// src/components/MultiSignatureManager.tsx
+
 import { useState, useEffect } from 'react';
 import { api } from '../api/client';
 import Button from './Button';
 import useAuth from '../hooks/UseAuth';
 
+// Mejora de la interfaz para incluir todos los tipos necesarios
 interface User {
   id: string;
   name: string;
@@ -15,7 +18,7 @@ interface MultiSignatureManagerProps {
   onUpdate: () => void;
 }
 
-const MultiSignatureManager = ({ documentId, onUpdate }: MultiSignatureManagerProps) => {
+const MultiSignatureManager = ({ documentId, documentTitle, onUpdate }: MultiSignatureManagerProps) => {
   const { user: currentUser } = useAuth();
   const [isOwner, setIsOwner] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -45,6 +48,7 @@ const MultiSignatureManager = ({ documentId, onUpdate }: MultiSignatureManagerPr
     try {
       const response = await api.get(`/api/documents/${documentId}/signature-status`);
       setDocumentStatus(response.data);
+      
       // Si ya hay un proceso iniciado, cargar los firmantes seleccionados
       if (response.data.multiSignatureProcess) {
         const usersResponse = await api.get('/api/users/available-signers');
@@ -142,6 +146,16 @@ const MultiSignatureManager = ({ documentId, onUpdate }: MultiSignatureManagerPr
     }
   };
 
+  // Calcular porcentaje de progreso
+  const calculateProgress = () => {
+    if (!documentStatus?.multiSignatureProcess) return 0;
+    
+    const completedCount = documentStatus.completedSigners?.length || 0;
+    const requiredCount = documentStatus.requiredSigners || 1;
+    
+    return Math.min(Math.round((completedCount / requiredCount) * 100), 100);
+  };
+
   return (
     <div className="p-6 mt-6 bg-white rounded-lg shadow">
       <h3 className="mb-4 text-lg font-medium text-gray-900">Firmas Múltiples</h3>
@@ -189,6 +203,26 @@ const MultiSignatureManager = ({ documentId, onUpdate }: MultiSignatureManagerPr
             <p className="mt-1 text-sm text-blue-600">
               Firmas completadas: {documentStatus.completedSigners?.length || 0}
             </p>
+            
+            {/* Barra de progreso */}
+            <div className="mt-4">
+              <div className="flex items-center justify-between text-xs">
+                <span>{documentStatus.completedSigners?.length || 0} de {documentStatus.requiredSigners} firmas</span>
+                <span>{calculateProgress()}% completado</span>
+              </div>
+              <div className="w-full h-2 mt-1 bg-blue-200 rounded-full">
+                <div 
+                  className="h-2 bg-blue-600 rounded-full"
+                  style={{ width: `${calculateProgress()}%` }}
+                ></div>
+              </div>
+            </div>
+            
+            {documentStatus.isComplete && (
+              <div className="p-2 mt-3 text-sm font-medium text-green-800 bg-green-100 rounded">
+                ✓ Quórum alcanzado. Documento válidamente firmado.
+              </div>
+            )}
           </div>
 
           <div className="mt-4">
@@ -297,11 +331,12 @@ const MultiSignatureManager = ({ documentId, onUpdate }: MultiSignatureManagerPr
                     value={requiredSigners}
                     onChange={(e) => setRequiredSigners(Number(e.target.value))}
                     className="block w-full py-2 pl-3 pr-10 text-base border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    disabled={selectedUsers.length === 0}
                   >
-                    {[...Array(selectedUsers.length + 1).keys()].slice(1).map(num => (
-                      <option key={num} value={num}>
-                        {num} {num === 1 ? 'firmante' : 'firmantes'}
-                        {num === selectedUsers.length ? ' (todos)' : ''}
+                    {[...Array(selectedUsers.length || 1).keys()].map(num => (
+                      <option key={num + 1} value={num + 1}>
+                        {num + 1} {num + 1 === 1 ? 'firmante' : 'firmantes'}
+                        {num + 1 === selectedUsers.length ? ' (todos)' : ''}
                       </option>
                     ))}
                   </select>

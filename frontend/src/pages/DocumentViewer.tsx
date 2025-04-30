@@ -8,7 +8,8 @@ import DocumentSharing from '../components/DocumentSharing';
 import DocumentComments from '../components/DocumentComments';
 import PDFViewer from '../components/PDFViewer';
 import DocumentBlockchainVerification from '../components/DocumentBlockchainVerification';
-import MultiSignatureManager from '../components/MultiSignatureManager';
+import MultiSignatureManager from './MultiSignatureManager';
+import MultiSignatureVerification from './MultiSignatureVerification';
 
 interface DocumentType {
   id: string;
@@ -341,9 +342,8 @@ const fetchUnreadComments = async () => {
 
     return (
       <div className="mt-4">
-
         {/* Componente de gestión de firmas múltiples */}
-        {multiSignatureEnabled && (
+        {multiSignatureEnabled !== false && (
           <MultiSignatureManager 
             documentId={id}
             documentTitle={document.title}
@@ -364,11 +364,32 @@ const fetchUnreadComments = async () => {
           />
         )}
 
+        {/* Verificación de firmas múltiples */}
+        {multiSignatureEnabled !== false && signatures.length > 1 && (
+          <MultiSignatureVerification 
+            documentId={id}
+            documentTitle={document.title}
+            signatures={signatures}
+            onUpdate={() => {
+              const fetchSignatures = async () => {
+                try {
+                  const response = await api.get(`/api/signatures/document/${id}`);
+                  setSignatures(response.data);
+                } catch (err) {
+                  console.error('Error loading signatures:', err);
+                }
+              };
+              fetchSignatures();
+            }}
+          />
+        )}
+
         <DocumentSignature 
           documentId={id}
           documentTitle={document.title}
           documentStatus={document.status}
           onSignSuccess={handleDocumentUpdated}
+          multiSignatureEnabled={true}
         />
 
         {/* Document Encryption Component */}

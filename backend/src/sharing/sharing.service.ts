@@ -34,7 +34,7 @@ import {
 
 @Injectable()
 export class SharingService {
-  private readonly logger = new Logger(SharingService.name);
+  private readonly logger = new Logger(SharingService.name); // Add logger
 
   constructor(
     @InjectRepository(DocumentPermission)

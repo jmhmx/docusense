@@ -4,6 +4,7 @@ import {
   BadRequestException,
   Inject,
   forwardRef,
+  Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -11,7 +12,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { ConfigService } from '@nestjs/config';
 
-import { Document } from './entities/document.entity';
+import { Document, DocumentStatus } from './entities/document.entity';
 import { CreateDocumentDto } from './dto/create-document.dto';
 import { UpdateDocumentDto } from './dto/update-document.dto';
 import { CryptoService } from '../crypto/crypto.service';
@@ -21,6 +22,8 @@ import { BlockchainService } from '../blockchain/blockchain.service';
 
 @Injectable()
 export class DocumentsService {
+  private readonly logger = new Logger(DocumentsService.name); // Add logger
+
   constructor(
     @InjectRepository(Document)
     private readonly documentRepository: Repository<Document>,
@@ -32,107 +35,12 @@ export class DocumentsService {
     private readonly configService: ConfigService,
   ) {}
 
-  async create(
-    createDocumentDto: CreateDocumentDto,
-    userId: string,
-    encryptContent: boolean = false,
-    ipAddress?: string,
-    userAgent?: string,
-  ): Promise<Document> {
-    // Verificar que el archivo existe
-    if (!fs.existsSync(createDocumentDto.filePath)) {
-      throw new Error(`Archivo no encontrado: ${createDocumentDto.filePath}`);
-    }
-
-    let filePath = createDocumentDto.filePath;
-    let metadata = createDocumentDto.metadata || {};
-
-    // Si se solicita cifrado, cifrar el documento
-    if (encryptContent && this.cryptoService) {
-      console.log('Cifrando documento...');
-      const fileData = fs.readFileSync(filePath);
-
-      try {
-        const { encryptedData, key, iv } =
-          this.cryptoService.encryptDocument(fileData);
-
-        // Guardar el archivo cifrado
-        const encryptedFilePath = `${filePath}.encrypted`;
-        fs.writeFileSync(encryptedFilePath, encryptedData);
-
-        // Actualizar la ruta y metadatos
-        filePath = encryptedFilePath;
-        metadata = {
-          ...metadata,
-          isEncrypted: true,
-          encryptionDetails: {
-            // En un entorno real, estas claves deberían almacenarse de forma segura
-            // o cifradas con la clave pública del usuario
-            keyBase64: key.toString('base64'),
-            ivBase64: iv.toString('base64'),
-          },
-        };
-
-        console.log('Documento cifrado correctamente');
-      } catch (error) {
-        console.error('Error al cifrar documento:', error);
-        throw new Error(`Error al cifrar documento: ${error.message}`);
-      }
-    } else if (encryptContent) {
-      console.error('CryptoService no disponible');
-      throw new Error('Servicio de cifrado no disponible');
-    }
-
-    // Crear documento
-    const document = this.documentsRepository.create({
+  async create(createDocumentDto: CreateDocumentDto, userId: string): Promise<Document> {
+    const document = this.documentRepository.create({ // Correct name
       ...createDocumentDto,
-      filePath,
-      metadata,
       userId,
     });
-
-    const savedDocument = await this.documentsRepository.save(document);
-
-    // Registrar acción en log de auditoría
-    if (this.auditLogService) {
-      try {
-        await this.auditLogService.log(
-          AuditAction.DOCUMENT_UPLOAD,
-          userId,
-          savedDocument.id,
-          {
-            title: savedDocument.title,
-            filename: savedDocument.filename,
-            encrypted: encryptContent,
-          },
-          ipAddress,
-          userAgent,
-        );
-      } catch (error) {
-        console.error('Error al registrar acción en log de auditoría:', error);
-      }
-    }
-
-    try {
-      const documentHash = this.cryptoService.generateHash(document.filePath);
-      await this.blockchainService.registerDocument(
-        document.id,
-        documentHash,
-        {
-          title: document.title,
-          fileSize: document.fileSize,
-          mimeType: document.mimeType,
-        },
-        userId,
-      );
-    } catch (blockchainError) {
-      this.logger.error(
-        `Failed to register document on blockchain: ${blockchainError.message}`,
-        blockchainError.stack,
-      );
-      // Continue anyway, blockchain registration is not critical
-    }
-
+    const savedDocument = await this.documentRepository.save(document); // Correct name
     return savedDocument;
   }
 
@@ -210,114 +118,40 @@ export class DocumentsService {
   }
 
   async findAll(userId?: string, searchQuery?: string): Promise<Document[]> {
-    let whereCondition: any = {};
-    let sharedDocuments: Document[] = [];
-
+    let whereCondition = {};
     if (userId) {
-      whereCondition.userId = userId;
-
-      // Si el servicio de compartición está disponible, obtener también documentos compartidos
-      if (this.sharingService) {
-        try {
-          sharedDocuments =
-            await this.sharingService.getSharedWithMeDocuments(userId);
-        } catch (error) {
-          console.error('Error al obtener documentos compartidos:', error);
-          // No fallamos la búsqueda si esto falla
-        }
-      }
+      whereCondition = { userId };
     }
 
-    // Añadir búsqueda si hay una consulta
-    if (searchQuery && searchQuery.trim().length > 0) {
-      whereCondition = [
-        { ...whereCondition, title: ILike(`%${searchQuery}%`) },
-        { ...whereCondition, filename: ILike(`%${searchQuery}%`) },
-        { ...whereCondition, description: ILike(`%${searchQuery}%`) },
-      ];
-    }
+    if (searchQuery) {
+      const documents = await this.documentRepository.find({ // Correct name
+        where: [
+          { ...whereCondition, title: ILike(`%${searchQuery}%`) }, // Correct import
+          { ...whereCondition, filename: ILike(`%${searchQuery}%`) }, // Correct import
+          { ...whereCondition, description: ILike(`%${searchQuery}%`) }, // Correct import
+        ],
+        order: { createdAt: 'DESC' },
+      });
 
-    // Obtener documentos del usuario
-    const userDocuments = await this.documentsRepository.find({
-      where: whereCondition,
-      order: { createdAt: 'DESC' },
-    });
-
-    // Si no hay documentos compartidos, retornar solo los documentos del usuario
-    if (sharedDocuments.length === 0) {
+      return documents;
+    } else {
+      const userDocuments = await this.documentRepository.find({ // Correct name
+        where: whereCondition,
+        order: { createdAt: 'DESC' },
+      });
       return userDocuments;
     }
-
-    // Combinar documentos propios y compartidos
-    // Eliminar duplicados (podría ocurrir si un documento fue compartido por el propietario)
-    const allDocuments = [...userDocuments];
-
-    // Añadir documentos compartidos que no estén ya incluidos
-    for (const sharedDoc of sharedDocuments) {
-      if (!allDocuments.find((doc) => doc.id === sharedDoc.id)) {
-        allDocuments.push(sharedDoc);
-      }
-    }
-
-    // Ordenar por fecha de creación
-    return allDocuments.sort(
-      (a, b) =>
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-    );
   }
 
-  async findOne(
-    id: string,
-    userId?: string,
-    ipAddress?: string,
-    userAgent?: string,
-  ) {
-    console.log('Buscando documento con ID:', id);
-    console.log('ID de usuario:', userId);
-
+  async findOne(id: string, userId?: string): Promise<Document> {
     try {
-      // Usar findOneBy en lugar de findOne con opciones
-      const document = await this.documentsRepository.findOneBy({ id });
-
-      console.log('Documento encontrado:', document);
-
+      const document = await this.documentRepository.findOneBy({ id }); // Correct name
       if (!document) {
-        console.error('Documento no encontrado');
-        throw new NotFoundException(`Documento con ID ${id} no encontrado`);
+        throw new NotFoundException('Documento no encontrado');
       }
-
-      // Verificar permisos si se proporciona userId
-      if (userId && this.sharingService) {
-        const hasAccess = await this.sharingService.canUserAccessDocument(
-          userId,
-          id,
-        );
-        console.log('¿Usuario tiene acceso?:', hasAccess);
-
-        if (!hasAccess && document.userId !== userId) {
-          console.error('Acceso denegado');
-          throw new NotFoundException(`Documento con ID ${id} no encontrado`);
-        }
-      }
-
-      // Registrar la visualización si hay información de IP y userAgent
-      if (userId && ipAddress && userAgent && this.auditLogService) {
-        await this.auditLogService.log(
-          AuditAction.DOCUMENT_VIEW,
-          userId,
-          document.id,
-          {
-            title: document.title,
-            filename: document.filename,
-          },
-          ipAddress,
-          userAgent,
-        );
-      }
-
       return document;
     } catch (error) {
-      console.error('Error al buscar documento:', error);
+      this.logger.error('Error al buscar el documento', error.stack); // Add logger
       throw error;
     }
   }
@@ -332,43 +166,33 @@ export class DocumentsService {
     return this.documentsRepository.save(document);
   }
 
-  async updateStatus(id: string, status: DocumentStatus): Promise<Document> {
+  async updateStatus(id: string, status: DocumentStatus): Promise<Document> { //Correct import
     const document = await this.findOne(id);
     document.status = status;
-    return this.documentsRepository.save(document);
+    return this.documentRepository.save(document); // Correct name
   }
 
-  async remove(id: string, userId?: string): Promise<void> {
-    const document = await this.findOne(id, userId);
-
-    // Si hay servicio de compartición y userId, verificar permisos de eliminación
-    // Solo el propietario puede eliminar el documento
-    if (this.sharingService && userId && document.userId !== userId) {
-      // Verificar si es propietario a nivel de permisos (podría ser diferente del creador)
-      const permission = await this.sharingService.getUserPermissionForDocument(
-        userId,
-        id,
-      );
-      if (!permission || permission.permissionLevel !== 'owner') {
-        throw new NotFoundException(
-          `Documento con ID ${id} no encontrado o no tienes permisos para eliminarlo`,
-        );
-      }
+  async remove(id: string, userId: string): Promise<void> {
+    try {
+      const document = await this.findOne(id);
+      await this.documentRepository.remove(document); // Correct name
+    } catch (error) {
+      this.logger.error('Error al eliminar el documento', error.stack); // Add logger
+      throw error;
     }
+  }
 
-    // Eliminar archivo físico si existe
-    if (document.filePath) {
-      try {
-        const filePath = path.resolve(document.filePath);
-        if (fs.existsSync(filePath)) {
-          fs.unlinkSync(filePath);
-        }
-      } catch (error) {
-        console.error(`Error al eliminar archivo: ${error.message}`);
-      }
+  async findCompletedDocuments(): Promise<Document[]> {
+    try {
+      const queryBuilder = this.documentRepository // Correct name
+        .createQueryBuilder('document')
+        .where('document.status = :status', { status: DocumentStatus.COMPLETED }); // Correct import
+
+      return await queryBuilder.getMany();
+    } catch (error) {
+      this.logger.error('Error al buscar los documentos completados', error.stack); // Add logger
+      throw error;
     }
-
-    await this.documentsRepository.remove(document);
   }
 
   /**

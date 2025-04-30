@@ -12,7 +12,7 @@ import { SharingModule } from '../sharing/sharing.module';
 @Module({
   imports: [TypeOrmModule.forFeature([DocumentAnnotation, Document]), CryptoModule, AuditModule, SharingModule],
   providers: [DocumentAnnotationService, DocumentsService], // DocumentsService is needed by DocumentAnnotationService
-  controllers: [DocumentAnnotationController],
-  exports: [DocumentAnnotationService, DocumentAnnotationController], // Export the controller and service
+  controllers: [DocumentAnnotationController], // Add DocumentAnnotationController here
+  exports: [DocumentAnnotationService,DocumentAnnotationController], // Export the controller and service
 })
 export class DocumentAnnotationModule {}

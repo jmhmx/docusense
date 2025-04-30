@@ -19,28 +19,13 @@ interface SealData {
     shape: 'rectangle' | 'round' | 'circle';
     backgroundColor: string;
     fontSize: string;
-    fontFamily: string;
-    borderWidth: string;
-    rotation: number;
-    shadow: boolean;
-    shadowColor: string;
   };
   content: {
     showName: boolean;
     showDate: boolean;
     showReason: boolean;
     showLogo: boolean;
-    showSignature: boolean;
-    signatureData?: string;
     customText?: string;
-    customTitle?: string;
-    position: 'left' | 'center' | 'right';
-    layoutDirection: 'horizontal' | 'vertical';
-  };
-  metadata: {
-    device: string;
-    createdAt: string;
-    version: string;
   };
 }
 
@@ -54,235 +39,39 @@ const CustomSignatureSeal = ({ name, date, reason, onSave, onCancel }: CustomSig
       shape: 'rectangle',
       backgroundColor: 'rgba(240, 247, 255, 0.8)',
       fontSize: 'medium',
-      fontFamily: 'Arial',
-      borderWidth: '2px',
-      rotation: 0,
-      shadow: false,
-      shadowColor: 'rgba(0, 0, 0, 0.3)',
     },
     content: {
       showName: true,
       showDate: true,
       showReason: !!reason,
       showLogo: false,
-      showSignature: false,
       customText: '',
-      customTitle: 'DOCUMENTO FIRMADO ELECTRÓNICAMENTE',
-      position: 'left',
-      layoutDirection: 'vertical',
-    },
-    metadata: {
-      device: navigator.userAgent,
-      createdAt: new Date().toISOString(),
-      version: '2.0',
     },
   });
   
   const [uploadedLogo, setUploadedLogo] = useState<string | null>(null);
-  const [signatureDrawn, setSignatureDrawn] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'style' | 'content' | 'preview'>('style');
-  const [showRotationControl, setShowRotationControl] = useState(false);
-  const [selectedFontSize, setSelectedFontSize] = useState('medium');
-  const [selectedPosition, setSelectedPosition] = useState('left');
-  
   const previewRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const signatureCanvasRef = useRef<HTMLCanvasElement>(null);
-  const isDrawingRef = useRef(false);
-  
-  // Templates predefinidos
-  const templates = [
-    {
-      name: 'Corporativo',
-      style: {
-        color: '#1a365d',
-        borderColor: '#2b6cb0',
-        borderStyle: 'solid',
-        shape: 'rectangle',
-        backgroundColor: 'rgba(235, 244, 255, 0.9)',
-        fontSize: 'medium',
-        fontFamily: 'Arial',
-        borderWidth: '2px',
-        rotation: 0,
-        shadow: true,
-        shadowColor: 'rgba(0, 0, 0, 0.2)',
-      },
-      content: {
-        showName: true,
-        showDate: true,
-        showReason: true,
-        showLogo: true,
-        showSignature: false,
-        customTitle: 'DOCUMENTO OFICIAL',
-        position: 'left',
-        layoutDirection: 'vertical',
-      }
-    },
-    {
-      name: 'Notarial',
-      style: {
-        color: '#1a3e1a',
-        borderColor: '#2f572f',
-        borderStyle: 'double',
-        shape: 'rectangle',
-        backgroundColor: 'rgba(240, 249, 240, 0.9)',
-        fontSize: 'medium',
-        fontFamily: 'Times New Roman',
-        borderWidth: '3px',
-        rotation: 0,
-        shadow: false,
-        shadowColor: 'rgba(0, 0, 0, 0.3)',
-      },
-      content: {
-        showName: true,
-        showDate: true,
-        showReason: true,
-        showLogo: false,
-        showSignature: true,
-        customTitle: 'CERTIFICACIÓN NOTARIAL',
-        position: 'center',
-        layoutDirection: 'vertical',
-      }
-    },
-    {
-      name: 'Minimalista',
-      style: {
-        color: '#4a5568',
-        borderColor: '#cbd5e0',
-        borderStyle: 'solid',
-        shape: 'round',
-        backgroundColor: 'rgba(255, 255, 255, 0.95)',
-        fontSize: 'small',
-        fontFamily: 'Helvetica',
-        borderWidth: '1px',
-        rotation: 0,
-        shadow: true,
-        shadowColor: 'rgba(0, 0, 0, 0.1)',
-      },
-      content: {
-        showName: true,
-        showDate: true,
-        showReason: false,
-        showLogo: false,
-        showSignature: false,
-        customTitle: '',
-        position: 'right',
-        layoutDirection: 'horizontal',
-      }
-    },
-  ];
   
   // Actualizar vista previa cuando cambian las opciones
   useEffect(() => {
     renderPreview();
-  }, [sealData, uploadedLogo, signatureDrawn]);
-  
-  // Inicializar canvas de firma
-  useEffect(() => {
-    if (!signatureCanvasRef.current) return;
-    
-    const canvas = signatureCanvasRef.current;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    
-    ctx.lineWidth = 2;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    ctx.strokeStyle = '#000000';
-    
-    // Handlers para dibujar
-    const startDrawing = (e: MouseEvent | TouchEvent) => {
-      isDrawingRef.current = true;
-      const { offsetX, offsetY } = getEventCoordinates(e, canvas);
-      ctx.beginPath();
-      ctx.moveTo(offsetX, offsetY);
-    };
-    
-    const draw = (e: MouseEvent | TouchEvent) => {
-      if (!isDrawingRef.current) return;
-      const { offsetX, offsetY } = getEventCoordinates(e, canvas);
-      ctx.lineTo(offsetX, offsetY);
-      ctx.stroke();
-    };
-    
-    const stopDrawing = () => {
-      if (isDrawingRef.current) {
-        isDrawingRef.current = false;
-        // Guardar la firma como data URL
-        setSignatureDrawn(canvas.toDataURL());
-        
-        // Activar firma en el sello
-        setSealData(prev => ({
-          ...prev,
-          content: {
-            ...prev.content,
-            showSignature: true,
-            signatureData: canvas.toDataURL(),
-          }
-        }));
-      }
-    };
-    
-    // Funciones auxiliares para manejar eventos táctiles
-    function getEventCoordinates(e: MouseEvent | TouchEvent, canvas: HTMLCanvasElement) {
-      let offsetX, offsetY;
-      
-      if (e instanceof MouseEvent) {
-        const rect = canvas.getBoundingClientRect();
-        offsetX = e.clientX - rect.left;
-        offsetY = e.clientY - rect.top;
-      } else {
-        // Es un evento táctil
-        e.preventDefault();
-        const touch = e.touches[0];
-        const rect = canvas.getBoundingClientRect();
-        offsetX = touch.clientX - rect.left;
-        offsetY = touch.clientY - rect.top;
-      }
-      
-      return { offsetX, offsetY };
-    }
-    
-    // Agregar event listeners
-    canvas.addEventListener('mousedown', startDrawing);
-    canvas.addEventListener('mousemove', draw);
-    canvas.addEventListener('mouseup', stopDrawing);
-    canvas.addEventListener('mouseout', stopDrawing);
-    
-    // Eventos táctiles
-    canvas.addEventListener('touchstart', startDrawing);
-    canvas.addEventListener('touchmove', draw);
-    canvas.addEventListener('touchend', stopDrawing);
-    
-    // Limpiar event listeners
-    return () => {
-      canvas.removeEventListener('mousedown', startDrawing);
-      canvas.removeEventListener('mousemove', draw);
-      canvas.removeEventListener('mouseup', stopDrawing);
-      canvas.removeEventListener('mouseout', stopDrawing);
-      canvas.removeEventListener('touchstart', startDrawing);
-      canvas.removeEventListener('touchmove', draw);
-      canvas.removeEventListener('touchend', stopDrawing);
-    };
-  }, []);
+  }, [sealData, uploadedLogo]);
   
   // Renderizar vista previa
   const renderPreview = () => {
     if (!previewRef.current) return;
     
     const preview = previewRef.current;
-    const style = sealData.style;
     
     // Aplicar estilos
-    preview.style.borderColor = style.borderColor;
-    preview.style.borderStyle = style.borderStyle;
-    preview.style.borderWidth = style.borderWidth;
-    preview.style.backgroundColor = style.backgroundColor;
-    preview.style.color = style.color;
-    preview.style.fontFamily = style.fontFamily;
+    preview.style.borderColor = sealData.style.borderColor;
+    preview.style.borderStyle = sealData.style.borderStyle;
+    preview.style.backgroundColor = sealData.style.backgroundColor;
+    preview.style.color = sealData.style.color;
     
     // Aplicar forma
-    switch (style.shape) {
+    switch (sealData.style.shape) {
       case 'round':
         preview.style.borderRadius = '12px';
         break;
@@ -293,48 +82,10 @@ const CustomSignatureSeal = ({ name, date, reason, onSave, onCancel }: CustomSig
       default:
         preview.style.borderRadius = '0';
     }
-    
-    // Aplicar sombra si está activada
-    if (style.shadow) {
-      preview.style.boxShadow = `0 4px 6px ${style.shadowColor}`;
-    } else {
-      preview.style.boxShadow = 'none';
-    }
-    
-    // Aplicar rotación
-    preview.style.transform = `rotate(${style.rotation}deg)`;
-    
-    // Aplicar tamaño de fuente
-    switch (style.fontSize) {
-      case 'small':
-        preview.style.fontSize = '0.875rem';
-        break;
-      case 'medium':
-        preview.style.fontSize = '1rem';
-        break;
-      case 'large':
-        preview.style.fontSize = '1.25rem';
-        break;
-      default:
-        preview.style.fontSize = '1rem';
-    }
-    
-    // Aplicar alineación
-    switch (sealData.content.position) {
-      case 'left':
-        preview.style.textAlign = 'left';
-        break;
-      case 'center':
-        preview.style.textAlign = 'center';
-        break;
-      case 'right':
-        preview.style.textAlign = 'right';
-        break;
-    }
   };
   
   // Cambiar un valor de estilo
-  const handleStyleChange = (property: keyof SealData['style'], value: string | number | boolean) => {
+  const handleStyleChange = (property: keyof SealData['style'], value: string) => {
     setSealData({
       ...sealData,
       style: {
@@ -382,7 +133,7 @@ const CustomSignatureSeal = ({ name, date, reason, onSave, onCancel }: CustomSig
             ...prev.content,
             showLogo: true,
           },
-          image: event.target?.result?.toString(),
+          image: event.target.result.toString(),
         }));
       }
     };
@@ -392,14 +143,7 @@ const CustomSignatureSeal = ({ name, date, reason, onSave, onCancel }: CustomSig
   // Eliminar logo
   const handleRemoveLogo = () => {
     setUploadedLogo(null);
-    setSealData(prev => ({
-      ...prev,
-      content: {
-        ...prev.content,
-        showLogo: false,
-      },
-      image: undefined,
-    }));
+    handleContentChange('showLogo', false);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -428,15 +172,13 @@ const CustomSignatureSeal = ({ name, date, reason, onSave, onCancel }: CustomSig
   
   // Aplicar template
   const applyTemplate = (index: number) => {
-  const template = templates[index];
-  
+    const template = templates[index];
+    
     setSealData(prev => ({
       ...prev,
       style: {
         ...prev.style,
         ...template.style,
-        // Asegurar que shape es del tipo correcto
-        shape: template.style.shape as 'rectangle' | 'round' | 'circle',
       },
       content: {
         ...prev.content,
@@ -450,8 +192,8 @@ const CustomSignatureSeal = ({ name, date, reason, onSave, onCancel }: CustomSig
   
   // Guardar sello
   const handleSave = () => {
-    // Versión final del sello
-    const finalSealData: SealData = {
+    // Agregar logo si existe
+    const finalSealData = {
       ...sealData,
       image: uploadedLogo || undefined,
     };
@@ -460,314 +202,248 @@ const CustomSignatureSeal = ({ name, date, reason, onSave, onCancel }: CustomSig
   };
   
   return (
-    <div className="max-w-4xl p-6 mx-auto bg-white rounded-lg shadow-xl">
-      <h2 className="mb-4 text-xl font-semibold text-gray-800">
-        Personalizar sello de firma
-      </h2>
-      
-      {/* Pestañas */}
-      <div className="mb-6 border-b border-gray-200">
-        <nav className="flex -mb-px space-x-8">
-          <button
-            onClick={() => setActiveTab('style')}
-            className={`py-4 px-1 border-b-2 font-medium text-sm ${
-              activeTab === 'style'
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            }`}
-          >
-            Estilo
-          </button>
-          <button
-            onClick={() => setActiveTab('content')}
-            className={`py-4 px-1 border-b-2 font-medium text-sm ${
-              activeTab === 'content'
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            }`}
-          >
-            Contenido
-          </button>
-          <button
-            onClick={() => setActiveTab('preview')}
-            className={`py-4 px-1 border-b-2 font-medium text-sm ${
-              activeTab === 'preview'
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            }`}
-          >
-            Vista previa
-          </button>
-        </nav>
-      </div>
+    <div className="max-w-4xl p-6 bg-white rounded-lg shadow-xl">
+      <h2 className="mb-6 text-xl font-semibold text-gray-800">Personalizar sello de firma</h2>
       
       <div className="grid grid-cols-1 gap-6 mb-6 md:grid-cols-2">
         {/* Panel de opciones */}
-        <div className="space-y-6">
-          {/* Templates predefinidos */}
-          <div className="pb-4 mb-6 border-b border-gray-200">
-            <h3 className="mb-3 text-base font-medium text-gray-700">Plantillas rápidas</h3>
-            <div className="grid grid-cols-3 gap-3">
-              {templates.map((template, index) => (
-                <button
-                  key={index}
-                  onClick={() => applyTemplate(index)}
-                  className="p-2 text-xs text-center border rounded hover:bg-gray-50"
-                >
-                  <div 
-                    className="w-full h-12 mx-auto mb-1 border-2 rounded"
-                    style={{
-                      borderColor: template.style.borderColor,
-                      borderStyle: template.style.borderStyle,
-                      backgroundColor: template.style.backgroundColor,
-                    }}
-                  ></div>
-                  {template.name}
-                </button>
-              ))}
+        <div className="space-y-4">
+          <h3 className="text-lg font-medium text-gray-700">Opciones de estilo</h3>
+          
+          {/* Color de texto */}
+          <div>
+            <label className="block mb-1 text-sm font-medium">Color de texto</label>
+            <div className="flex items-center">
+              <input
+                type="color"
+                value={sealData.style.color}
+                onChange={(e) => handleStyleChange('color', e.target.value)}
+                className="w-10 h-8 rounded"
+              />
+              <span className="ml-2 text-sm text-gray-600">{sealData.style.color}</span>
             </div>
           </div>
+          
+          {/* Color de borde */}
+          <div>
+            <label className="block mb-1 text-sm font-medium">Color de borde</label>
+            <div className="flex items-center">
+              <input
+                type="color"
+                value={sealData.style.borderColor}
+                onChange={(e) => handleStyleChange('borderColor', e.target.value)}
+                className="w-10 h-8 rounded"
+              />
+              <span className="ml-2 text-sm text-gray-600">{sealData.style.borderColor}</span>
+            </div>
+          </div>
+          
+          {/* Estilo de borde */}
+          <div>
+            <label className="block mb-1 text-sm font-medium">Estilo de borde</label>
+            <select
+              value={sealData.style.borderStyle}
+              onChange={(e) => handleStyleChange('borderStyle', e.target.value)}
+              className="block w-full py-2 pl-3 pr-10 text-sm border border-gray-300 rounded focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="solid">Sólido</option>
+              <option value="dashed">Discontinuo</option>
+              <option value="dotted">Punteado</option>
+              <option value="double">Doble</option>
+            </select>
+          </div>
+          
+          {/* Forma */}
+          <div>
+            <label className="block mb-1 text-sm font-medium">Forma</label>
+            <div className="flex space-x-2">
+              <button
+                type="button"
+                onClick={() => handleStyleChange('shape', 'rectangle')}
+                className={`p-2 border rounded ${sealData.style.shape === 'rectangle' ? 'bg-blue-100 border-blue-500' : 'bg-white border-gray-300'}`}
+              >
+                <div className="w-8 h-6 bg-gray-300 rounded-sm"></div>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleStyleChange('shape', 'round')}
+                className={`p-2 border rounded ${sealData.style.shape === 'round' ? 'bg-blue-100 border-blue-500' : 'bg-white border-gray-300'}`}
+              >
+                <div className="w-8 h-6 bg-gray-300 rounded-md"></div>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleStyleChange('shape', 'circle')}
+                className={`p-2 border rounded ${sealData.style.shape === 'circle' ? 'bg-blue-100 border-blue-500' : 'bg-white border-gray-300'}`}
+              >
+                <div className="w-6 h-6 bg-gray-300 rounded-full"></div>
+              </button>
+            </div>
+          </div>
+          
+          {/* Color de fondo */}
+          <div>
+            <label className="block mb-1 text-sm font-medium">Color de fondo</label>
+            <div className="flex items-center">
+              <input
+                type="color"
+                value={sealData.style.backgroundColor.replace('rgba(', '').replace(')', '').split(',').slice(0, 3).join(',')}
+                onChange={(e) => {
+                  // Convertir hexadecimal a rgba con opacidad 0.8
+                  const hex = e.target.value;
+                  const r = parseInt(hex.slice(1, 3), 16);
+                  const g = parseInt(hex.slice(3, 5), 16);
+                  const b = parseInt(hex.slice(5, 7), 16);
+                  handleStyleChange('backgroundColor', `rgba(${r}, ${g}, ${b}, 0.8)`);
+                }}
+                className="w-10 h-8 rounded"
+              />
+              <input
+                type="range"
+                min="0"
+                max="100"
+                value={parseInt(sealData.style.backgroundColor.replace('rgba(', '').replace(')', '').split(',')[3].trim()) * 100}
+                onChange={(e) => {
+                  // Actualizar opacidad manteniendo el color
+                  const rgba = sealData.style.backgroundColor.replace('rgba(', '').replace(')', '').split(',');
+                  const opacity = parseInt(e.target.value) / 100;
+                  handleStyleChange('backgroundColor', `rgba(${rgba[0]}, ${rgba[1]}, ${rgba[2]}, ${opacity})`);
+                }}
+                className="w-24 h-8 mx-2"
+              />
+              <span className="text-sm text-gray-600">Opacidad: {Math.round(parseFloat(sealData.style.backgroundColor.replace('rgba(', '').replace(')', '').split(',')[3].trim()) * 100)}%</span>
+            </div>
+          </div>
+          
+          <h3 className="mt-4 text-lg font-medium text-gray-700">Contenido</h3>
+          
+          {/* Opciones de contenido */}
+          <div className="space-y-2">
+            <div className="flex items-center">
+              <input
+                type="checkbox"
+                id="showName"
+                checked={sealData.content.showName}
+                onChange={(e) => handleContentChange('showName', e.target.checked)}
+                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+              />
+              <label htmlFor="showName" className="ml-2 text-sm">Mostrar nombre</label>
+            </div>
+            
+            <div className="flex items-center">
+              <input
+                type="checkbox"
+                id="showDate"
+                checked={sealData.content.showDate}
+                onChange={(e) => handleContentChange('showDate', e.target.checked)}
+                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+              />
+              <label htmlFor="showDate" className="ml-2 text-sm">Mostrar fecha</label>
+            </div>
+            
+            {reason && (
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  id="showReason"
+                  checked={sealData.content.showReason}
+                  onChange={(e) => handleContentChange('showReason', e.target.checked)}
+                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                />
+                <label htmlFor="showReason" className="ml-2 text-sm">Mostrar motivo</label>
+              </div>
+            )}
+            
+            <div className="flex items-center">
+              <input
+                type="checkbox"
+                id="showLogo"
+                checked={sealData.content.showLogo}
+                onChange={(e) => {
+                  if (!e.target.checked) {
+                    handleRemoveLogo();
+                  } else if (!uploadedLogo) {
+                    // Activar diálogo de archivo
+                    fileInputRef.current?.click();
+                  } else {
+                    handleContentChange('showLogo', true);
+                  }
+                }}
+                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+              />
+              <label htmlFor="showLogo" className="ml-2 text-sm">Mostrar logo</label>
+              
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleLogoUpload}
+                accept="image/*"
+                className="hidden"
+              />
+              
+              {uploadedLogo && (
+                <button
+                  onClick={handleRemoveLogo}
+                  className="ml-2 text-xs text-red-600 hover:text-red-800"
+                >
+                  Eliminar
+                </button>
+              )}
+            </div>
+            
+            <div>
+              <label htmlFor="customText" className="block mb-1 text-sm font-medium">Texto personalizado</label>
+              <textarea
+                id="customText"
+                value={sealData.content.customText || ''}
+                onChange={(e) => handleContentChange('customText', e.target.value)}
+                className="block w-full border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                rows={2}
+                placeholder="Texto adicional para el sello..."
+              />
+            </div>
+          </div>
+        </div>
         
-          {activeTab === 'style' && (
-            <>
-              <h3 className="text-lg font-medium text-gray-700">Opciones de estilo</h3>
+        {/* Vista previa */}
+        <div>
+          <h3 className="mb-4 text-lg font-medium text-gray-700">Vista previa</h3>
+          <div 
+            ref={previewRef}
+            className="flex flex-col h-40 p-4 border-2 w-72"
+            style={{
+              borderColor: sealData.style.borderColor,
+              borderStyle: sealData.style.borderStyle,
+              backgroundColor: sealData.style.backgroundColor,
+              color: sealData.style.color,
+              borderRadius: sealData.style.shape === 'round' ? '12px' : sealData.style.shape === 'circle' ? '50%' : '0',
+              aspectRatio: sealData.style.shape === 'circle' ? '1/1' : 'auto',
+            }}
+          >
+            <div className="flex items-center justify-between">
+              {uploadedLogo && sealData.content.showLogo && (
+                <img 
+                  src={uploadedLogo} 
+                  alt="Logo" 
+                  className="object-contain w-12 h-12"
+                />
+              )}
               
-              {/* Color de texto */}
-              <div>
-                <label className="block mb-1 text-sm font-medium">Color de texto</label>
-                <div className="flex items-center">
-                  <input
-                    type="color"
-                    value={sealData.style.color}
-                    onChange={(e) => handleStyleChange('color', e.target.value)}
-                    className="w-10 h-8 rounded"
-                  />
-                  <span className="ml-2 text-sm text-gray-600">{sealData.style.color}</span>
-                </div>
-              </div>
-              
-              {/* Color de fondo */}
-              <div>
-                <label className="block mb-1 text-sm font-medium">Color de fondo</label>
-                <div className="flex items-center">
-                  <input
-                    type="color"
-                    value={sealData.style.backgroundColor.replace('rgba(', '').replace(')', '').split(',').slice(0, 3).join(',')}
-                    onChange={(e) => {
-                      // Convertir hexadecimal a rgba con opacidad 0.8
-                      const hex = e.target.value;
-                      const r = parseInt(hex.slice(1, 3), 16);
-                      const g = parseInt(hex.slice(3, 5), 16);
-                      const b = parseInt(hex.slice(5, 7), 16);
-                      handleStyleChange('backgroundColor', `rgba(${r}, ${g}, ${b}, 0.8)`);
-                    }}
-                    className="w-10 h-8 rounded"
-                  />
-                  <input
-                    type="range"
-                    min="0"
-                    max="100"
-                    value={parseInt(sealData.style.backgroundColor.replace('rgba(', '').replace(')', '').split(',')[3].trim()) * 100}
-                    onChange={(e) => {
-                      // Actualizar opacidad manteniendo el color
-                      const rgba = sealData.style.backgroundColor.replace('rgba(', '').replace(')', '').split(',');
-                      const opacity = parseInt(e.target.value) / 100;
-                      handleStyleChange('backgroundColor', `rgba(${rgba[0]}, ${rgba[1]}, ${rgba[2]}, ${opacity})`);
-                    }}
-                    className="w-24 h-8 mx-2"
-                  />
-                  <span className="text-sm text-gray-600">Opacidad: {Math.round(parseFloat(sealData.style.backgroundColor.replace('rgba(', '').replace(')', '').split(',')[3].trim()) * 100)}%</span>
-                </div>
-              </div>
-              
-              {/* Color de borde */}
-              <div>
-                <label className="block mb-1 text-sm font-medium">Color de borde</label>
-                <div className="flex items-center">
-                  <input
-                    type="color"
-                    value={sealData.style.borderColor}
-                    onChange={(e) => handleStyleChange('borderColor', e.target.value)}
-                    className="w-10 h-8 rounded"
-                  />
-                  <span className="ml-2 text-sm text-gray-600">{sealData.style.borderColor}</span>
-                </div>
-              </div>
-              
-              {/* Estilo de borde */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block mb-1 text-sm font-medium">Estilo de borde</label>
-                  <select
-                    value={sealData.style.borderStyle}
-                    onChange={(e) => handleStyleChange('borderStyle', e.target.value)}
-                    className="block w-full py-2 pl-3 pr-10 text-sm border border-gray-300 rounded focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    <option value="solid">Sólido</option>
-                    <option value="dashed">Discontinuo</option>
-                    <option value="dotted">Punteado</option>
-                    <option value="double">Doble</option>
-                  </select>
-                </div>
-                
-                <div>
-                  <label className="block mb-1 text-sm font-medium">Grosor de borde</label>
-                  <select
-                    value={sealData.style.borderWidth}
-                    onChange={(e) => handleStyleChange('borderWidth', e.target.value)}
-                    className="block w-full py-2 pl-3 pr-10 text-sm border border-gray-300 rounded focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    <option value="1px">Fino</option>
-                    <option value="2px">Medio</option>
-                    <option value="3px">Grueso</option>
-                    <option value="4px">Muy grueso</option>
-                  </select>
-                </div>
-              </div>
-              
-              {/* Forma */}
-              <div>
-                <label className="block mb-1 text-sm font-medium">Forma</label>
-                <div className="flex space-x-2">
-                  <button
-                    type="button"
-                    onClick={() => handleStyleChange('shape', 'rectangle')}
-                    className={`p-2 border rounded ${sealData.style.shape === 'rectangle' ? 'bg-blue-100 border-blue-500' : 'bg-white border-gray-300'}`}
-                  >
-                    <div className="w-8 h-6 bg-gray-300 rounded-sm"></div>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleStyleChange('shape', 'round')}
-                    className={`p-2 border rounded ${sealData.style.shape === 'round' ? 'bg-blue-100 border-blue-500' : 'bg-white border-gray-300'}`}
-                  >
-                    <div className="w-8 h-6 bg-gray-300 rounded-md"></div>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleStyleChange('shape', 'circle')}
-                    className={`p-2 border rounded ${sealData.style.shape === 'circle' ? 'bg-blue-100 border-blue-500' : 'bg-white border-gray-300'}`}
-                  >
-                    <div className="w-6 h-6 bg-gray-300 rounded-full"></div>
-                  </button>
-                </div>
-              </div>
-              
-              {/* Fuente */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block mb-1 text-sm font-medium">Tipo de fuente</label>
-                  <select
-                    value={sealData.style.fontFamily}
-                    onChange={(e) => handleStyleChange('fontFamily', e.target.value)}
-                    className="block w-full py-2 pl-3 pr-10 text-sm border border-gray-300 rounded focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    <option value="Arial">Arial</option>
-                    <option value="Helvetica">Helvetica</option>
-                    <option value="Times New Roman">Times New Roman</option>
-                    <option value="Courier New">Courier New</option>
-                    <option value="Georgia">Georgia</option>
-                    <option value="Verdana">Verdana</option>
-                  </select>
-                </div>
-                
-                <div>
-                  <label className="block mb-1 text-sm font-medium">Tamaño de fuente</label>
-                  <select
-                    value={selectedFontSize}
-                    onChange={(e) => {
-                      setSelectedFontSize(e.target.value);
-                      handleStyleChange('fontSize', e.target.value);
-                    }}
-                    className="block w-full py-2 pl-3 pr-10 text-sm border border-gray-300 rounded focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    <option value="small">Pequeño</option>
-                    <option value="medium">Mediano</option>
-                    <option value="large">Grande</option>
-                  </select>
-                </div>
-              </div>
-              
-              {/* Rotación */}
-              <div>
-                <div className="flex items-center justify-between">
-                  <label className="block mb-1 text-sm font-medium">Rotación</label>
-                  <button
-                    type="button"
-                    onClick={() => setShowRotationControl(!showRotationControl)}
-                    className="text-xs text-blue-600 hover:text-blue-800"
-                  >
-                    {showRotationControl ? 'Ocultar' : 'Mostrar'}
-                  </button>
-                </div>
-                
-                {showRotationControl && (
-                  <div className="mt-2">
-                    <input
-                      type="range"
-                      min="-180"
-                      max="180"
-                      value={sealData.style.rotation}
-                      onChange={(e) => handleStyleChange('rotation', parseInt(e.target.value))}
-                      className="w-full h-6"
-                    />
-                    <div className="flex justify-between text-xs text-gray-500">
-                      <span>-180°</span>
-                      <span>{sealData.style.rotation}°</span>
-                      <span>180°</span>
-                    </div>
-                  </div>
+              <div className="flex-1 ml-2">
+                {sealData.content.showName && (
+                  <div className="font-medium">{name}</div>
                 )}
-              </div>
-              
-              {/* Sombra */}
-              <div>
-                <div className="flex items-center mb-2">
-                  <input
-                    type="checkbox"
-                    id="enableShadow"
-                    checked={sealData.style.shadow}
-                    onChange={(e) => handleStyleChange('shadow', e.target.checked)}
-                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                  />
-                  <label htmlFor="enableShadow" className="ml-2 text-sm font-medium">
-                    Activar sombra
-                  </label>
-                </div>
                 
-                {sealData.style.shadow && (
-                  <div className="ml-6">
-                    <label className="block mb-1 text-sm">Color de sombra</label>
-                    <div className="flex items-center">
-                      <input
-                        type="color"
-                        value="#000000"
-                        onChange={(e) => {
-                          // Convertir hexadecimal a rgba con opacidad 0.3
-                          const hex = e.target.value;
-                          const r = parseInt(hex.slice(1, 3), 16);
-                          const g = parseInt(hex.slice(3, 5), 16);
-                          const b = parseInt(hex.slice(5, 7), 16);
-                          handleStyleChange('shadowColor', `rgba(${r}, ${g}, ${b}, 0.3)`);
-                        }}
-                        className="w-8 h-8 rounded"
-                      />
-                      <input
-                        type="range"
-                        min="0"
-                        max="100"
-                        value={30}
-                        onChange={(e) => {
-                          // Actualizar opacidad manteniendo el color
-                          const rgba = sealData.style.shadowColor.replace('rgba(', '').replace(')', '').split(',');
-                          const opacity = parseInt(e.target.value) / 100;
-                          handleStyleChange('shadowColor', `rgba(${rgba[0]}, ${rgba[1]}, ${rgba[2]}, ${opacity})`);
-                        }}
-                        className="w-24 h-8 mx-2"
-                      />
-                      <span className="text-sm text-gray-600">Opacidad</span>
-                    </div>
-                  </div>
+                {sealData.content.showDate && (
+                  <div className="text-sm">{date}</div>
+                )}
+                
+                {sealData.content.showReason && reason && (
+                  <div className="text-sm">Motivo: {reason}</div>
+                )}
+                
+                {sealData.content.customText && (
+                  <div className="mt-1 text-sm">{sealData.content.customText}</div>
                 )}
               </div>
             </>
@@ -778,7 +454,7 @@ const CustomSignatureSeal = ({ name, date, reason, onSave, onCancel }: CustomSig
               <h3 className="text-lg font-medium text-gray-700">Opciones de contenido</h3>
               
               {/* Título personalizado */}
-               <div>
+              <div>
                 <label htmlFor="customTitle" className="block mb-1 text-sm font-medium">Título del sello</label>
                 <input
                   id="customTitle"
@@ -786,352 +462,4 @@ const CustomSignatureSeal = ({ name, date, reason, onSave, onCancel }: CustomSig
                   value={sealData.content.customTitle || ''}
                   onChange={(e) => handleContentChange('customTitle', e.target.value)}
                   placeholder="Título opcional del sello"
-                  className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                />
-              </div>
-              
-              {/* Texto personalizado */}
-              <div>
-                <label htmlFor="customText" className="block mb-1 text-sm font-medium">Texto adicional</label>
-                <textarea
-                  id="customText"
-                  value={sealData.content.customText || ''}
-                  onChange={(e) => handleContentChange('customText', e.target.value)}
-                  placeholder="Texto adicional opcional"
-                  className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                  rows={2}
-                />
-              </div>
-              
-              {/* Elementos a mostrar */}
-              <div>
-                <h4 className="mb-2 text-sm font-medium">Elementos a mostrar</h4>
-                <div className="space-y-2">
-                  <div className="flex items-center">
-                    <input
-                      type="checkbox"
-                      id="showName"
-                      checked={sealData.content.showName}
-                      onChange={(e) => handleContentChange('showName', e.target.checked)}
-                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                    />
-                    <label htmlFor="showName" className="ml-2 text-sm">
-                      Mostrar nombre
-                    </label>
-                  </div>
-                  
-                  <div className="flex items-center">
-                    <input
-                      type="checkbox"
-                      id="showDate"
-                      checked={sealData.content.showDate}
-                      onChange={(e) => handleContentChange('showDate', e.target.checked)}
-                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                    />
-                    <label htmlFor="showDate" className="ml-2 text-sm">
-                      Mostrar fecha
-                    </label>
-                  </div>
-                  
-                  <div className="flex items-center">
-                    <input
-                      type="checkbox"
-                      id="showReason"
-                      checked={sealData.content.showReason}
-                      onChange={(e) => handleContentChange('showReason', e.target.checked)}
-                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                    />
-                    <label htmlFor="showReason" className="ml-2 text-sm">
-                      Mostrar motivo
-                    </label>
-                  </div>
-                </div>
-              </div>
-              
-              {/* Disposición y alineación */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block mb-1 text-sm font-medium">Alineación</label>
-                  <select
-                    value={selectedPosition}
-                    onChange={(e) => {
-                      setSelectedPosition(e.target.value);
-                      handleContentChange('position', e.target.value as 'left' | 'center' | 'right');
-                    }}
-                    className="block w-full py-2 pl-3 pr-10 text-sm border border-gray-300 rounded focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    <option value="left">Izquierda</option>
-                    <option value="center">Centro</option>
-                    <option value="right">Derecha</option>
-                  </select>
-                </div>
-                
-                <div>
-                  <label className="block mb-1 text-sm font-medium">Disposición</label>
-                  <select
-                    value={sealData.content.layoutDirection}
-                    onChange={(e) => handleContentChange('layoutDirection', e.target.value as 'horizontal' | 'vertical')}
-                    className="block w-full py-2 pl-3 pr-10 text-sm border border-gray-300 rounded focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    <option value="vertical">Vertical</option>
-                    <option value="horizontal">Horizontal</option>
-                  </select>
-                </div>
-              </div>
-              
-              {/* Subir logo */}
-              <div>
-                <label className="block mb-1 text-sm font-medium">Logo o imagen (opcional)</label>
-                <div className="flex flex-col items-start space-y-2">
-                  <input
-                    type="file"
-                    ref={fileInputRef}
-                    accept="image/*"
-                    onChange={handleLogoUpload}
-                    className="text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-                  />
-                  
-                  {uploadedLogo && (
-                    <div className="flex items-center mt-2 space-x-2">
-                      <img 
-                        src={uploadedLogo} 
-                        alt="Logo"
-                        className="object-contain w-12 h-12 border border-gray-200 rounded"
-                      />
-                      <button
-                        type="button"
-                        onClick={handleRemoveLogo}
-                        className="text-xs text-red-600 hover:text-red-800"
-                      >
-                        Eliminar
-                      </button>
-                      <div className="flex items-center">
-                        <input
-                          type="checkbox"
-                          id="showLogo"
-                          checked={sealData.content.showLogo}
-                          onChange={(e) => handleContentChange('showLogo', e.target.checked)}
-                          className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                        />
-                        <label htmlFor="showLogo" className="ml-2 text-xs">
-                          Mostrar en sello
-                        </label>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-              
-              {/* Firma manuscrita */}
-              <div>
-                <label className="block mb-1 text-sm font-medium">Firma manuscrita (opcional)</label>
-                <div className="p-1 mt-1 border border-gray-300 rounded-md">
-                  <canvas
-                    ref={signatureCanvasRef}
-                    width={300}
-                    height={100}
-                    className="block w-full bg-white border border-gray-200 rounded"
-                  />
-                  <div className="flex justify-between mt-1">
-                    <button
-                      type="button"
-                      onClick={clearSignature}
-                      className="text-xs text-gray-600 hover:text-gray-800"
-                    >
-                      Limpiar
-                    </button>
-                    <div className="flex items-center">
-                      <input
-                        type="checkbox"
-                        id="showSignature"
-                        checked={sealData.content.showSignature}
-                        onChange={(e) => handleContentChange('showSignature', e.target.checked)}
-                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                      />
-                      <label htmlFor="showSignature" className="ml-2 text-xs">
-                        Mostrar en sello
-                      </label>
-                    </div>
-                  </div>
-                </div>
-                <p className="mt-1 text-xs text-gray-500">Dibuje su firma con el ratón o el dedo en pantallas táctiles</p>
-              </div>
-            </>
-          )}
-          
-          {activeTab === 'preview' && (
-            <>
-              <h3 className="text-lg font-medium text-gray-700">Vista previa</h3>
-              <p className="mb-4 text-sm text-gray-500">
-                Así se verá el sello de firma en el documento
-              </p>
-              
-              <div className="p-6 bg-gray-100 rounded-md">
-                <div 
-                  className="flex items-center justify-center max-w-full p-8 mx-auto bg-white"
-                >
-                  <div
-                    ref={previewRef}
-                    className="relative max-w-md px-4 py-3 border-2"
-                    style={{
-                      minWidth: '200px',
-                      minHeight: '100px',
-                    }}
-                  >
-                    <div className={`flex ${sealData.content.layoutDirection === 'horizontal' ? 'flex-row items-center' : 'flex-col'}`}>
-                      {/* Logo */}
-                      {sealData.content.showLogo && uploadedLogo && (
-                        <div className={`${sealData.content.layoutDirection === 'horizontal' ? 'mr-4' : 'mb-3'} flex-shrink-0`}>
-                          <img 
-                            src={uploadedLogo} 
-                            alt="Logo" 
-                            className="object-contain w-16 h-16"
-                          />
-                        </div>
-                      )}
-                      
-                      <div className="flex-1">
-                        {/* Título personalizado */}
-                        {sealData.content.customTitle && (
-                          <div className="mb-2 font-bold">
-                            {sealData.content.customTitle}
-                          </div>
-                        )}
-                        
-                        {/* Firma dibujada */}
-                        {sealData.content.showSignature && signatureDrawn && (
-                          <div className="mb-2">
-                            <img 
-                              src={signatureDrawn} 
-                              alt="Firma" 
-                              className="h-12"
-                            />
-                          </div>
-                        )}
-                        
-                        {/* Información principal */}
-                        <div>
-                          {sealData.content.showName && (
-                            <div className="font-medium">
-                              {name}
-                            </div>
-                          )}
-                          
-                          {sealData.content.showDate && (
-                            <div className="text-sm">
-                              Fecha: {date}
-                            </div>
-                          )}
-                          
-                          {sealData.content.showReason && reason && (
-                            <div className="text-sm">
-                              Motivo: {reason}
-                            </div>
-                          )}
-                          
-                          {/* Texto personalizado */}
-                          {sealData.content.customText && (
-                            <div className="mt-2 text-sm">
-                              {sealData.content.customText}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </>
-          )}
-        </div>
-        
-        {/* Vista previa en tiempo real */}
-        <div className={`${activeTab !== 'preview' ? 'block' : 'hidden'} p-4 bg-gray-50 rounded-lg border border-gray-200`}>
-          <h3 className="mb-3 text-sm font-medium text-gray-700">Vista previa</h3>
-          <div className="flex justify-center">
-            <div
-              ref={activeTab !== 'preview' ? previewRef : undefined}
-              className="relative max-w-full px-4 py-3 border-2"
-              style={{
-                minWidth: '200px',
-                minHeight: '100px',
-                maxWidth: '300px',
-              }}
-            >
-              <div className={`flex ${sealData.content.layoutDirection === 'horizontal' ? 'flex-row items-center' : 'flex-col'}`}>
-                {/* Logo */}
-                {sealData.content.showLogo && uploadedLogo && (
-                  <div className={`${sealData.content.layoutDirection === 'horizontal' ? 'mr-4' : 'mb-3'} flex-shrink-0`}>
-                    <img 
-                      src={uploadedLogo} 
-                      alt="Logo" 
-                      className="object-contain w-12 h-12"
-                    />
-                  </div>
-                )}
-                
-                <div className="flex-1">
-                  {/* Título personalizado */}
-                  {sealData.content.customTitle && (
-                    <div className="mb-1 text-sm font-bold">
-                      {sealData.content.customTitle}
-                    </div>
-                  )}
-                  
-                  {/* Firma dibujada */}
-                  {sealData.content.showSignature && signatureDrawn && (
-                    <div className="mb-1">
-                      <img 
-                        src={signatureDrawn} 
-                        alt="Firma" 
-                        className="h-8"
-                      />
-                    </div>
-                  )}
-                  
-                  {/* Información principal */}
-                  <div>
-                    {sealData.content.showName && (
-                      <div className="text-sm font-medium">
-                        {name}
-                      </div>
-                    )}
-                    
-                    {sealData.content.showDate && (
-                      <div className="text-xs">
-                        Fecha: {date}
-                      </div>
-                    )}
-                    
-                    {sealData.content.showReason && reason && (
-                      <div className="text-xs">
-                        Motivo: {reason}
-                      </div>
-                    )}
-                    
-                    {sealData.content.customText && (
-                      <div className="mt-1 text-xs truncate">
-                        {sealData.content.customText}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-      
-      <div className="flex justify-end mt-6 space-x-3">
-        <Button variant="secondary" onClick={onCancel}>
-          Cancelar
-        </Button>
-        <Button variant="primary" onClick={handleSave}>
-          Guardar sello
-        </Button>
-      </div>
-    </div>
-  );
-};
-
-export default CustomSignatureSeal;
+                  className="block w-

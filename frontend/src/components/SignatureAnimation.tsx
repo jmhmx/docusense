@@ -1,4 +1,3 @@
-// src/components/SignatureAnimation.tsx (mejorado)
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -138,7 +137,7 @@ const SignatureAnimation = ({
                       animate={{ opacity: 1 }}
                       transition={{ repeat: Infinity, repeatType: "reverse", duration: 0.7 }}
                     >
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h10a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
                     </motion.svg>
                   )}
                 </div>

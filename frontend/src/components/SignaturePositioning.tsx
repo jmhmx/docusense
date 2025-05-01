@@ -32,9 +32,13 @@ const SignaturePositioning = ({
   const [activePage, setActivePage] = useState(currentPage);
   const [scale, setScale] = useState(1);
   const [showGrid, setShowGrid] = useState(true);
+  const [snapToGrid, setSnapToGrid] = useState(true);
+  //@ts-ignore
+  const [gridSize, setGridSize] = useState(20);
   
   const containerRef = useRef<HTMLDivElement>(null);
   const signatureRef = useRef<HTMLDivElement>(null);
+  const documentImageRef = useRef<HTMLImageElement>(null);
   
   // Inicializar la posición
   useEffect(() => {
@@ -57,47 +61,76 @@ const SignaturePositioning = ({
   
   // Efectos para agregar/remover listeners globales
   useEffect(() => {
-  if (isDragging) {
-    const handleMouseMoveGlobal = (e: MouseEvent) => {
-      if (!containerRef.current) return;
+    if (isDragging) {
+      const handleMouseMoveGlobal = (e: MouseEvent) => {
+        if (!containerRef.current) return;
   
-      const container = containerRef.current.getBoundingClientRect();
-      const signature = signatureRef.current?.getBoundingClientRect();
-      
-      if (!signature) return;
+        const container = containerRef.current.getBoundingClientRect();
+        const signature = signatureRef.current?.getBoundingClientRect();
         
-      // Calcular nuevas coordenadas relativas al contenedor
-      let newX = e.clientX - container.left - signature.width / 2;
-      let newY = e.clientY - container.top - 20;
+        if (!signature) return;
+          
+        // Calcular nuevas coordenadas relativas al contenedor
+        let newX = e.clientX - container.left - signature.width / 2;
+        let newY = e.clientY - container.top - 20;
+        
+        // Limitar al área del contenedor
+        newX = Math.max(0, Math.min(newX, container.width - signature.width));
+        newY = Math.max(0, Math.min(newY, container.height - signature.height));
+        
+        // Ajustar a la cuadrícula si está habilitado
+        if (snapToGrid) {
+          newX = Math.round(newX / gridSize) * gridSize;
+          newY = Math.round(newY / gridSize) * gridSize;
+        }
+        
+        setPosition({ x: newX, y: newY });
+      };
       
-      // Limitar al área del contenedor
-      newX = Math.max(0, Math.min(newX, container.width - signature.width));
-      newY = Math.max(0, Math.min(newY, container.height - signature.height));
+      const handleMouseUpGlobal = () => {
+        setIsDragging(false);
+      };
       
-      setPosition({ x: newX, y: newY });
-    };
+      window.addEventListener('mousemove', handleMouseMoveGlobal);
+      window.addEventListener('mouseup', handleMouseUpGlobal);
+      
+      return () => {
+        window.removeEventListener('mousemove', handleMouseMoveGlobal);
+        window.removeEventListener('mouseup', handleMouseUpGlobal);
+      };
+    }
+  }, [isDragging, snapToGrid, gridSize]);
+  
+  // Manejar clic en el documento para posicionar la firma
+  const handleDocumentClick = (e: React.MouseEvent) => {
+    if (isDragging) return;
     
-    const handleMouseUpGlobal = () => {
-      setIsDragging(false);
-    };
+    const container = containerRef.current?.getBoundingClientRect();
+    if (!container) return;
     
-    window.addEventListener('mousemove', handleMouseMoveGlobal);
-    window.addEventListener('mouseup', handleMouseUpGlobal);
+    let newX = e.clientX - container.left - signatureSize.width / 2;
+    let newY = e.clientY - container.top - signatureSize.height / 2;
     
-    return () => {
-      window.removeEventListener('mousemove', handleMouseMoveGlobal);
-      window.removeEventListener('mouseup', handleMouseUpGlobal);
-    };
-  }
-}, [isDragging]);
+    // Limitar al área del contenedor
+    newX = Math.max(0, Math.min(newX, container.width - signatureSize.width));
+    newY = Math.max(0, Math.min(newY, container.height - signatureSize.height));
+    
+    // Ajustar a la cuadrícula si está habilitado
+    if (snapToGrid) {
+      newX = Math.round(newX / gridSize) * gridSize;
+      newY = Math.round(newY / gridSize) * gridSize;
+    }
+    
+    setPosition({ x: newX, y: newY });
+  };
   
   // Cambio de página
   const changePage = (increment: number) => {
-  const newPage = activePage + increment;
-  if (newPage >= 1 && newPage <= totalPages) {
-    setActivePage(newPage);
-  }
-};
+    const newPage = activePage + increment;
+    if (newPage >= 1 && newPage <= totalPages) {
+      setActivePage(newPage);
+    }
+  };
   
   // Confirmación de la posición
   const confirmPosition = () => {
@@ -124,6 +157,15 @@ const SignaturePositioning = ({
           >
             <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16m-7 6h7" />
+            </svg>
+          </button>
+          <button 
+            className={`p-1.5 rounded-md ${snapToGrid ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'}`}
+            onClick={() => setSnapToGrid(!snapToGrid)}
+            title={snapToGrid ? "Desactivar ajuste a cuadrícula" : "Activar ajuste a cuadrícula"}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
             </svg>
           </button>
           <button 
@@ -179,14 +221,17 @@ const SignaturePositioning = ({
           ref={containerRef}
           className={`relative w-full h-full overflow-hidden bg-white ${showGrid ? 'bg-grid' : ''}`} 
           style={{ 
-            transform: `scale(${scale})`,
             transformOrigin: 'center',
-            transition: 'transform 0.2s ease-out'
+            transition: 'transform 0.2s ease-out',
+            cursor: isDragging ? 'grabbing' : 'pointer',
+            backgroundSize: `${gridSize}px ${gridSize}px`
           }}
+          onClick={handleDocumentClick}
         >
-          {/* Aquí iría la previsualización de la página del documento */}
-          <div className="absolute inset-0">
+          {/* Visualización del documento */}
+          <div className="absolute inset-0" style={{ transform: `scale(${scale})`, transformOrigin: 'center' }}>
             <img 
+              ref={documentImageRef}
               src={`/api/documents/${documentId}/preview?page=${activePage}`}
               alt={`Vista previa página ${activePage}`}
               className="object-contain w-full h-full"
@@ -196,14 +241,16 @@ const SignaturePositioning = ({
           {/* Componente de firma arrastrable */}
           <div 
             ref={signatureRef}
-            className={`absolute bg-white border-2 rounded px-3 py-2 cursor-move ${
-              isDragging ? 'border-blue-500 shadow-lg' : 'border-blue-300 shadow'
+            className={`absolute bg-white border-2 rounded px-3 py-2 ${
+              isDragging ? 'border-blue-500 shadow-lg cursor-grabbing' : 'border-blue-300 shadow cursor-grab'
             }`}
             style={{ 
               left: `${position.x}px`, 
               top: `${position.y}px`,
               width: `${signatureSize.width}px`,
-              touchAction: 'none'
+              height: `${signatureSize.height}px`,
+              touchAction: 'none',
+              zIndex: 10
             }}
             onMouseDown={handleMouseDown}
             onTouchStart={(e) => {
@@ -212,7 +259,7 @@ const SignaturePositioning = ({
             }}
           >
             {/* Vista previa de la firma */}
-            <div className="flex flex-col">
+            <div className="flex flex-col justify-between h-full">
               <div className="text-base font-medium text-blue-800">
                 {signatureData.name}
               </div>
@@ -227,33 +274,82 @@ const SignaturePositioning = ({
             </div>
             
             {/* Indicadores de arrastre */}
-            <div className="absolute top-0 left-0 w-full h-6 -mt-6 bg-blue-100 bg-opacity-50 opacity-0 pointer-events-none rounded-t-md group-hover:opacity-100">
-              <div className="flex items-center justify-center h-full">
-                <span className="text-xs text-blue-700">Arrastrar para posicionar</span>
-              </div>
+            <div className="absolute top-0 right-0 w-4 h-4 cursor-se-resize" 
+                 onMouseDown={(e) => {
+                   e.stopPropagation();
+                   const startX = e.clientX;
+                   const startY = e.clientY;
+                   const startWidth = signatureSize.width;
+                   const startHeight = signatureSize.height;
+                   
+                   const handleResizeMove = (moveEvent: MouseEvent) => {
+                     const newWidth = Math.max(150, startWidth + (moveEvent.clientX - startX));
+                     const newHeight = Math.max(80, startHeight + (moveEvent.clientY - startY));
+                     setSignatureSize({ width: newWidth, height: newHeight });
+                   };
+                   
+                   const handleResizeUp = () => {
+                     window.removeEventListener('mousemove', handleResizeMove);
+                     window.removeEventListener('mouseup', handleResizeUp);
+                   };
+                   
+                   window.addEventListener('mousemove', handleResizeMove);
+                   window.addEventListener('mouseup', handleResizeUp);
+                 }}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-blue-500" viewBox="0 0 20 20" fill="currentColor">
+                <path d="M5 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2H5zM5 11a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5zM11 5a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V5zM14 11a1 1 0 011 1v1h1a1 1 0 110 2h-1v1a1 1 0 11-2 0v-1h-1a1 1 0 110-2h1v-1a1 1 0 011-1z" />
+              </svg>
             </div>
+            
+            {isDragging && (
+              <div className="absolute inset-0 flex items-center justify-center bg-blue-500 border-2 border-blue-500 pointer-events-none bg-opacity-10">
+                <span className="px-2 py-1 text-xs font-medium text-white bg-blue-600 rounded-md">Arrastrando</span>
+              </div>
+            )}
           </div>
         </div>
       </div>
       
       <div className="mb-4 text-sm text-gray-500">
-        <p>• Arrastre la firma para posicionarla en el documento</p>
-        <p>• Use los controles para cambiar de página y ajustar el zoom</p>
+        <p className="flex items-center mb-1">
+          <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 mr-1 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122" />
+          </svg>
+          Haga clic en cualquier lugar del documento para posicionar la firma
+        </p>
+        <p className="flex items-center mb-1">
+          <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 mr-1 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 11.5V14m0-2.5v-6a2.5 2.5 0 015 0v6a2.5 2.5 0 01-5 0z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2 9h4m0 0v6a5 5 0 0010 0V9m4 0H2" />
+          </svg>
+          Arrastre la firma para ajustar su posición con precisión
+        </p>
+        <p className="flex items-center">
+          <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 mr-1 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+          </svg>
+          Use el controlador en la esquina inferior derecha para ajustar el tamaño
+        </p>
       </div>
       
       <div className="grid grid-cols-2 gap-4 sm:flex sm:justify-between">
         <div className="col-span-2 sm:col-auto">
           <div className="flex items-center space-x-2">
-            <label className="text-sm text-gray-700">Ancho:</label>
+            <label className="text-sm text-gray-700">Tamaño:</label>
             <input
               type="range"
               min="150"
-              max="300"
+              max="400"
               value={signatureSize.width}
-              onChange={(e) => setSignatureSize(prev => ({ ...prev, width: Number(e.target.value) }))}
+              //@ts-ignore
+              onChange={(e) => setSignatureSize(prev => ({ 
+                width: Number(e.target.value), 
+                height: Number(e.target.value) / 2 
+              }))}
               className="w-24"
             />
-            <span className="text-xs text-gray-500">{signatureSize.width}px</span>
+            <span className="text-xs text-gray-500">{signatureSize.width}×{signatureSize.height}px</span>
           </div>
         </div>
         
@@ -269,7 +365,6 @@ const SignaturePositioning = ({
       
       <style>{`
         .bg-grid {
-          background-size: 20px 20px;
           background-image: 
             linear-gradient(to right, rgba(0, 0, 0, 0.1) 1px, transparent 1px),
             linear-gradient(to bottom, rgba(0, 0, 0, 0.1) 1px, transparent 1px);

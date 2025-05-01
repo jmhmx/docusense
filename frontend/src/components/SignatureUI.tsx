@@ -1,3 +1,4 @@
+// src/components/SignatureUI.tsx (mejorado)
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Button from './Button';
@@ -115,20 +116,6 @@ const SignatureUI = ({
   const handleSelectType = (type: 'standard' | 'biometric' | 'efirma') => {
     setSignatureType(type);
   };
-  
-  // Manejar confirmación de firma (llamada desde signaturePositioning)
-  /* const _handleConfirmSignature = () => {
-    if (!position) {
-      setError('Debe seleccionar una posición para la firma');
-      return;
-    }
-    
-    if (signatureType === 'standard') {
-      setStep('customize');
-    } else {
-      handleFinalizeSignature();
-    }
-  }; */
   
   // Manejar selección de posición
   const handlePositionSelected = (pos: SignaturePosition) => {

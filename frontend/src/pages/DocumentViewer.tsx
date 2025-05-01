@@ -10,7 +10,6 @@ import PDFViewer from '../components/PDFViewer';
 import DocumentBlockchainVerification from '../components/DocumentBlockchainVerification';
 import MultiSignatureManager from '../components/MultiSignatureManager';
 import MultiSignatureVerification from '../components/MultiSignatureVerification';
-import PDFViewer from '../components/PDFViewer';
 import PDFSearch from '../components/PDFSearch';
 import PDFThumbnails from '../components/PDFThumbnails';
 import PDFAnnotationManager from '../components/PDFAnnotationManager';

@@ -13,7 +13,7 @@ import {
 } from '@nestjs/common';
 import { AnnotationsService } from './annotations.service';
 import { CreateAnnotationDto } from './dto/create-annotation.dto';
-//import { UpdateAnnotationDto } from './dto/update-annotation.dto';
+import { UpdateAnnotationDto } from './dto/update-annotation.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 @Controller('api/annotations')

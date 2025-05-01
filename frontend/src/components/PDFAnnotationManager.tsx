@@ -1,4 +1,3 @@
-// frontend/src/components/PDFAnnotationManager.tsx
 import { useState, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { api } from '../api/client';
@@ -28,7 +27,9 @@ interface PDFAnnotationManagerProps {
 
 const PDFAnnotationManager = ({ documentId, children }: PDFAnnotationManagerProps) => {
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
+  //@ts-ignore
   const [loading, setLoading] = useState(true);
+  //@ts-ignore
   const [error, setError] = useState<string | null>(null);
   const [activeNote, setActiveNote] = useState<Annotation | null>(null);
 

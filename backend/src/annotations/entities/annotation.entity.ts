@@ -1,4 +1,3 @@
-// backend/src/annotations/entities/annotation.entity.ts
 import {
   Entity,
   Column,

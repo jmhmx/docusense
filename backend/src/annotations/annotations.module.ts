@@ -1,4 +1,3 @@
-// backend/src/annotations/annotations.module.ts
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AnnotationsService } from './annotations.service';

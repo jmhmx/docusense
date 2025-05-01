@@ -1,4 +1,3 @@
-// backend/src/annotations/annotations.controller.ts
 import {
   Controller,
   Get,
@@ -29,6 +28,23 @@ export class AnnotationsController {
   ) {
     return this.annotationsService.create(
       createAnnotationDto,
+      documentId,
+      req.user.id,
+    );
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('document/:documentId/batch')
+  createBatch(
+    @Param('documentId') documentId: string,
+    @Body() createAnnotationDtos: CreateAnnotationDto[],
+    @Request() req,
+  ) {
+    if (!Array.isArray(createAnnotationDtos)) {
+      throw new BadRequestException('Expected an array of annotations');
+    }
+    return this.annotationsService.saveMultiple(
+      createAnnotationDtos,
       documentId,
       req.user.id,
     );

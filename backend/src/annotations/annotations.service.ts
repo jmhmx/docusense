@@ -1,4 +1,3 @@
-// backend/src/annotations/annotations.service.ts
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -58,5 +57,20 @@ export class AnnotationsService {
   async remove(id: string): Promise<void> {
     const annotation = await this.findOne(id);
     await this.annotationsRepository.remove(annotation);
+  }
+
+  // Método para guardar múltiples anotaciones
+  async saveMultiple(annotations: CreateAnnotationDto[], documentId: string, userId: string): Promise<Annotation[]> {
+    // Crear entidades de anotación
+    const annotationEntities = annotations.map(dto => 
+      this.annotationsRepository.create({
+        ...dto,
+        documentId,
+        userId,
+      })
+    );
+    
+    // Guardar todas las anotaciones en la base de datos
+    return this.annotationsRepository.save(annotationEntities);
   }
 }

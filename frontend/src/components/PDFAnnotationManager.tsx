@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect, ReactNode } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { api } from '../api/client';
 
@@ -22,15 +22,20 @@ interface Annotation {
 
 interface PDFAnnotationManagerProps {
   documentId: string;
-  children: React.ReactNode;
+  children: ReactNode;
+}
+
+interface ChildProps {
+  annotations: Annotation[];
+  onAnnotationCreate: (newAnnotation: Omit<Annotation, 'id'>) => void;
+  onAnnotationDelete: (id: string) => void;
+  onAnnotationUpdate: (updatedAnnotation: Annotation) => void;
 }
 
 const PDFAnnotationManager = ({ documentId, children }: PDFAnnotationManagerProps) => {
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
   //@ts-ignore
-  const [loading, setLoading] = useState(true);
-  //@ts-ignore
-  const [error, setError] = useState<string | null>(null);
+  const [, setLoading] = useState(true);
   const [activeNote, setActiveNote] = useState<Annotation | null>(null);
 
   // Fetch annotations when the component mounts
@@ -39,31 +44,36 @@ const PDFAnnotationManager = ({ documentId, children }: PDFAnnotationManagerProp
   }, [documentId]);
 
   const fetchAnnotations = async () => {
-    setLoading(true);
     try {
-      // Replace with actual API call when you implement backend
-      const response = await api.get(`/api/documents/${documentId}/annotations`);
+      // Usar el endpoint correcto para obtener anotaciones
+      const response = await api.get(`/api/annotations/document/${documentId}`);
       setAnnotations(response.data);
     } catch (err) {
       console.error('Error fetching annotations:', err);
-      // For now, use local storage as a fallback
+      // Si hay un error, intenta usar localStorage
       const storedAnnotations = localStorage.getItem(`annotations-${documentId}`);
       if (storedAnnotations) {
-        setAnnotations(JSON.parse(storedAnnotations));
+        try {
+          setAnnotations(JSON.parse(storedAnnotations));
+        } catch (e) {
+          console.error('Error parsing stored annotations:', e);
+          setAnnotations([]);
+        }
+      } else {
+        setAnnotations([]);
       }
-    } finally {
-      setLoading(false);
     }
   };
 
   const saveAnnotations = async (updatedAnnotations: Annotation[]) => {
     try {
-      // Replace with actual API call when you implement backend
-      await api.post(`/api/documents/${documentId}/annotations`, updatedAnnotations);
+      // Guardar en localStorage como respaldo
+      localStorage.setItem(`annotations-${documentId}`, JSON.stringify(updatedAnnotations));
+      
+      // Intentar enviar al backend en batch
+      await api.post(`/api/annotations/document/${documentId}/batch`, updatedAnnotations);
     } catch (err) {
       console.error('Error saving annotations:', err);
-      // For now, use local storage as a fallback
-      localStorage.setItem(`annotations-${documentId}`, JSON.stringify(updatedAnnotations));
     }
   };
 
@@ -77,28 +87,54 @@ const PDFAnnotationManager = ({ documentId, children }: PDFAnnotationManagerProp
     setAnnotations(updatedAnnotations);
     saveAnnotations(updatedAnnotations);
     
+    // También intentar guardar individualmente
+    try {
+      api.post(`/api/annotations/document/${documentId}`, newAnnotation);
+    } catch (err) {
+      console.error('Error creating single annotation:', err);
+    }
+    
     // If it's a note, open the editor
     if (annotation.type === 'note') {
       setActiveNote(annotation);
     }
   };
 
-  const handleDeleteAnnotation = (id: string) => {
+  const handleDeleteAnnotation = async (id: string) => {
     const updatedAnnotations = annotations.filter(ann => ann.id !== id);
     setAnnotations(updatedAnnotations);
     saveAnnotations(updatedAnnotations);
+    
+    try {
+      // Intentar eliminar en el backend
+      await api.delete(`/api/annotations/${id}`);
+    } catch (err) {
+      console.error('Error deleting annotation:', err);
+    }
     
     if (activeNote?.id === id) {
       setActiveNote(null);
     }
   };
 
-  const handleUpdateAnnotation = (updatedAnnotation: Annotation) => {
+  const handleUpdateAnnotation = async (updatedAnnotation: Annotation) => {
     const updatedAnnotations = annotations.map(ann => 
       ann.id === updatedAnnotation.id ? updatedAnnotation : ann
     );
     setAnnotations(updatedAnnotations);
     saveAnnotations(updatedAnnotations);
+    
+    try {
+      // Intentar actualizar en el backend
+      await api.patch(`/api/annotations/${updatedAnnotation.id}`, {
+        content: updatedAnnotation.content,
+        position: updatedAnnotation.position,
+        color: updatedAnnotation.color,
+        type: updatedAnnotation.type
+      });
+    } catch (err) {
+      console.error('Error updating annotation:', err);
+    }
     
     if (activeNote?.id === updatedAnnotation.id) {
       setActiveNote(null);
@@ -113,7 +149,7 @@ const PDFAnnotationManager = ({ documentId, children }: PDFAnnotationManagerProp
         onAnnotationCreate: handleCreateAnnotation,
         onAnnotationDelete: handleDeleteAnnotation,
         onAnnotationUpdate: handleUpdateAnnotation
-      });
+      } as ChildProps);
     }
     return child;
   });
@@ -126,20 +162,20 @@ const PDFAnnotationManager = ({ documentId, children }: PDFAnnotationManagerProp
       {activeNote && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
           <div className="w-full max-w-md p-6 bg-white rounded-lg shadow-xl">
-            <h3 className="mb-4 text-lg font-medium text-gray-900">Edit Note</h3>
+            <h3 className="mb-4 text-lg font-medium text-gray-900">Editar Nota</h3>
             <textarea
               className="w-full p-2 mb-4 border border-gray-300 rounded"
               rows={5}
               value={activeNote.content || ''}
               onChange={(e) => setActiveNote({...activeNote, content: e.target.value})}
-              placeholder="Enter your note..."
+              placeholder="Escribe tu nota..."
             ></textarea>
             <div className="flex justify-end space-x-2">
               <button
                 onClick={() => setActiveNote(null)}
                 className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200"
               >
-                Cancel
+                Cancelar
               </button>
               <button
                 onClick={() => {
@@ -149,7 +185,7 @@ const PDFAnnotationManager = ({ documentId, children }: PDFAnnotationManagerProp
                 }}
                 className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700"
               >
-                Save
+                Guardar
               </button>
             </div>
           </div>

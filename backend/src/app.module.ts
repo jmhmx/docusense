@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module } from '@nestjs/core';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
@@ -15,6 +15,7 @@ import { BlockchainModule } from './blockchain/blockchain.module';
 import { SatModule } from './sat/sat.module';
 import { EmailModule } from './email/email.module';
 import { WebsocketModule } from './websocket/websocket.module';
+import { AnnotationsModule } from './annotations/annotations.module'; // Importación del nuevo módulo
 
 @Module({
   controllers: [HealthController],
@@ -54,6 +55,7 @@ import { WebsocketModule } from './websocket/websocket.module';
     SatModule,
     EmailModule,
     WebsocketModule,
+    AnnotationsModule, // Registrar el nuevo módulo
   ],
 })
 export class AppModule {}

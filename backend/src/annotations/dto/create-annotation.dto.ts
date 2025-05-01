@@ -1,4 +1,3 @@
-// backend/src/annotations/dto/create-annotation.dto.ts
 import {
   IsNotEmpty,
   IsEnum,

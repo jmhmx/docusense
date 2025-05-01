@@ -170,17 +170,6 @@ const renderDocumentPreview = () => {
       // Para PDFs, vamos a usar nuestro sistema mejorado
       return (
         <div className="flex flex-col space-y-4">
-          <PDFAnnotationManager documentId={id || ''}>
-            <PDFViewer 
-              documentId={id || ''} 
-              onPageChange={(page) => setCurrentPage(page)}
-              onSelectionChange={(selection) => {
-                console.log('Text selected:', selection);
-                // Podrías usar esta selección para crear comentarios o anotaciones
-              }}
-            />
-          </PDFAnnotationManager>
-          
           {/* Búsqueda en PDF */}
           <PDFSearch 
             documentId={id || ''} 
@@ -195,6 +184,18 @@ const renderDocumentPreview = () => {
             currentPage={currentPage}
             onPageSelect={(page) => setCurrentPage(page)}
           />
+          <PDFAnnotationManager documentId={id || ''}>
+            <PDFViewer 
+              documentId={id || ''} 
+              onPageChange={(page) => setCurrentPage(page)}
+              onSelectionChange={(selection) => {
+                console.log('Text selected:', selection);
+                // Podrías usar esta selección para crear comentarios o anotaciones
+              }}
+            />
+          </PDFAnnotationManager>
+          
+          
         </div>
       );
     } else if (document.mimeType?.includes('image')) {

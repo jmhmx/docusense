@@ -1,4 +1,3 @@
-// backend/src/annotations/dto/update-annotation.dto.ts
 import {
   IsOptional,
   IsEnum,

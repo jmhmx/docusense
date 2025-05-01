@@ -10,6 +10,10 @@ import PDFViewer from '../components/PDFViewer';
 import DocumentBlockchainVerification from '../components/DocumentBlockchainVerification';
 import MultiSignatureManager from '../components/MultiSignatureManager';
 import MultiSignatureVerification from '../components/MultiSignatureVerification';
+import PDFViewer from '../components/PDFViewer';
+import PDFSearch from '../components/PDFSearch';
+import PDFThumbnails from '../components/PDFThumbnails';
+import PDFAnnotationManager from '../components/PDFAnnotationManager';
 
 interface DocumentType {
   id: string;
@@ -53,6 +57,9 @@ const DocumentViewer = () => {
   const [multiSignatureEnabled, setMultiSignatureEnabled] = useState(true);
   //@ts-ignore
   const [signatures, setSignatures] = useState<Signature[]>([]);
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  //@ts-ignore
+  const [totalPages, setTotalPages] = useState<number>(1);
 
 
 
@@ -155,49 +162,70 @@ const fetchUnreadComments = async () => {
     }
   };
 
-  const renderDocumentPreview = () => {
-  if (!document) return null;
+  // Modificar en frontend/src/pages/DocumentViewer.tsx (solo la sección de renderDocumentPreview)
 
-  if (document.mimeType?.includes('pdf')) {
-    // Use the new PDF viewer component for PDFs
-    return (
-      <PDFViewer 
-        documentId={id || ''} 
-        onPageChange={(page) => console.log(`Page changed to ${page}`)}
-        onSelectionChange={(selection) => {
-          console.log('Text selected:', selection);
-          // You could use this selection for creating comments or annotations
-        }}
-      />
-    );
-  } else if (document.mimeType?.includes('image')) {
-    return (
-      <div className="flex items-center justify-center p-4 bg-gray-100 rounded-lg">
-        <img 
-          src={`/api/documents/${id}/view`} 
-          alt={document.title}
-          className="object-contain max-w-full max-h-96"
-        />
-      </div>
-    );
-  } else {
-    // For other document types show a message
-    return (
-      <div className="flex flex-col items-center justify-center p-4 bg-gray-100 rounded-lg h-96">
-        <svg xmlns="http://www.w3.org/2000/svg" className="w-20 h-20 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-        </svg>
-        <p className="mt-4 text-gray-600">Previsualización no disponible para este tipo de archivo.</p>
-        <button 
-          onClick={handleDownloadDocument}
-          className="inline-flex items-center px-4 py-2 mt-4 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-        >
-          Descargar para ver
-        </button>
-      </div>
-    );
-  }
-};
+const renderDocumentPreview = () => {
+    if (!document) return null;
+
+    if (document.mimeType?.includes('pdf')) {
+      // Para PDFs, vamos a usar nuestro sistema mejorado
+      return (
+        <div className="flex flex-col space-y-4">
+          <PDFAnnotationManager documentId={id || ''}>
+            <PDFViewer 
+              documentId={id || ''} 
+              onPageChange={(page) => setCurrentPage(page)}
+              onSelectionChange={(selection) => {
+                console.log('Text selected:', selection);
+                // Podrías usar esta selección para crear comentarios o anotaciones
+              }}
+            />
+          </PDFAnnotationManager>
+          
+          {/* Búsqueda en PDF */}
+          <PDFSearch 
+            documentId={id || ''} 
+            numPages={totalPages}
+            onResultClick={(page) => setCurrentPage(page)}
+          />
+          
+          {/* Miniaturas de páginas */}
+          <PDFThumbnails
+            documentId={id || ''}
+            numPages={totalPages}
+            currentPage={currentPage}
+            onPageSelect={(page) => setCurrentPage(page)}
+          />
+        </div>
+      );
+    } else if (document.mimeType?.includes('image')) {
+      return (
+        <div className="flex items-center justify-center p-4 bg-gray-100 rounded-lg">
+          <img 
+            src={`/api/documents/${id}/view`} 
+            alt={document.title}
+            className="object-contain max-w-full max-h-96"
+          />
+        </div>
+      );
+    } else {
+      // Para otros tipos de documento mostrar un mensaje
+      return (
+        <div className="flex flex-col items-center justify-center p-4 bg-gray-100 rounded-lg h-96">
+          <svg xmlns="http://www.w3.org/2000/svg" className="w-20 h-20 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+          <p className="mt-4 text-gray-600">Previsualización no disponible para este tipo de archivo.</p>
+          <button 
+            onClick={handleDownloadDocument}
+            className="inline-flex items-center px-4 py-2 mt-4 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+          >
+            Descargar para ver
+          </button>
+        </div>
+      );
+    }
+  };
 
   const renderMetadataTab = () => {
     if (!document) return null;

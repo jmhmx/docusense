@@ -883,6 +883,13 @@ export class SignaturesService {
     ipAddress?: string,
     userAgent?: string,
   ): Promise<Signature> {
+    // Validar el objeto biometricVerification
+    if (!biometricVerification || !biometricVerification.timestamp) {
+      throw new BadRequestException(
+        'Información de verificación biométrica incompleta',
+      );
+    }
+
     // Verificación básica de entradas
     if (!documentId || !userId) {
       throw new BadRequestException('Document ID and User ID are required');

@@ -139,6 +139,12 @@ const SignatureUI = ({
   const handleFinalizeSignature = () => {
     setStep('processing');
     setProcessing(true);
+
+    if (signatureType === 'biometric') {
+      // Iniciar componente BiometricCapture
+      setBiometricVerificationActive(true);
+      return;
+    }
     
     // Simular proceso de firma (esto sería reemplazado por la llamada real)
     setTimeout(() => {

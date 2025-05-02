@@ -194,7 +194,7 @@ const FileUpload = ({ onUploadSuccess, onCancel }: FileUploadProps) => {
             ></textarea>
           </div>
 
-          <div className="mb-4">
+          <div className="hidden mb-4 ">
             <div className="flex items-center">
               <input
                 id="encrypt"

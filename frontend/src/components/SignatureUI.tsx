@@ -41,11 +41,19 @@ const SignatureUI = ({
   const [step, setStep] = useState<'type' | 'position' | 'customize' | 'processing' | 'complete'>('type');
   const [signatureType, setSignatureType] = useState<'standard' | 'biometric' | 'efirma'>('standard');
   const [reason, setReason] = useState('');
-  const [position, setPosition] = useState<SignaturePosition | null>(null);
+  const [position, setPosition] = useState<SignaturePosition | null>({
+    "page": 1,
+    "x": 725,
+    "y": 348,
+    "width": 200,
+    "height": 100
+});
   const [sealData, setSealData] = useState<SealData | null>(null);
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  
+
   
   const currentUserName = localStorage.getItem('user')
     ? JSON.parse(localStorage.getItem('user') || '{}').name || 'Usuario'
@@ -140,11 +148,7 @@ const SignatureUI = ({
     setStep('processing');
     setProcessing(true);
 
-    if (signatureType === 'biometric') {
-      // Iniciar componente BiometricCapture
-      setBiometricVerificationActive(true);
-      return;
-    }
+    console.log(position)
     
     // Simular proceso de firma (esto sería reemplazado por la llamada real)
     setTimeout(() => {

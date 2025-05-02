@@ -1,8 +1,9 @@
+// backend/src/analytics/analytics.service.ts
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Document } from '../documents/entities/document.entity';
 import { AuditLog } from '../audit/entities/audit-log.entity';
-import { Repository, Between, FindOperator } from 'typeorm';
+import { Repository, Between } from 'typeorm';
 import { format, subWeeks, subMonths, subYears } from 'date-fns';
 import * as PDFDocument from 'pdfkit';
 
@@ -13,7 +14,39 @@ export enum DocumentStatus {
   ERROR = 'error',
 }
 
-interface DashboardMetrics {
+export interface DocumentStatusData {
+  status: string;
+  count: number;
+}
+
+export interface SignatureProgressData {
+  date: string;
+  completed: number;
+  pending: number;
+}
+
+export interface RecentActivity {
+  id: string;
+  action: string;
+  user: {
+    id: string;
+    name: string;
+  };
+  resourceId: string;
+  resourceType: string;
+  resourceName: string;
+  timestamp: string;
+  details?: any;
+}
+
+export interface TopDocument {
+  id: string;
+  title: string;
+  views: number;
+  lastViewed: string;
+}
+
+export interface DashboardMetrics {
   totalDocuments: number;
   signedDocuments: number;
   encryptedDocuments: number;
@@ -26,27 +59,6 @@ interface DashboardMetrics {
   signatureProgressData: SignatureProgressData[];
   recentActivity: RecentActivity[];
   topDocuments: TopDocument[];
-}
-
-interface DocumentStatusData {
-  status: string;
-  count: number;
-}
-
-interface SignatureProgressData {
-  status: string;
-  count: number;
-}
-
-interface RecentActivity {
-  date: string;
-  activity: string;
-  user: string;
-}
-
-interface TopDocument {
-  title: string;
-  views: number;
 }
 
 @Injectable()
@@ -94,7 +106,11 @@ export class AnalyticsService {
     const signedDocuments = await this.documentRepository.count({
       where: { status: DocumentStatus.COMPLETED },
     });
-    const encryptedDocuments = await this.documentRepository.count();
+    const encryptedDocuments = await this.documentRepository.count({
+      where: {
+        metadata: { isEncrypted: true },
+      },
+    });
     const sharedDocuments = 0;
 
     const previousDocuments = await this.documentRepository.count({
@@ -109,7 +125,10 @@ export class AnalyticsService {
     });
     const signedChange = signedDocuments - previousSignedDocuments;
     const previousEncryptedDocuments = await this.documentRepository.count({
-      where: { createdAt: Between(subMonths(startDate, 1), startDate) },
+      where: {
+        metadata: { isEncrypted: true },
+        createdAt: Between(subMonths(startDate, 1), startDate),
+      },
     });
     const encryptedChange = encryptedDocuments - previousEncryptedDocuments;
     const previousSharedDocuments = 0;
@@ -162,23 +181,49 @@ export class AnalyticsService {
     startDate: Date,
     endDate: Date,
   ): Promise<SignatureProgressData[]> {
-    const signatureCounts: { [key: string]: number } = {};
+    // Agrupar datos por fecha
+    const dateGroups: {
+      [key: string]: { completed: number; pending: number };
+    } = {};
+    const dateRange = this.generateDateRange(startDate, endDate);
+
+    dateRange.forEach((date) => {
+      const formattedDate = format(date, 'yyyy-MM-dd');
+      dateGroups[formattedDate] = { completed: 0, pending: 0 };
+    });
+
     const documents = await this.documentRepository.find({
       where: { createdAt: Between(startDate, endDate) },
     });
+
     documents.forEach((doc) => {
-      if (doc.status === DocumentStatus.COMPLETED) {
-        signatureCounts['signed'] = (signatureCounts['signed'] || 0) + 1;
-      } else if (doc.status === DocumentStatus.PENDING) {
-        signatureCounts['pending'] = (signatureCounts['pending'] || 0) + 1;
-      } else if (doc.status === DocumentStatus.ERROR) {
-        signatureCounts['error'] = (signatureCounts['error'] || 0) + 1;
+      const dateStr = format(doc.createdAt, 'yyyy-MM-dd');
+      if (dateGroups[dateStr]) {
+        if (doc.status === DocumentStatus.COMPLETED) {
+          dateGroups[dateStr].completed++;
+        } else if (doc.status === DocumentStatus.PENDING) {
+          dateGroups[dateStr].pending++;
+        }
       }
     });
-    return Object.keys(signatureCounts).map((status) => ({
-      status,
-      count: signatureCounts[status],
+
+    return Object.keys(dateGroups).map((date) => ({
+      date,
+      completed: dateGroups[date].completed,
+      pending: dateGroups[date].pending,
     }));
+  }
+
+  private generateDateRange(startDate: Date, endDate: Date): Date[] {
+    const dates = [];
+    let currentDate = new Date(startDate);
+
+    while (currentDate <= endDate) {
+      dates.push(new Date(currentDate));
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+
+    return dates;
   }
 
   private async getRecentActivity(
@@ -186,13 +231,23 @@ export class AnalyticsService {
     endDate: Date,
   ): Promise<RecentActivity[]> {
     const logs = await this.auditLogRepository.find({
-      where: { created_at: Between(startDate, endDate) },
-      order: { created_at: 'DESC' },
+      where: { timestamp: Between(startDate, endDate) },
+      order: { timestamp: 'DESC' },
+      take: 10,
     });
+
     return logs.map((log) => ({
-      date: format(log.created_at, 'dd/MM/yyyy HH:mm'),
-      activity: log.activity,
-      user: 'Usuario',
+      id: log.id,
+      action: log.action,
+      user: {
+        id: log.userId,
+        name: 'Usuario ' + log.userId.substring(0, 5), // Nombre simplificado para el ejemplo
+      },
+      resourceId: log.resourceId || '',
+      resourceType: 'document',
+      resourceName: log.details?.title || 'Documento',
+      timestamp: log.timestamp.toISOString(),
+      details: log.details,
     }));
   }
 
@@ -200,18 +255,58 @@ export class AnalyticsService {
     startDate: Date,
     endDate: Date,
   ): Promise<TopDocument[]> {
-    const documents = await this.documentRepository.find({
-      where: { createdAt: Between(startDate, endDate) },
-      order: { viewCount: 'DESC' },
-      take: 5,
+    // Como no tenemos viewCount, usaremos los registros de auditoría para contar vistas
+    const viewLogs = await this.auditLogRepository.find({
+      where: {
+        action: 'document_view',
+        timestamp: Between(startDate, endDate),
+      },
     });
+
+    // Contar vistas por documento
+    const docViews: Record<string, number> = {};
+    const docLastViewed: Record<string, Date> = {};
+
+    viewLogs.forEach((log) => {
+      if (log.resourceId) {
+        docViews[log.resourceId] = (docViews[log.resourceId] || 0) + 1;
+
+        // Actualizar última vista
+        if (
+          !docLastViewed[log.resourceId] ||
+          log.timestamp > docLastViewed[log.resourceId]
+        ) {
+          docLastViewed[log.resourceId] = log.timestamp;
+        }
+      }
+    });
+
+    // Obtener IDs de documentos ordenados por vistas
+    const sortedDocIds = Object.keys(docViews)
+      .sort((a, b) => docViews[b] - docViews[a])
+      .slice(0, 5);
+
+    if (sortedDocIds.length === 0) {
+      return [];
+    }
+
+    // Obtener los documentos
+    const documents = await this.documentRepository.findByIds(sortedDocIds);
+
+    // Mapear los documentos con sus vistas
     return documents.map((doc) => ({
+      id: doc.id,
       title: doc.title,
-      views: doc.viewCount,
+      views: docViews[doc.id] || 0,
+      lastViewed:
+        docLastViewed[doc.id]?.toISOString() || doc.updatedAt.toISOString(),
     }));
   }
 
   async generateReport(range: 'week' | 'month' | 'year'): Promise<Buffer> {
+    // Asegurarse de tener datos actualizados
+    await this.getDashboardMetrics(range);
+
     const doc = new PDFDocument();
 
     doc

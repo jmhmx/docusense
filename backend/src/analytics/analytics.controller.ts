@@ -1,3 +1,4 @@
+// backend/src/analytics/analytics.controller.ts
 import {
   Controller,
   Get,
@@ -6,12 +7,11 @@ import {
   Request,
   Res,
   BadRequestException,
-  StreamableFile,
   Header,
 } from '@nestjs/common';
 import { Response } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { AnalyticsService } from './analytics.service';
+import { AnalyticsService, DashboardMetrics } from './analytics.service';
 
 @Controller('api/analytics')
 export class AnalyticsController {
@@ -23,7 +23,7 @@ export class AnalyticsController {
     @Request() req,
     @Query('range') range: 'week' | 'month' | 'year' = 'month',
     @Query('userId') userId?: string,
-  ) {
+  ): Promise<DashboardMetrics> {
     try {
       // Solo administradores pueden ver datos de otros usuarios
       if (userId && userId !== req.user.id && !req.user.isAdmin) {

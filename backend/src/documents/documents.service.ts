@@ -67,11 +67,12 @@ export class DocumentsService {
           ...metadata,
           isEncrypted: true,
           encryptionDetails: {
-            // En un entorno real, estas claves deberían almacenarse de forma segura
-            // o cifradas con la clave pública del usuario
             keyBase64: key.toString('base64'),
             ivBase64: iv.toString('base64'),
+            authTagBase64: authTag.toString('base64'), // Añade esto
+            encryptedAt: new Date().toISOString(),
           },
+          originalFilePath: document.filePath,
         };
 
         console.log('Documento cifrado correctamente');
@@ -399,6 +400,7 @@ export class DocumentsService {
   /**
    * Obtiene el contenido de un documento, descifrándolo si es necesario
    */
+  // En DocumentsService.ts, método getDocumentContent:
   async getDocumentContent(
     document: Document,
     userId: string,
@@ -428,15 +430,16 @@ export class DocumentsService {
           // Convertir de base64 a Buffer
           const key = Buffer.from(encryptionDetails.keyBase64, 'base64');
           const iv = Buffer.from(encryptionDetails.ivBase64, 'base64');
+          const authTag = encryptionDetails.authTagBase64
+            ? Buffer.from(encryptionDetails.authTagBase64, 'base64')
+            : undefined;
 
-          // Descifrar el contenido
-          return this.cryptoService.decryptDocument(fileData, key, iv);
+          // Descifrar el contenido (añadir authTag si está disponible)
+          return this.cryptoService.decryptDocument(fileData, key, iv, authTag);
         } catch (error) {
           console.error('Error al descifrar documento:', error);
           throw new Error(`Error al descifrar documento: ${error.message}`);
         }
-      } else if (document.metadata?.isEncrypted) {
-        throw new Error('Servicio de cifrado no disponible');
       }
 
       // Si no está cifrado, devolver el contenido tal cual

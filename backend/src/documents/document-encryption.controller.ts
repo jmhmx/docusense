@@ -13,6 +13,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { DocumentsService } from './documents.service';
 import { CryptoService } from '../crypto/crypto.service';
 import { AuditLogService, AuditAction } from '../audit/audit-log.service';
+import * as fs from 'fs';
 
 @Controller('api/documents')
 export class DocumentEncryptionController {
@@ -53,15 +54,14 @@ export class DocumentEncryptionController {
       );
 
       // Encrypt the document
-      const { encryptedData, key, iv } =
+      const { encryptedData, key, iv, authTag } =
         this.cryptoService.encryptDocument(fileData);
 
-      // Save encrypted version
+      // Guardar versión cifrada
       const encryptedFilePath = `${document.filePath}.encrypted`;
-      const fs = require('fs');
       fs.writeFileSync(encryptedFilePath, encryptedData);
 
-      // Update document metadata
+      // Actualizar metadata del documento
       const updatedDoc = await this.documentsService.update(
         id,
         {
@@ -72,6 +72,7 @@ export class DocumentEncryptionController {
             encryptionDetails: {
               keyBase64: key.toString('base64'),
               ivBase64: iv.toString('base64'),
+              authTagBase64: authTag.toString('base64'), // Añade el authTag aquí
               encryptedAt: new Date().toISOString(),
             },
             originalFilePath: document.filePath,

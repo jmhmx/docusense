@@ -144,45 +144,46 @@ export class DocumentsController {
     @Request() req,
     @Res() res: Response,
   ) {
-    console.log('Usuario autenticado:', req.user);
     const document = await this.documentsService.findOne(id, req.user.id);
 
     // Verificar si el documento está cifrado
     if (document.metadata?.isEncrypted) {
-      console.log('Documento cifrado, descifrando...');
       try {
-        // Obtener el contenido descifrado
         const fileData = await this.documentsService.getDocumentContent(
           document,
           req.user.id,
         );
 
-        // Crear stream desde el buffer descifrado
+        // Crear correctamente el stream desde el buffer
         const file = new Readable();
+        file._read = () => {}; // Implementación requerida
         file.push(fileData);
         file.push(null);
 
         res.set({
-          'Content-Type': document.mimeType,
+          'Content-Type': document.mimeType || 'application/octet-stream',
           'Content-Disposition': `inline; filename="${document.filename}"`,
         });
+
         file.pipe(res);
       } catch (error) {
-        console.error('Error al descifrar documento:', error);
-        throw new BadRequestException('No se pudo descifrar el documento');
+        console.error('Error detallado:', error);
+        throw new BadRequestException(
+          `No se pudo descifrar el documento: ${error.message}`,
+        );
       }
     } else {
-      // Lógica original para documentos no cifrados
+      // Lógica para documentos no cifrados
       const file = createReadStream(document.filePath);
       res.set({
-        'Content-Type': document.mimeType,
+        'Content-Type': document.mimeType || 'application/octet-stream',
         'Content-Disposition': `inline; filename="${document.filename}"`,
       });
       file.pipe(res);
     }
   }
 
-  @UseGuards(JwtAuthGuard) // Asegúrate de que esta línea esté presente
+  @UseGuards(JwtAuthGuard)
   @Get(':id/download')
   async downloadDocument(
     @Param('id') id: string,
@@ -338,7 +339,7 @@ export class DocumentsController {
       );
 
       // Cifrar el documento
-      const { encryptedData, key, iv } =
+      const { encryptedData, key, iv, authTag } =
         this.cryptoService.encryptDocument(fileData);
 
       // Guardar versión cifrada
@@ -356,6 +357,7 @@ export class DocumentsController {
             encryptionDetails: {
               keyBase64: key.toString('base64'),
               ivBase64: iv.toString('base64'),
+              authTagBase64: authTag.toString('base64'), // Añade el authTag aquí
               encryptedAt: new Date().toISOString(),
             },
             originalFilePath: document.filePath,

@@ -400,46 +400,20 @@ export class CryptoService {
     iv: Buffer;
     authTag: Buffer;
   } {
-    // Validate input
-    if (!data || !Buffer.isBuffer(data)) {
-      throw new BadRequestException(
-        'Invalid document data provided for encryption',
-      );
-    }
+    // Generar clave aleatoria y vector de inicialización
+    const key = crypto.randomBytes(32); // AES-256
+    const iv = crypto.randomBytes(12); // GCM recomienda 12 bytes
 
-    if (data.length === 0) {
-      throw new BadRequestException(
-        'Empty document data provided for encryption',
-      );
-    }
+    // Crear cipher con modo GCM
+    const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
 
-    try {
-      // Generate random key and initialization vector
-      const key = crypto.randomBytes(this.AES_KEY_LENGTH); // AES-256
-      const iv = crypto.randomBytes(12); // GCM recomienda un IV de 12 bytes para mayor rendimiento
+    // Cifrar datos
+    const encryptedData = Buffer.concat([cipher.update(data), cipher.final()]);
 
-      // Create cipher with GCM mode
-      const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+    // Obtener tag de autenticación
+    const authTag = cipher.getAuthTag();
 
-      // Encrypt data
-      const encryptedData = Buffer.concat([
-        cipher.update(data),
-        cipher.final(),
-      ]);
-
-      // Get authentication tag
-      const authTag = cipher.getAuthTag();
-
-      return { encryptedData, key, iv, authTag };
-    } catch (error) {
-      this.logger.error(
-        `Error encrypting document: ${error.message}`,
-        error.stack,
-      );
-      throw new BadRequestException(
-        `Failed to encrypt document: ${error.message}`,
-      );
-    }
+    return { encryptedData, key, iv, authTag };
   }
 
   /**
@@ -456,21 +430,8 @@ export class CryptoService {
     iv: Buffer,
     authTag?: Buffer,
   ): Buffer {
-    // Validate inputs
-    if (!encryptedData || !Buffer.isBuffer(encryptedData)) {
-      throw new BadRequestException('Invalid encrypted data provided');
-    }
-
-    if (!key || !Buffer.isBuffer(key) || key.length !== this.AES_KEY_LENGTH) {
-      throw new BadRequestException('Invalid encryption key provided');
-    }
-
-    if (!iv || !Buffer.isBuffer(iv)) {
-      throw new BadRequestException('Invalid initialization vector provided');
-    }
-
     try {
-      // Si authTag está presente, usar GCM (nuevo método)
+      // Si authTag está presente, usar GCM (método más seguro)
       if (authTag && Buffer.isBuffer(authTag)) {
         const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
         decipher.setAuthTag(authTag);
@@ -479,11 +440,8 @@ export class CryptoService {
           decipher.final(),
         ]);
       }
-      // Si no hay authTag, usar CBC para retrocompatibilidad
+      // Sin authTag, usar CBC para compatibilidad
       else {
-        this.logger.warn(
-          'Using legacy CBC mode for decryption due to missing authentication tag',
-        );
         // Asegurar que el IV es de 16 bytes para CBC
         let cbcIv = iv;
         if (iv.length !== 16) {
@@ -497,8 +455,8 @@ export class CryptoService {
         ]);
       }
     } catch (error) {
-      this.logger.error(
-        `Error decrypting document: ${error.message}`,
+      console.error(
+        `Error detallado de descifrado: ${error.message}`,
         error.stack,
       );
       throw new BadRequestException(

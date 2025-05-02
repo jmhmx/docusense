@@ -2,9 +2,16 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Document } from '../documents/entities/document.entity';
 import { AuditLog } from '../audit/entities/audit-log.entity';
-import { Repository, Between } from 'typeorm';
+import { Repository, Between, FindOperator } from 'typeorm';
 import { format, subWeeks, subMonths, subYears } from 'date-fns';
 import * as PDFDocument from 'pdfkit';
+
+export enum DocumentStatus {
+  PENDING = 'pending',
+  PROCESSING = 'processing',
+  COMPLETED = 'completed',
+  ERROR = 'error',
+}
 
 interface DashboardMetrics {
   totalDocuments: number;
@@ -85,7 +92,7 @@ export class AnalyticsService {
 
     const totalDocuments = await this.documentRepository.count();
     const signedDocuments = await this.documentRepository.count({
-      where: { status: 'completed' },
+      where: { status: DocumentStatus.COMPLETED },
     });
     const encryptedDocuments = await this.documentRepository.count();
     const sharedDocuments = 0;
@@ -96,7 +103,7 @@ export class AnalyticsService {
     const documentChange = totalDocuments - previousDocuments;
     const previousSignedDocuments = await this.documentRepository.count({
       where: {
-        status: 'completed',
+        status: DocumentStatus.COMPLETED,
         createdAt: Between(subMonths(startDate, 1), startDate),
       },
     });
@@ -160,11 +167,11 @@ export class AnalyticsService {
       where: { createdAt: Between(startDate, endDate) },
     });
     documents.forEach((doc) => {
-      if (doc.status === 'completed') {
+      if (doc.status === DocumentStatus.COMPLETED) {
         signatureCounts['signed'] = (signatureCounts['signed'] || 0) + 1;
-      } else if (doc.status === 'pending') {
+      } else if (doc.status === DocumentStatus.PENDING) {
         signatureCounts['pending'] = (signatureCounts['pending'] || 0) + 1;
-      } else if (doc.status === 'error') {
+      } else if (doc.status === DocumentStatus.ERROR) {
         signatureCounts['error'] = (signatureCounts['error'] || 0) + 1;
       }
     });
@@ -179,12 +186,12 @@ export class AnalyticsService {
     endDate: Date,
   ): Promise<RecentActivity[]> {
     const logs = await this.auditLogRepository.find({
-      where: { createdAt: Between(startDate, endDate) },
-      order: { createdAt: 'DESC' },
+      where: { created_at: Between(startDate, endDate) },
+      order: { created_at: 'DESC' },
     });
     return logs.map((log) => ({
-      date: format(log.createdAt, 'dd/MM/yyyy HH:mm'),
-      activity: log.description,
+      date: format(log.created_at, 'dd/MM/yyyy HH:mm'),
+      activity: log.activity,
       user: 'Usuario',
     }));
   }
@@ -195,12 +202,12 @@ export class AnalyticsService {
   ): Promise<TopDocument[]> {
     const documents = await this.documentRepository.find({
       where: { createdAt: Between(startDate, endDate) },
-      order: { views: 'DESC' },
+      order: { viewCount: 'DESC' },
       take: 5,
     });
     return documents.map((doc) => ({
       title: doc.title,
-      views: doc.views,
+      views: doc.viewCount,
     }));
   }
 

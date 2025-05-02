@@ -1,4 +1,3 @@
-// backend/src/analytics/analytics.controller.ts
 import {
   Controller,
   Get,
@@ -36,7 +35,7 @@ export class AnalyticsController {
       // Si no se especifica userId o el usuario no es admin, usar el ID del usuario actual
       const targetUserId = !userId || !req.user.isAdmin ? req.user.id : userId;
 
-      return await this.analyticsService.getDashboardData(range, targetUserId);
+      return await this.analyticsService.getDashboardMetrics(range);
     } catch (error) {
       throw new BadRequestException(
         `Error al obtener datos del dashboard: ${error.message}`,

@@ -54,14 +54,15 @@ const SignatureProgressChart = ({ data }: SignatureProgressChartProps) => {
     ]);
     
     // Draw the bars
-    stackedData.forEach((dateGroup, i) => {
+    stackedData.forEach((dateGroup) => {
       let y0 = 0;
       dateGroup.forEach(d => {
         svg.append('rect')
+          //@ts-ignore
           .attr('x', xScale(d.date.toISOString()))
           .attr('y', yScale(d.value + y0))
           .attr('width', xScale.bandwidth())
-          .attr('height', innerHeight - yScale(d.value))
+          .attr('height', innerHeight - yScale(d.value || 0))
           .attr('fill', d.key === 'completed' ? '#34D399' : '#FBBF24')
           .attr('opacity', 0.8);
         

@@ -1,6 +1,3 @@
-// Completando el componente RecentActivityTimeline.tsx
-import React from 'react';
-
 interface Activity {
   id: string;
   action: string;

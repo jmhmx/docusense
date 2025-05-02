@@ -1,5 +1,3 @@
-// frontend/src/components/analytics/TopDocumentsTable.tsx
-import React from 'react';
 import { useNavigate } from 'react-router-dom';
 
 interface Document {

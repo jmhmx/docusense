@@ -6,6 +6,7 @@ import { AuditLog } from '../audit/entities/audit-log.entity';
 import { Repository, Between } from 'typeorm';
 import { format, subWeeks, subMonths, subYears } from 'date-fns';
 import * as PDFDocument from 'pdfkit';
+import { AuditAction } from '../audit/audit-log.service';
 
 export enum DocumentStatus {
   PENDING = 'pending',
@@ -258,7 +259,7 @@ export class AnalyticsService {
     // Como no tenemos viewCount, usaremos los registros de auditoría para contar vistas
     const viewLogs = await this.auditLogRepository.find({
       where: {
-        action: 'document_view',
+        action: AuditAction.DOCUMENT_VIEW,
         timestamp: Between(startDate, endDate),
       },
     });

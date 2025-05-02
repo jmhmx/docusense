@@ -1,3 +1,4 @@
+// Completando el componente RecentActivityTimeline.tsx
 import React from 'react';
 
 interface Activity {
@@ -64,4 +65,92 @@ const getActivityIcon = (action: string) => {
     case 'document_delete':
       return (
         <div className="flex items-center justify-center w-8 h-8 bg-red-100 rounded-full">
-          <svg className="w-5 h-5 text-red-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="
+          <svg className="w-5 h-5 text-red-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+          </svg>
+        </div>
+      );
+    default:
+      return (
+        <div className="flex items-center justify-center w-8 h-8 bg-gray-100 rounded-full">
+          <svg className="w-5 h-5 text-gray-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+          </svg>
+        </div>
+      );
+  }
+};
+
+const RecentActivityTimeline = ({ activities }: RecentActivityTimelineProps) => {
+  if (!activities || activities.length === 0) {
+    return (
+      <div className="py-6 text-center text-gray-500">
+        No hay actividad reciente para mostrar.
+      </div>
+    );
+  }
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleString('es-ES', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  const getActionText = (action: string): string => {
+    switch(action) {
+      case 'document_upload': return 'subió';
+      case 'document_view': return 'visualizó';
+      case 'document_sign': return 'firmó';
+      case 'document_encrypt': return 'cifró';
+      case 'document_share': return 'compartió';
+      case 'document_delete': return 'eliminó';
+      default: return 'interactuó con';
+    }
+  };
+
+  return (
+    <div className="flow-root">
+      <ul className="-mb-8">
+        {activities.map((activity, index) => (
+          <li key={activity.id}>
+            <div className="relative pb-8">
+              {index < activities.length - 1 && (
+                <span className="absolute top-4 left-4 -ml-px h-full w-0.5 bg-gray-200" aria-hidden="true"></span>
+              )}
+              <div className="relative flex space-x-3">
+                <div>{getActivityIcon(activity.action)}</div>
+                <div className="min-w-0 flex-1 pt-1.5 flex justify-between space-x-4">
+                  <div>
+                    <p className="text-sm text-gray-700">
+                      <span className="font-medium text-gray-900">{activity.user.name}</span>
+                      {" "}{getActionText(activity.action)}{" "}
+                      <span className="font-medium text-gray-900">{activity.resourceName}</span>
+                    </p>
+                    {activity.details && (
+                      <p className="mt-1 text-xs text-gray-500">
+                        {typeof activity.details === 'string' 
+                          ? activity.details 
+                          : activity.details.message || JSON.stringify(activity.details)
+                        }
+                      </p>
+                    )}
+                  </div>
+                  <div className="text-xs text-right text-gray-500 whitespace-nowrap">
+                    <time dateTime={activity.timestamp}>{formatDate(activity.timestamp)}</time>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+};
+
+export default RecentActivityTimeline;

@@ -34,7 +34,7 @@ export class DocumentEncryptionController {
     try {
       const userAgent = headers['user-agent'] || 'Unknown';
 
-      // Get document
+      // Obtener documento
       const document = await this.documentsService.findOne(
         id,
         req.user.id,
@@ -42,46 +42,44 @@ export class DocumentEncryptionController {
         userAgent,
       );
 
-      // Check if already encrypted
+      // Comprobar si ya está cifrado
       if (document.metadata?.isEncrypted) {
-        throw new BadRequestException('Document is already encrypted');
+        throw new BadRequestException('Documento ya cifrado');
       }
 
-      // Read original file
-      const fileData = await this.documentsService.getDocumentContent(
-        document,
-        req.user.id,
-      );
+      // Leer archivo original
+      const fileData = fs.readFileSync(document.filePath);
 
-      // Encrypt the document
+      // Cifrar el documento
       const { encryptedData, key, iv, authTag } =
         this.cryptoService.encryptDocument(fileData);
 
-      // Guardar versión cifrada
+      // Guardar versión cifrada conservando la original
       const encryptedFilePath = `${document.filePath}.encrypted`;
       fs.writeFileSync(encryptedFilePath, encryptedData);
 
-      // Actualizar metadata del documento
+      // Actualizar metadata manteniendo ruta original
       const updatedDoc = await this.documentsService.update(
         id,
         {
-          filePath: encryptedFilePath,
           metadata: {
             ...document.metadata,
             isEncrypted: true,
             encryptionDetails: {
               keyBase64: key.toString('base64'),
               ivBase64: iv.toString('base64'),
-              authTagBase64: authTag.toString('base64'), // Añade el authTag aquí
+              authTagBase64: authTag.toString('base64'),
               encryptedAt: new Date().toISOString(),
+              // Almacenar ambas rutas
+              encryptedFilePath: encryptedFilePath,
+              originalFilePath: document.filePath,
             },
-            originalFilePath: document.filePath,
           },
         },
         req.user.id,
       );
 
-      // Log audit action
+      // Registro en auditoría
       await this.auditLogService.log(
         AuditAction.DOCUMENT_ENCRYPT,
         req.user.id,
@@ -95,13 +93,11 @@ export class DocumentEncryptionController {
       );
 
       return {
-        message: 'Document encrypted successfully',
+        message: 'Documento cifrado correctamente',
         documentId: updatedDoc.id,
       };
     } catch (error) {
-      throw new BadRequestException(
-        `Error encrypting document: ${error.message}`,
-      );
+      throw new BadRequestException(`Error al cifrar: ${error.message}`);
     }
   }
 

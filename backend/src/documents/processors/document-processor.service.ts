@@ -68,6 +68,15 @@ export class DocumentProcessorService {
       document.status = DocumentStatus.PROCESSING;
       await this.documentsRepository.save(document);
 
+      // Determinar qué ruta usar para procesamiento
+      let filePath = document.filePath;
+      if (
+        document.metadata?.isEncrypted &&
+        document.metadata.encryptionDetails?.originalFilePath
+      ) {
+        filePath = document.metadata.encryptionDetails.originalFilePath;
+      }
+
       // Verificar que el archivo existe
       if (!fs.existsSync(document.filePath)) {
         throw new Error(`Archivo no encontrado: ${document.filePath}`);

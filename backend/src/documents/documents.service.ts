@@ -406,48 +406,39 @@ export class DocumentsService {
     userId: string,
   ): Promise<Buffer> {
     try {
-      // Verificar que el archivo existe
-      if (!fs.existsSync(document.filePath)) {
-        throw new Error(`Archivo no encontrado: ${document.filePath}`);
-      }
+      let filePath = document.filePath;
 
-      // Leer el archivo
-      const fileData = fs.readFileSync(document.filePath);
-
-      // Si el documento está cifrado, descifrarlo
-      if (document.metadata?.isEncrypted && this.cryptoService) {
+      // Si el documento está cifrado, usar la ruta encriptada
+      if (document.metadata?.isEncrypted) {
         const { encryptionDetails } = document.metadata;
 
-        if (
-          !encryptionDetails ||
-          !encryptionDetails.keyBase64 ||
-          !encryptionDetails.ivBase64
-        ) {
-          throw new Error('Faltan detalles de cifrado para el documento');
+        // Para lectura/visualización, usar ruta cifrada
+        if (encryptionDetails.encryptedFilePath) {
+          filePath = encryptionDetails.encryptedFilePath;
         }
 
-        try {
-          // Convertir de base64 a Buffer
-          const key = Buffer.from(encryptionDetails.keyBase64, 'base64');
-          const iv = Buffer.from(encryptionDetails.ivBase64, 'base64');
-          const authTag = encryptionDetails.authTagBase64
-            ? Buffer.from(encryptionDetails.authTagBase64, 'base64')
-            : undefined;
-
-          // Descifrar el contenido (añadir authTag si está disponible)
-          return this.cryptoService.decryptDocument(fileData, key, iv, authTag);
-        } catch (error) {
-          console.error('Error al descifrar documento:', error);
-          throw new Error(`Error al descifrar documento: ${error.message}`);
+        // Verificar que el archivo existe
+        if (!fs.existsSync(filePath)) {
+          throw new Error(`Archivo no encontrado: ${filePath}`);
         }
+
+        // Leer el archivo cifrado
+        const fileData = fs.readFileSync(filePath);
+
+        // Descifrar
+        const key = Buffer.from(encryptionDetails.keyBase64, 'base64');
+        const iv = Buffer.from(encryptionDetails.ivBase64, 'base64');
+        const authTag = encryptionDetails.authTagBase64
+          ? Buffer.from(encryptionDetails.authTagBase64, 'base64')
+          : undefined;
+
+        return this.cryptoService.decryptDocument(fileData, key, iv, authTag);
       }
 
       // Si no está cifrado, devolver el contenido tal cual
-      return fileData;
+      return fs.readFileSync(filePath);
     } catch (error) {
-      throw new Error(
-        `Error al obtener contenido del documento: ${error.message}`,
-      );
+      throw new Error(`Error al obtener contenido: ${error.message}`);
     }
   }
 }

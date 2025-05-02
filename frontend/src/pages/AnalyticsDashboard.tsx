@@ -95,7 +95,7 @@ const AnalyticsDashboard = () => {
       {/* Encabezado */}
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Dashboard Analítico</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Analíticas</h1>
           <p className="mt-1 text-sm text-gray-500">
             Visión general del sistema de gestión documental
           </p>

@@ -226,7 +226,7 @@ const DocumentSignature = ({
         setIsLoading(true);
         try {
           // Iniciar el proceso de firma biométrica
-          await api.post(`/api/signatures/${documentId}/biometric-init`, {
+          await api.post(`/api/signatures/${documentId}/biometric`, {
             position,
             reason: reason.trim() || 'Firma con verificación biométrica',
             sealData

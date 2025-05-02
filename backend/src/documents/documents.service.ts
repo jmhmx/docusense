@@ -54,7 +54,7 @@ export class DocumentsService {
       const fileData = fs.readFileSync(filePath);
 
       try {
-        const { encryptedData, key, iv } =
+        const { encryptedData, key, iv, authTag } =
           this.cryptoService.encryptDocument(fileData);
 
         // Guardar el archivo cifrado
@@ -72,7 +72,7 @@ export class DocumentsService {
             authTagBase64: authTag.toString('base64'), // Añade esto
             encryptedAt: new Date().toISOString(),
           },
-          originalFilePath: document.filePath,
+          originalFilePath: createDocumentDto.filePath,
         };
 
         console.log('Documento cifrado correctamente');

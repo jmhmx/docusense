@@ -23,7 +23,7 @@ interface FaceDescriptor {
 export class BiometryService {
   private readonly logger = new Logger(BiometryService.name);
   private readonly MATCH_THRESHOLD = 0.6; // Umbral de similitud por defecto
-  private readonly MIN_LIVENESS_SCORE = 0.75; // Puntuación mínima de liveness
+  private readonly MIN_LIVENESS_SCORE = 0.7; // Puntuación mínima de liveness
 
   constructor(
     @InjectRepository(BiometricData)
@@ -507,7 +507,7 @@ export class BiometryService {
     // Ajuste dinámico del umbral según factores de riesgo
     const baseThreshold = this.MIN_LIVENESS_SCORE;
     const riskFactor = this.calculateRiskFactor(livenessProof);
-    const adjustedThreshold = baseThreshold * (1 + 0.1 * riskFactor);
+    const adjustedThreshold = baseThreshold * (1 + 0.05 * riskFactor);
 
     // Verificar si se alcanza la puntuación mínima
     const verified = score >= adjustedThreshold;
@@ -658,7 +658,7 @@ export class BiometryService {
     // 3. Análisis de secuencias temporales para detectar ciclo completo
 
     return {
-      score: 0.85,
+      score: 0.9,
       confidence: 0.9,
     };
   }

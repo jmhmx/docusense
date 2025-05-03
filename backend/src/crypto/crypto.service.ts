@@ -27,11 +27,12 @@ export class CryptoService {
   // Método especializado para datos biométricos con mayor seguridad
   encryptBiometricData(data: Buffer): EncryptionResult {
     // Usar AES-GCM para mayor seguridad (autenticación incluida)
-    const key = crypto.scryptSync(
+    const key = crypto.pbkdf2Sync(
       process.env.MASTER_KEY || 'default-key-should-be-replaced-in-production',
-      crypto.randomBytes(16), // Salt aleatorio
-      this.AES_KEY_LENGTH, // 256 bits
-      { N: 32768, r: 8, p: 1 }, // Parámetros de seguridad más fuertes para scrypt
+      crypto.randomBytes(16),
+      10000, // iteraciones
+      this.AES_KEY_LENGTH,
+      'sha256',
     );
 
     const iv = crypto.randomBytes(12); // GCM requiere un IV de 12 bytes para rendimiento óptimo

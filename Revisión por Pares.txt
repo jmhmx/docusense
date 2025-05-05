@@ -1,0 +1,80 @@
+1.	REVISIÓN POR PARES (CHECHLIST)
+
+Es crucial que los desarrolladores busquen la revisión de su 
+código por parte de sus líderes o colegas antes de finalizar 
+cualquier implementación. Este proceso no solo ayuda a identificar 
+posibles errores y mejorar la calidad del código, sino que también 
+asegura la adherencia a los estándares establecidos y fomenta un 
+ambiente de colaboración y aprendizaje continuo.
+
+No Cumple
+Revisión a realizar.
+
+¿El código **no** cumple con la sintaxis requerida 
+por el lenguaje de programación utilizado?
+
+¿El código **no** utiliza nombres de variables y 
+estructuras de objetos y acciones que sean 
+comprensibles y sigan una estructura clara y 
+coherente?
+
+¿El código **no** maneja adecuadamente las 
+excepciones y errores que pueden ocurrir durante la 
+ejecución?
+
+¿El código **no** permite la configuración de 
+parámetros a través de un archivo de configuración?
+
+¿El código **no** incluye medidas para mitigar la 
+presencia de variables que no son utilizadas en el 
+código?
+
+¿El código **no** utiliza comentarios para explicar 
+el propósito y funcionamiento de secciones 
+específicas del código?
+
+¿El código **no** sigue los principios de buenas 
+prácticas de programación, como la separación de 
+responsabilidades, la simplicidad y la cohesión?
+
+¿El código **no** utiliza bibliotecas y frameworks 
+comunes de manera adecuada y eficiente?
+
+¿El código **no** utiliza patrones de diseño 
+conocidos para resolver problemas comunes en la 
+programación?
+
+¿El código **no** implementa adecuadamente la 
+persistencia de datos, utilizando técnicas como la 
+serialización o el acceso a bases de datos?
+
+¿El código **no** sigue las convenciones de 
+codificación para el lenguaje utilizado, como la 
+indentación, el uso de espacios en blanco y la 
+longitud de línea máxima,  ?
+
+¿El código **no** incluye pruebas unitarias 
+adecuadas para todas las funcionalidades críticas?
+
+¿El código **no** ha sido revisado para detectar 
+posibles problemas de seguridad, como la validación 
+de entradas y la protección contra inyecciones?
+
+¿El código **no** incluye logs adecuados para 
+facilitar la depuración y el monitoreo en 
+producción?
+
+¿No se ha verificado que el código no contiene 
+código duplicado y que las funciones reutilizables 
+están correctamente abstraídas?
+
+¿El código **no** incluye el uso adecuado de los 
+campos de auditoria?
+
+
+
+Nota: Revisor: Por favor, asegúrate de validar exhaustivamente 
+todos los puntos mencionados anteriormente.
+
+
+

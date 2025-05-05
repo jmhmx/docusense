@@ -68,6 +68,7 @@ const DocumentSignature = ({
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [showTwoFactorModal, setShowTwoFactorModal] = useState(false);
+  const [showBiometricWorkflow, setShowBiometricWorkflow] = useState(false);
   const [pendingSignatureData, setPendingSignatureData] = useState<{
     type: string;
     reason: string;
@@ -187,205 +188,178 @@ const DocumentSignature = ({
 
   // Manejar solicitud de firma con diferentes métodos
   const handleSignRequest = async (
-  signatureType: string, 
-  reason: string, 
-  position?: SignaturePosition, 
-  sealData?: any
-) => {
-  if (!position) {
-    setError('Posición de firma no especificada');
-    return;
-  }
-
-  setIsLoading(true);
-  setError(null);
-  
-  try {
-    // Primero, almacenar todos los datos pendientes
-    const signatureData = {
-      type: signatureType,
-      reason: reason.trim() || 'Firma de documento',
-      position,
-      sealData
-    };
-    
-    // Manejar según el tipo de firma
-    switch (signatureType) {
-      case 'standard':
-        // Con firma estándar, guardar los datos pendientes y mostrar modal 2FA
-        setPendingSignatureData(signatureData);
-        setShowTwoFactorModal(true);
-        setShowSignModal(false); // Cerrar el modal de firma
-        break;
-        
-      case 'biometric':
-        // Cerrar el modal de firma
-        setShowSignModal(false);
-        
-        // Mostrar el componente de flujo biométrico
-        setIsLoading(true);
-        try {
-          // Iniciar el proceso de firma biométrica
-          await api.post(`/api/signatures/${documentId}/biometric`, {
-            position,
-            reason: reason.trim() || 'Firma con verificación biométrica',
-            sealData
-          });
-          
-          // Crear contenedor para el flujo biométrico
-          const bioModalContainer = document.createElement('div');
-          bioModalContainer.id = 'biometric-workflow-container';
-          bioModalContainer.className = 'fixed inset-0 z-50 flex items-center justify-center bg-gray-600 bg-opacity-50';
-          document.body.appendChild(bioModalContainer);
-          
-          // Importar createRoot dinámicamente
-          const { createRoot } = await import('react-dom/client');
-          
-          // Crear la raíz de React
-          const root = createRoot(bioModalContainer);
-          
-          // Renderizar el componente de flujo biométrico
-          root.render(
-            <BiometricSignatureWorkflow
-              documentId={documentId}
-              documentTitle={documentTitle}
-              onSuccess={() => {
-                // Desmontar componente y eliminar contenedor
-                root.unmount();
-                document.body.removeChild(bioModalContainer);
-                
-                // Finalizar proceso de firma
-                handleSignatureSuccess();
-              }}
-              onCancel={() => {
-                // Desmontar componente y eliminar contenedor
-                root.unmount();
-                document.body.removeChild(bioModalContainer);
-              }}
-              navigateToRegistration={() => {
-                // Desmontar componente y eliminar contenedor
-                root.unmount();
-                document.body.removeChild(bioModalContainer);
-                
-                // Navegar a registro biométrico
-                window.location.href = '/biometric-registration';
-              }}
-            />
-          );
-        } catch (err: any) {
-          console.error('Error iniciando proceso de firma biométrica:', err);
-          setError(err?.response?.data?.message || 'Error al iniciar firma biométrica');
-          setIsLoading(false);
-        }
-        break;
-        
-      case 'efirma':
-        // Cerrar el modal de firma
-        setShowSignModal(false);
-        
-        // Mostrar el modal de selección/validación de e.firma
-        setIsLoading(true);
-        try {
-          // Crear contenedor para el flujo de e.firma
-          const efirmaModalContainer = document.createElement('div');
-          efirmaModalContainer.id = 'efirma-workflow-container';
-          efirmaModalContainer.className = 'fixed inset-0 z-50 flex items-center justify-center bg-gray-600 bg-opacity-50';
-          document.body.appendChild(efirmaModalContainer);
-          
-          // Importar createRoot
-          const { createRoot } = await import('react-dom/client');
-          const root = createRoot(efirmaModalContainer);
-          
-          // Importar EfirmaSignatureWorkflow dinámicamente
-          const EfirmaSignatureWorkflow = await import('./EfirmaSignatureWorkflow').then(m => m.default);
-          
-          // Renderizar el componente de flujo de e.firma
-          root.render(
-            <EfirmaSignatureWorkflow
-              documentId={documentId}
-              documentTitle={documentTitle}
-              position={position}
-              reason={reason.trim() || 'Firma con e.firma (FIEL)'}
-              onSuccess={() => {
-                // Desmontar componente y eliminar contenedor
-                root.unmount();
-                document.body.removeChild(efirmaModalContainer);
-                
-                // Finalizar proceso de firma
-                handleSignatureSuccess();
-              }}
-              onCancel={() => {
-                // Desmontar componente y eliminar contenedor
-                root.unmount();
-                document.body.removeChild(efirmaModalContainer);
-                setIsLoading(false);
-              }}
-            />
-          );
-        } catch (err: any) {
-          console.error('Error iniciando proceso de firma con e.firma:', err);
-          setError(err?.response?.data?.message || 'Error al iniciar firma con e.firma');
-          setIsLoading(false);
-        }
-        break;
-        
-      default:
-        throw new Error('Tipo de firma no válido');
+    signatureType: string, 
+    reason: string, 
+    position?: SignaturePosition, 
+    sealData?: any
+  ) => {
+    if (!position) {
+      setError('Posición de firma no especificada');
+      return;
     }
-  } catch (err: any) {
-    console.error('Error al firmar documento:', err);
-    setError(err?.response?.data?.message || 'Error al firmar documento');
-  } finally {
-    if (signatureType !== 'standard') {
+
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      // Almacenar datos pendientes para todos los tipos
+      const signatureData = {
+        type: signatureType,
+        reason: reason.trim() || 'Firma de documento',
+        position,
+        sealData
+      };
+      
+      // Manejar según el tipo de firma
+      switch (signatureType) {
+        case 'standard':
+          // Con firma estándar, guardar los datos pendientes y mostrar modal 2FA
+          setPendingSignatureData(signatureData);
+          setShowTwoFactorModal(true);
+          setShowSignModal(false); // Cerrar el modal de firma
+          break;
+          
+        case 'biometric':
+          // Guardar datos y mostrar flujo biométrico
+          setPendingSignatureData(signatureData);
+          setShowBiometricWorkflow(true);
+          setShowSignModal(false); // Cerrar el modal de firma
+          break;
+          
+        case 'efirma':
+          // Cerrar el modal de firma
+          setShowSignModal(false);
+          
+          // Mostrar el modal de selección/validación de e.firma
+          try {
+            // Crear contenedor para el flujo de e.firma
+            const efirmaModalContainer = document.createElement('div');
+            efirmaModalContainer.id = 'efirma-workflow-container';
+            efirmaModalContainer.className = 'fixed inset-0 z-50 flex items-center justify-center bg-gray-600 bg-opacity-50';
+            document.body.appendChild(efirmaModalContainer);
+            
+            // Importar createRoot
+            const { createRoot } = await import('react-dom/client');
+            const root = createRoot(efirmaModalContainer);
+            
+            // Importar EfirmaSignatureWorkflow dinámicamente
+            const EfirmaSignatureWorkflow = await import('./EfirmaSignatureWorkflow').then(m => m.default);
+            
+            // Renderizar el componente de flujo de e.firma
+            root.render(
+              <EfirmaSignatureWorkflow
+                documentId={documentId}
+                documentTitle={documentTitle}
+                position={position}
+                reason={reason.trim() || 'Firma con e.firma (FIEL)'}
+                onSuccess={() => {
+                  // Desmontar componente y eliminar contenedor
+                  root.unmount();
+                  document.body.removeChild(efirmaModalContainer);
+                  
+                  // Finalizar proceso de firma
+                  handleSignatureSuccess();
+                }}
+                onCancel={() => {
+                  // Desmontar componente y eliminar contenedor
+                  root.unmount();
+                  document.body.removeChild(efirmaModalContainer);
+                  setIsLoading(false);
+                }}
+              />
+            );
+          } catch (err: any) {
+            console.error('Error iniciando proceso de firma con e.firma:', err);
+            setError(err?.response?.data?.message || 'Error al iniciar firma con e.firma');
+            setIsLoading(false);
+          }
+          break;
+          
+        default:
+          throw new Error('Tipo de firma no válido');
+      }
+    } catch (err: any) {
+      console.error('Error al firmar documento:', err);
+      setError(err?.response?.data?.message || 'Error al firmar documento');
       setIsLoading(false);
     }
-  }
   };
   
   const handleTwoFactorSuccess = async () => {
-  if (!pendingSignatureData) {
-    setError('No hay datos de firma pendientes');
-    return;
-  }
-  
-  setIsLoading(true);
-  
-  try {
-    // Ahora realizar la firma con los datos almacenados
-    await api.post(`/api/signatures/${documentId}`, {
-      position: pendingSignatureData.position,
-      reason: pendingSignatureData.reason,
-      sealData: pendingSignatureData.sealData
-    });
+    if (!pendingSignatureData) {
+      setError('No hay datos de firma pendientes');
+      return;
+    }
     
-    handleSignatureSuccess();
-  } catch (err: any) {
-    console.error('Error al firmar documento después de verificación 2FA:', err);
-    setError(err?.response?.data?.message || 'Error al firmar documento');
-  } finally {
-    setIsLoading(false);
-    setShowTwoFactorModal(false);
-    setPendingSignatureData(null);
-  }
+    setIsLoading(true);
+    
+    try {
+      // Realizar la firma con los datos almacenados
+      await api.post(`/api/signatures/${documentId}`, {
+        position: pendingSignatureData.position,
+        reason: pendingSignatureData.reason,
+        sealData: pendingSignatureData.sealData
+      });
+      
+      handleSignatureSuccess();
+    } catch (err: any) {
+      console.error('Error al firmar documento después de verificación 2FA:', err);
+      setError(err?.response?.data?.message || 'Error al firmar documento');
+    } finally {
+      setIsLoading(false);
+      setShowTwoFactorModal(false);
+      setPendingSignatureData(null);
+    }
+  };
+  
+  const handleBiometricSuccess = async (result: any) => {
+    if (!pendingSignatureData) {
+      setError('No hay datos de firma pendientes');
+      return;
+    }
+    
+    setIsLoading(true);
+    
+    try {
+      // Firma con verificación biométrica
+      await api.post(`/api/signatures/${documentId}/biometric`, {
+        position: pendingSignatureData.position,
+        reason: pendingSignatureData.reason,
+        biometricVerification: {
+          timestamp: Date.now(),
+          challenge: result?.challenge || 'blink',
+          score: result?.score || 0.9,
+          method: 'facial-recognition'
+        }
+      });
+      
+      handleSignatureSuccess();
+    } catch (err: any) {
+      console.error('Error al firmar documento con biometría:', err);
+      setError(err?.response?.data?.message || 'Error al firmar documento');
+    } finally {
+      setIsLoading(false);
+      setShowBiometricWorkflow(false);
+      setPendingSignatureData(null);
+    }
   };
   
   const handleSignatureSuccess = async () => {
-  // Actualizar lista de firmas
-  const signaturesResponse = await api.get(`/api/signatures/document/${documentId}`);
-  setSignatures(signaturesResponse.data);
-  
-  // Mostrar mensaje de éxito
-  setSuccessMessage(`Documento firmado exitosamente con ${
-    pendingSignatureData?.type === 'standard' ? 'autenticación 2FA' : 
-    pendingSignatureData?.type === 'biometric' ? 'verificación biométrica' : 
-    'e.firma'
-  }`);
-  
-  if (onSignSuccess) {
-    onSignSuccess();
-  }
+    // Actualizar lista de firmas
+    const signaturesResponse = await api.get(`/api/signatures/document/${documentId}`);
+    setSignatures(signaturesResponse.data);
+    
+    // Mostrar mensaje de éxito
+    setSuccessMessage(`Documento firmado exitosamente con ${
+      pendingSignatureData?.type === 'standard' ? 'autenticación 2FA' : 
+      pendingSignatureData?.type === 'biometric' ? 'verificación biométrica' : 
+      'e.firma'
+    }`);
+    
+    if (onSignSuccess) {
+      onSignSuccess();
+    }
   };
-  
 
   // Verificar una firma específica
   const verifySignature = async (signatureId: string) => {
@@ -658,23 +632,48 @@ const DocumentSignature = ({
           />
         </div>
       )}
+
+      {/* Modal de verificación de dos factores */}
       {showTwoFactorModal && (
-  <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-600 bg-opacity-50">
-    <TwoFactorVerification
-      onVerificationSuccess={handleTwoFactorSuccess}
-      onVerificationFailure={(errorMsg) => {
-        setError(errorMsg);
-        setShowTwoFactorModal(false);
-        setPendingSignatureData(null);
-      }}
-      onCancel={() => {
-        setShowTwoFactorModal(false);
-        setPendingSignatureData(null);
-      }}
-    />
-  </div>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-600 bg-opacity-50">
+          <TwoFactorVerification
+            onVerificationSuccess={handleTwoFactorSuccess}
+            onVerificationFailure={(errorMsg) => {
+              setError(errorMsg);
+              setShowTwoFactorModal(false);
+              setPendingSignatureData(null);
+              setIsLoading(false);
+            }}
+            onCancel={() => {
+              setShowTwoFactorModal(false);
+              setPendingSignatureData(null);
+              setIsLoading(false);
+            }}
+          />
+        </div>
       )}
       
+      {/* Modal de BiometricSignatureWorkflow */}
+      {showBiometricWorkflow && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-600 bg-opacity-50">
+          <BiometricSignatureWorkflow
+            documentId={documentId}
+            documentTitle={documentTitle}
+            onSuccess={(result) => {
+              handleBiometricSuccess(result);
+              setShowBiometricWorkflow(false);
+            }}
+            onCancel={() => {
+              setShowBiometricWorkflow(false);
+              setPendingSignatureData(null);
+              setIsLoading(false);
+            }}
+            navigateToRegistration={() => {
+              window.location.href = '/biometric-registration';
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 };

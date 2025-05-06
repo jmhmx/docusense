@@ -36,7 +36,7 @@ import { AnalyticsModule } from './analytics/analytics.module';
         password: config.get('DB_PASSWORD'),
         database: config.get('DB_NAME'),
         entities: [__dirname + '/**/*.entity{.ts,.js}'],
-        synchronize: true,
+        synchronize: true, //cambiar a false en producción
         uuidExtension: 'pgcrypto',
         extra: {
           max: 20,
@@ -57,7 +57,7 @@ import { AnalyticsModule } from './analytics/analytics.module';
     EmailModule,
     WebsocketModule,
     AnnotationsModule,
-    AnalyticsModule
+    AnalyticsModule,
   ],
 })
 export class AppModule {}

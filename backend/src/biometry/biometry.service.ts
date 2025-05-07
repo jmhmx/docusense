@@ -104,7 +104,7 @@ export class BiometryService {
     }
 
     // Cifrar datos biométricos con mayor seguridad
-    const { encryptedData, iv, authTag } =
+    const { encryptedData, iv, authTag, salt } =
       this.cryptoService.encryptBiometricData(descriptorBuffer);
 
     // Crear registro con metadatos completos
@@ -113,6 +113,7 @@ export class BiometryService {
       descriptorData: encryptedData,
       iv,
       authTag, // Añadir el authTag aquí
+      salt,
       type: registerDto.type,
       metadata: {
         ...registerDto.metadata,
@@ -262,15 +263,16 @@ export class BiometryService {
         storedBiometricData.descriptorData,
         storedBiometricData.iv,
         storedBiometricData.authTag,
+        storedBiometricData.salt, // Pasar la sal si está disponible
       );
     } catch (error) {
+      // Mejor manejo de errores con detalles
       this.logger.error(
         `Error al descifrar datos biométricos: ${error.message}`,
         error.stack,
       );
-
       throw new BadRequestException(
-        'Error al descifrar datos biométricos almacenados',
+        `Error al descifrar datos biométricos: ${error.message}`,
       );
     }
 

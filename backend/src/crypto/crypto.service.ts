@@ -12,6 +12,7 @@ export interface EncryptionResult {
   encryptedData: Buffer;
   iv: Buffer;
   authTag: Buffer;
+  salt: Buffer;
 }
 
 @Injectable()
@@ -45,8 +46,9 @@ export class CryptoService {
 
     return {
       encryptedData: encrypted,
-      iv: Buffer.concat([salt, iv.slice(0, -salt.length)]), // Incluir la sal en el IV
-      authTag,
+      iv: iv,
+      authTag: authTag,
+      salt: salt,
     };
   }
 
@@ -54,16 +56,15 @@ export class CryptoService {
     encryptedData: Buffer,
     iv: Buffer,
     authTag: Buffer,
+    salt?: Buffer,
   ): Buffer {
     try {
-      // Usar una sal derivada del IV para mantener consistencia
-      // (lo ideal sería almacenar la sal, pero esto es una solución rápida)
-      const salt = iv.slice(0, 16); // Usar el IV como sal
+      const usedSalt = salt || iv.slice(0, Math.min(16, iv.length));
 
       const key = crypto.pbkdf2Sync(
         process.env.MASTER_KEY ||
           'default-key-should-be-replaced-in-production',
-        salt,
+        usedSalt,
         10000,
         this.AES_KEY_LENGTH,
         'sha256',
@@ -74,9 +75,9 @@ export class CryptoService {
 
       return Buffer.concat([decipher.update(encryptedData), decipher.final()]);
     } catch (error) {
-      this.logger.error(`Error al descifrar datos: ${error.message}`);
+      console.error('Error detallado al descifrar:', error);
       throw new BadRequestException(
-        'Error al descifrar los datos: posible manipulación detectada',
+        'Error al descifrar los datos: ' + error.message,
       );
     }
   }

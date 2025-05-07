@@ -699,7 +699,11 @@ const startVideo = useCallback(async () => {
           }
         });
         
-        onSuccess(response.data);
+        onSuccess({
+          ...response.data,
+          descriptorData: btoa(JSON.stringify(descriptor)),
+          challenge: livenessChallenge
+        });
       }
     } catch (err: any) {
       console.error('Error procesando datos biométricos:', err);

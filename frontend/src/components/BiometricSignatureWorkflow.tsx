@@ -53,6 +53,7 @@ const BiometricSignatureWorkflow = ({
 
   // Manejar éxito de captura biométrica
   const handleBiometricSuccess = async (result: BiometricVerificationResult) => {
+    console.log("es esta 2");
     setIsProcessing(true);
     setError(null);
     

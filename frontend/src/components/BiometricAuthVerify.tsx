@@ -15,6 +15,8 @@ const BiometricAuthVerify = ({ onSuccess, onCancel }: BiometricAuthVerifyProps) 
   
   // Modificar la función handleBiometricSuccess
   const handleBiometricSuccess = async (result: any) => {
+    console.log("es esta");
+    
     setIsVerifying(true);
     setError(null);
     

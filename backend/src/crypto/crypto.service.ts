@@ -26,24 +26,26 @@ export class CryptoService {
 
   // Método especializado para datos biométricos con mayor seguridad
   encryptBiometricData(data: Buffer): EncryptionResult {
-    // Usar AES-GCM para mayor seguridad (autenticación incluida)
+    // Generar una sal consistente
+    const salt = crypto.randomBytes(16);
+
     const key = crypto.pbkdf2Sync(
       process.env.MASTER_KEY || 'default-key-should-be-replaced-in-production',
-      crypto.randomBytes(16),
-      10000, // iteraciones
+      salt,
+      10000,
       this.AES_KEY_LENGTH,
       'sha256',
     );
 
-    const iv = crypto.randomBytes(12); // GCM requiere un IV de 12 bytes para rendimiento óptimo
+    const iv = crypto.randomBytes(12);
     const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
 
     const encrypted = Buffer.concat([cipher.update(data), cipher.final()]);
-    const authTag = cipher.getAuthTag(); // Obtener el tag de autenticación
+    const authTag = cipher.getAuthTag();
 
     return {
       encryptedData: encrypted,
-      iv,
+      iv: Buffer.concat([salt, iv.slice(0, -salt.length)]), // Incluir la sal en el IV
       authTag,
     };
   }
@@ -53,17 +55,23 @@ export class CryptoService {
     iv: Buffer,
     authTag: Buffer,
   ): Buffer {
-    const key = crypto.scryptSync(
-      process.env.MASTER_KEY || 'default-key-should-be-replaced-in-production',
-      crypto.randomBytes(16), // Salt aleatorio - este debería ser el mismo que se usó para encriptar
-      this.AES_KEY_LENGTH,
-      { N: 32768, r: 8, p: 1 },
-    );
-
-    const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
-    decipher.setAuthTag(authTag); // Verificar la autenticidad de los datos
-
     try {
+      // Usar una sal derivada del IV para mantener consistencia
+      // (lo ideal sería almacenar la sal, pero esto es una solución rápida)
+      const salt = iv.slice(0, 16); // Usar el IV como sal
+
+      const key = crypto.pbkdf2Sync(
+        process.env.MASTER_KEY ||
+          'default-key-should-be-replaced-in-production',
+        salt,
+        10000,
+        this.AES_KEY_LENGTH,
+        'sha256',
+      );
+
+      const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+      decipher.setAuthTag(authTag);
+
       return Buffer.concat([decipher.update(encryptedData), decipher.final()]);
     } catch (error) {
       this.logger.error(`Error al descifrar datos: ${error.message}`);

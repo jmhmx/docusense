@@ -267,9 +267,6 @@ const renderDocumentPreview = () => {
               <PDFViewer 
                 documentId={id || ''} 
                 onPageChange={(page) => setCurrentPage(page)}
-                onSelectionChange={(selection) => {
-                  console.log('Text selected:', selection);
-                }}
                 annotations={formattedSignatures}
               />
             ) : (

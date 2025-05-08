@@ -15,6 +15,8 @@ import { SharingService } from '../sharing/sharing.service';
 import * as fs from 'fs';
 import * as path from 'path';
 import { BlockchainService } from '../blockchain/blockchain.service';
+import { PDFDocument, rgb } from 'pdf-lib';
+import { Signature } from '../signatures/entities/signature.entity';
 
 @Injectable()
 export class DocumentsService {
@@ -440,5 +442,79 @@ export class DocumentsService {
     } catch (error) {
       throw new Error(`Error al obtener contenido: ${error.message}`);
     }
+  }
+
+  async generateSignedPdf(
+    document: Document,
+    signatures: Signature[],
+  ): Promise<Buffer> {
+    // Obtener contenido del documento original
+    const fileData = await this.getDocumentContent(document, document.userId);
+
+    // Usar pdf-lib para modificar el PDF e incluir las firmas visualmente
+    const pdfDoc = await PDFDocument.load(fileData);
+
+    // Para cada firma, añadir su representación visual
+    for (const signature of signatures) {
+      try {
+        // Obtener posición
+        const position =
+          typeof signature.position === 'string'
+            ? JSON.parse(signature.position)
+            : signature.position;
+
+        // Obtener la página donde va la firma
+        const page = pdfDoc.getPages()[position.page - 1];
+        if (!page) continue;
+
+        // Crear capa de firma (rectángulo azul claro)
+        page.drawRectangle({
+          x: position.x,
+          y: page.getHeight() - position.y - position.height,
+          width: position.width,
+          height: position.height,
+          color: rgb(0.9, 0.95, 1),
+          borderColor: rgb(0, 0.4, 0.8),
+          borderWidth: 1,
+          opacity: 0.8,
+        });
+
+        // Añadir texto de la firma
+        const fontSize = 8;
+        page.drawText(`Firmado por: ${signature.user?.name || 'Usuario'}`, {
+          x: position.x + 5,
+          y: page.getHeight() - position.y - 15,
+          size: fontSize,
+          color: rgb(0, 0, 0.7),
+        });
+
+        page.drawText(
+          `Fecha: ${new Date(signature.signedAt).toLocaleDateString()}`,
+          {
+            x: position.x + 5,
+            y: page.getHeight() - position.y - 26,
+            size: fontSize,
+            color: rgb(0, 0, 0.7),
+          },
+        );
+
+        if (signature.reason) {
+          page.drawText(`Motivo: ${signature.reason}`, {
+            x: position.x + 5,
+            y: page.getHeight() - position.y - 37,
+            size: fontSize,
+            color: rgb(0, 0, 0.7),
+          });
+        }
+      } catch (error) {
+        this.logger.error(`Error añadiendo firma al PDF: ${error.message}`);
+        // Continuar con las siguientes firmas
+      }
+    }
+
+    // Serializar el PDF modificado
+    const pdfBytes = await pdfDoc.save();
+
+    return Buffer.from(pdfBytes);
   }
 }

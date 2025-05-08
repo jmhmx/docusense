@@ -68,6 +68,8 @@ const DocumentViewer = () => {
   //@ts-ignore
   const [isLoadingSignatures, setIsLoadingSignatures] = useState(true);
   const [documentImageUrl, setDocumentImageUrl] = useState<string | null>(null);
+  const [signatureOverlayVisible, setSignatureOverlayVisible] = useState(true);
+
 
 
   // Añadir esta función
@@ -208,6 +210,18 @@ const DocumentViewer = () => {
     }
   };
 
+  const handleDownloadSignedDocument = () => {
+    if (!document || !id) return;
+    
+    // Crear enlace de descarga
+    const link = window.document.createElement('a');
+    link.href = `/api/documents/${id}/download-signed`;
+    link.setAttribute('download', `signed_${document.filename}`);
+    window.document.body.appendChild(link);
+    link.click();
+    window.document.body.removeChild(link);
+  };
+
 
 const renderDocumentPreview = () => {
   if (!document) return null;
@@ -263,6 +277,43 @@ const renderDocumentPreview = () => {
             onPageSelect={(page) => setCurrentPage(page)}
           />
           <PDFAnnotationManager documentId={id || ''}>
+            <div className="flex justify-end space-x-2">
+              <button
+                type="button"
+                onClick={handleDownloadDocument}
+                className="inline-flex items-center px-3 py-1.5 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="-ml-0.5 mr-1 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+                Descargar original
+              </button>
+              
+              
+              {signatures.length > 0 && (
+                <div>
+                  <button 
+                    onClick={() => setSignatureOverlayVisible(!signatureOverlayVisible)}
+                    className="p-2 bg-white rounded-full shadow-sm"
+                  >
+                  {signatureOverlayVisible ? 'Ocultar firmas' : 'Mostrar firmas'}
+                    </button>
+                    <button
+                    type="button"
+                    onClick={handleDownloadSignedDocument}
+                    className="inline-flex items-center px-3 py-1.5 border border-green-300 shadow-sm text-sm font-medium rounded-md text-green-700 bg-white hover:bg-green-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="-ml-0.5 mr-1 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Descargar con firmas
+                  </button>
+                </div>
+                
+                
+              )}
+            </div>
+            
             {documentImageUrl ? (
               <PDFViewer 
                 documentId={id || ''} 
@@ -274,6 +325,30 @@ const renderDocumentPreview = () => {
                 <div className="w-16 h-16 border-4 border-blue-500 rounded-full border-t-transparent animate-spin"></div>
               </div>
             )}
+            {signatureOverlayVisible && (
+            <div className="absolute inset-0 pointer-events-none">
+              {formattedSignatures.map(sig => (
+                <div
+                  key={sig.id}
+                  className="absolute border-2 border-blue-500 rounded shadow-sm bg-white/80"
+                  style={{
+                    left: `${sig.position.x}px`,
+                    top: `${sig.position.y}px`,
+                    width: `${sig.position.width}px`,
+                    height: `${sig.position.height}px`,
+                    display: sig.position.page === currentPage ? 'block' : 'none',
+                  }}
+                >
+                  <div className="p-2 text-xs">
+                    <p className="font-bold">{sig.user.name}</p>
+                    <p>{new Date(sig.signedAt).toLocaleDateString()}</p>
+                    {sig.reason && <p>{sig.reason}</p>}
+                  </div>
+                </div>
+              ))}
+            </div>
+            )}
+            
           </PDFAnnotationManager>
           
           

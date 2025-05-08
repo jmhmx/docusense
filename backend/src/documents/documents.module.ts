@@ -22,9 +22,9 @@ import { SignaturesModule } from '../signatures/signatures.module';
     ScheduleModule.forRoot(),
     CryptoModule,
     AuditModule,
-    forwardRef(() => SharingModule), // Usar forwardRef para evitar dependencia circular
+    forwardRef(() => SharingModule),
     forwardRef(() => BlockchainModule),
-    forwardRef(() => SignaturesModule), // Añadimos la referencia a SignaturesModule
+    forwardRef(() => SignaturesModule),
   ],
   controllers: [
     DocumentsController,

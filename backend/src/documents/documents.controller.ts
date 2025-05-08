@@ -38,6 +38,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { Response } from 'express';
 import { createReadStream } from 'fs';
 import { Readable } from 'stream';
+import { SignaturesService } from '../signatures/signatures.service';
 
 const UPLOAD_DIR = 'uploads';
 // Asegurar que el directorio de carga existe
@@ -71,6 +72,7 @@ export class DocumentsController {
     private readonly documentAnalyzerService: DocumentAnalyzerService,
     private readonly cryptoService: CryptoService,
     private readonly auditLogService: AuditLogService,
+    private readonly signaturesService: SignaturesService,
   ) {
     // Verificar que el servicio se está inyectando correctamente
     console.log(
@@ -416,5 +418,31 @@ export class DocumentsController {
       pageCount: document.metadata?.pageCount || 1,
       // otros metadatos relevantes
     };
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get(':id/download-signed')
+  async downloadSignedDocument(
+    @Param('id') id: string,
+    @Request() req,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<StreamableFile> {
+    const document = await this.documentsService.findOne(id, req.user.id);
+
+    // Obtener firmas del documento
+    const signatures = await this.signaturesService.getDocumentSignatures(id);
+
+    // Generar PDF con firmas integradas
+    const pdfWithSignatures = await this.documentsService.generateSignedPdf(
+      document,
+      signatures,
+    );
+
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="signed_${document.filename}"`,
+    });
+
+    return new StreamableFile(pdfWithSignatures);
   }
 }

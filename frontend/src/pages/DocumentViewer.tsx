@@ -7,12 +7,18 @@ import DocumentEncrypt from '../components/DocumentEncrypt';
 import DocumentSharing from '../components/DocumentSharing';
 import DocumentComments from '../components/DocumentComments';
 import PDFViewer from '../components/PDFViewer';
+//import DocumentPreview from '../components/DocumentPreview';
 import DocumentBlockchainVerification from '../components/DocumentBlockchainVerification';
 import MultiSignatureManager from '../components/MultiSignatureManager';
 import MultiSignatureVerification from '../components/MultiSignatureVerification';
 import PDFSearch from '../components/PDFSearch';
 import PDFThumbnails from '../components/PDFThumbnails';
 import PDFAnnotationManager from '../components/PDFAnnotationManager';
+import { pdfjs } from 'react-pdf';
+
+
+// Set the worker source
+pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.js`;
 
 interface DocumentType {
   id: string;
@@ -59,28 +65,41 @@ const DocumentViewer = () => {
   const [currentPage, setCurrentPage] = useState<number>(1);
   //@ts-ignore
   const [totalPages, setTotalPages] = useState<number>(1);
-
+  //@ts-ignore
+  const [isLoadingSignatures, setIsLoadingSignatures] = useState(true);
+  const [documentImageUrl, setDocumentImageUrl] = useState<string | null>(null);
 
 
   // Añadir esta función
-const fetchUnreadComments = async () => {
-  if (!id) return;
-  
-  try {
-    const response = await api.get(`/api/comments/document/${id}/unread-count`);
-    setUnreadComments(response.data);
-  } catch (err) {
-    console.error('Error al obtener comentarios no leídos:', err);
-  }
-};
-
+  const fetchUnreadComments = async () => {
+    if (!id) return;
+    
+    try {
+      const response = await api.get(`/api/comments/document/${id}/unread-count`);
+      setUnreadComments(response.data);
+    } catch (err) {
+      console.error('Error al obtener comentarios no leídos:', err);
+    }
+  };
 
   useEffect(() => {
     if (id) {
       fetchDocument();
       fetchUnreadComments();
+      fetchSignatures();
     }
-  }, [id]);
+
+    if (id && currentPage) {
+    loadDocumentImage();    
+    // Limpieza al desmontar
+    return () => {
+      if (documentImageUrl) {
+        URL.revokeObjectURL(documentImageUrl);
+      }
+    };
+  }
+  }, [id, currentPage]);
+  
 
   const fetchDocument = async () => {
     setLoading(true);
@@ -95,6 +114,34 @@ const fetchUnreadComments = async () => {
       setLoading(false);
     }
   };
+
+  const fetchSignatures = async () => {
+    if (!id) return;
+    
+    setIsLoadingSignatures(true);
+    try {
+      const response = await api.get(`/api/signatures/document/${id}`);
+      setSignatures(response.data);
+    } catch (err) {
+      console.error('Error loading signatures:', err);
+    } finally {
+      setIsLoadingSignatures(false);
+    }
+  };
+
+  // Crear un objeto URL con datos binarios
+    const loadDocumentImage = async () => {
+      try {
+        const response = await api.get(`/api/documents/${id}/view?page=${currentPage}`, {
+          responseType: 'blob'
+        });
+        const imageUrl = URL.createObjectURL(response.data);
+        setDocumentImageUrl(imageUrl);
+      } catch (err) {
+        console.error('Error cargando imagen del documento:', err);
+        setError('Error al cargar la vista previa del documento');
+      }
+    };
 
   const handleProcessDocument = async () => {
     if (!id) return;
@@ -161,10 +208,41 @@ const fetchUnreadComments = async () => {
     }
   };
 
-  // Modificar en frontend/src/pages/DocumentViewer.tsx (solo la sección de renderDocumentPreview)
 
 const renderDocumentPreview = () => {
-    if (!document) return null;
+  if (!document) return null;
+  
+  // Convertir firmas para el componente DocumentPreview
+  const formattedSignatures = signatures.map(sig => {
+    // Intentar parsear el objeto position
+    let position = { page: 1, x: 0, y: 0, width: 200, height: 100 };
+    try {
+      if (sig.position) {
+        position = JSON.parse(sig.position);
+      }
+    } catch (e) {
+      console.error('Error parsing signature position:', e);
+    }
+
+    return {
+      id: sig.id,
+      position: {
+        page: position.page || 1,
+        x: position.x || 0,
+        y: position.y || 0,
+        width: position.width || 200,
+        height: position.height || 100
+      },
+      user: {
+        name: sig.user?.name || 'Usuario',
+        email: sig.user?.email
+      },
+      signedAt: sig.signedAt,
+      valid: sig.valid,
+      reason: sig.reason
+    };
+  });
+
 
     if (document.mimeType?.includes('pdf')) {
       // Para PDFs, vamos a usar nuestro sistema mejorado
@@ -185,14 +263,20 @@ const renderDocumentPreview = () => {
             onPageSelect={(page) => setCurrentPage(page)}
           />
           <PDFAnnotationManager documentId={id || ''}>
-            <PDFViewer 
-              documentId={id || ''} 
-              onPageChange={(page) => setCurrentPage(page)}
-              onSelectionChange={(selection) => {
-                console.log('Text selected:', selection);
-                // Podrías usar esta selección para crear comentarios o anotaciones
-              }}
-            />
+            {documentImageUrl ? (
+              <PDFViewer 
+                documentId={id || ''} 
+                onPageChange={(page) => setCurrentPage(page)}
+                onSelectionChange={(selection) => {
+                  console.log('Text selected:', selection);
+                }}
+                annotations={formattedSignatures}
+              />
+            ) : (
+              <div className="flex items-center justify-center h-96">
+                <div className="w-16 h-16 border-4 border-blue-500 rounded-full border-t-transparent animate-spin"></div>
+              </div>
+            )}
           </PDFAnnotationManager>
           
           
@@ -392,9 +476,6 @@ const renderDocumentPreview = () => {
     </div>
   );
   };
-  
-
-  
 
   const renderSignaturesTab = () => {
     if (!document || !id) return null;
@@ -513,6 +594,7 @@ const renderDocumentPreview = () => {
   if (!document) {
     return null;
   }
+  
 
   return (
     <div className="px-4 py-8 mx-auto max-w-7xl sm:px-6 lg:px-8">

@@ -1,27 +1,24 @@
 import { useState, useEffect, useRef } from 'react';
-import { Document, Page, pdfjs } from 'react-pdf';
+import { Document, Page } from 'react-pdf';
 import 'react-pdf/dist/esm/Page/AnnotationLayer.css';
 import 'react-pdf/dist/esm/Page/TextLayer.css';
 
-// Set the worker source
-pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.js`;
-
 interface Annotation {
   id: string;
-  type: 'highlight' | 'underline' | 'note';
-  content?: string;
   position: {
-    pageNumber: number;
-    boundingRect: {
-      x1: number;
-      y1: number;
-      x2: number;
-      y2: number;
-      width: number;
-      height: number;
-    };
+    page: number;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
   };
-  color: string;
+  user: {
+    name: string;
+    email?: string;
+  };
+  signedAt: string;
+  valid: boolean;
+  reason?: string;
 }
 
 interface PDFViewerProps {
@@ -30,7 +27,6 @@ interface PDFViewerProps {
   onPageChange?: (page: number) => void;
   annotations?: Annotation[];
   onAnnotationCreate?: (annotation: Omit<Annotation, 'id'>) => void;
-  onAnnotationDelete?: (id: string) => void;
 }
 
 const PDFViewer = ({ 
@@ -39,7 +35,6 @@ const PDFViewer = ({
   onPageChange,
   annotations = [],
   onAnnotationCreate,
-  onAnnotationDelete 
 }: PDFViewerProps) => {
   const [numPages, setNumPages] = useState<number | null>(null);
   const [pageNumber, setPageNumber] = useState<number>(1);
@@ -146,12 +141,12 @@ const PDFViewer = ({
           
           // Create annotation if tool is active
           if (activeAnnotationTool !== 'none' && onAnnotationCreate) {
-            onAnnotationCreate({
-              type: activeAnnotationTool,
-              position,
-              color: annotationColor,
-              content: activeAnnotationTool === 'note' ? '' : undefined
-            });
+            // onAnnotationCreate({
+            //   type: activeAnnotationTool,
+            //   position,
+            //   color: annotationColor,
+            //   content: activeAnnotationTool === 'note' ? '' : undefined
+            // });
             
             // Clear selection after creating annotation
             window.getSelection()?.removeAllRanges();
@@ -163,19 +158,21 @@ const PDFViewer = ({
   };
 
   const renderAnnotations = () => {
-    const pageAnnotations = annotations.filter(ann => ann.position.pageNumber === pageNumber);
+    if (!annotations) return [];
+    
+    // Filtrar anotaciones para la página actual
+    const pageAnnotations = annotations.filter(ann => ann.position.page === pageNumber);
     
     return pageAnnotations.map(annotation => {
-      const { x1, y1, width, height } = annotation.position.boundingRect;
+      const { x, y, width, height } = annotation.position;
       const style: React.CSSProperties = {
         position: 'absolute',
-        left: `${x1 * scale}px`,
-        top: `${y1 * scale}px`,
+        left: `${x * scale}px`,
+        top: `${y * scale}px`,
         width: `${width * scale}px`,
         height: `${height * scale}px`,
-        backgroundColor: annotation.type === 'note' ? 'transparent' : annotation.color,
-        opacity: annotation.type === 'highlight' ? 0.3 : 1,
-        borderBottom: annotation.type === 'underline' ? `2px solid ${annotation.color}` : 'none',
+        backgroundColor: annotation.valid ? 'rgba(46, 204, 113, 0.3)' : 'rgba(231, 76, 60, 0.3)',
+        border: `2px solid ${annotation.valid ? 'rgb(46, 204, 113)' : 'rgb(231, 76, 60)'}`,
         zIndex: 2,
         cursor: 'pointer'
       };
@@ -185,46 +182,23 @@ const PDFViewer = ({
           key={annotation.id} 
           style={style}
           onClick={() => handleAnnotationClick(annotation)}
-          title={annotation.content || 'Annotation'}
+          title={annotation.reason || 'Signature'}
         >
-          {annotation.type === 'note' && (
-            <div style={{ 
-              position: 'absolute', 
-              left: 0, 
-              top: 0, 
-              width: '24px', 
-              height: '24px', 
-              backgroundColor: annotation.color,
-              borderRadius: '50%',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: '#000',
-              fontWeight: 'bold',
-              fontSize: '12px'
-            }}>
-              i
+          <div className="flex items-center p-2">
+            <div className="flex items-center justify-center flex-shrink-0 w-6 h-6 bg-blue-100 rounded-full">
+              <span className="text-xs font-bold text-blue-800">
+                {annotation.user.name.substring(0, 2).toUpperCase()}
+              </span>
             </div>
-          )}
+          </div>
         </div>
       );
     });
   };
 
   const handleAnnotationClick = (annotation: Annotation) => {
-    // Show annotation detail or allow editing
-    console.log('Annotation clicked:', annotation);
-    
-    // If it's a note, you might want to show a modal or popup
-    if (annotation.type === 'note') {
-      // Implement note viewing/editing
-    }
-    
-    // Add option to delete the annotation
-    if (window.confirm('¿Desea eliminar esta anotación?') && onAnnotationDelete) {
-      onAnnotationDelete(annotation.id);
-    }
-  };
+  console.log('Annotation clicked:', annotation);
+};
 
   return (
     <div className="flex flex-col p-4 bg-white rounded-lg shadow">
@@ -415,9 +389,11 @@ const PDFViewer = ({
               onClick={() => {
                 if (onAnnotationCreate) {
                   onAnnotationCreate({
-                    type: 'highlight',
                     position: selectedText.position,
-                    color: annotationColor
+                    user: { name: 'Current User' },
+                    signedAt: new Date().toISOString(),
+                    valid: true,
+                    reason: 'Annotation'
                   });
                   window.getSelection()?.removeAllRanges();
                   setSelectedText(null);
@@ -434,9 +410,11 @@ const PDFViewer = ({
               onClick={() => {
                 if (onAnnotationCreate) {
                   onAnnotationCreate({
-                    type: 'underline',
                     position: selectedText.position,
-                    color: annotationColor
+                    user: { name: 'Current User' },
+                    signedAt: new Date().toISOString(),
+                    valid: true,
+                    reason: 'Annotation'
                   });
                   window.getSelection()?.removeAllRanges();
                   setSelectedText(null);
@@ -453,10 +431,11 @@ const PDFViewer = ({
               onClick={() => {
                 if (onAnnotationCreate) {
                   onAnnotationCreate({
-                    type: 'note',
                     position: selectedText.position,
-                    color: annotationColor,
-                    content: ''
+                    user: { name: 'Current User' },
+                    signedAt: new Date().toISOString(),
+                    valid: true,
+                    reason: 'Annotation'
                   });
                   window.getSelection()?.removeAllRanges();
                   setSelectedText(null);

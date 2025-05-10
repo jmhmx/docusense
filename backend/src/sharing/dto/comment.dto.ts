@@ -7,6 +7,7 @@ import {
   ValidateNested,
   IsNumber,
   IsObject,
+  IsArray,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -61,6 +62,10 @@ export class CreateCommentDto {
   @IsOptional()
   @IsObject()
   metadata?: Record<string, any>;
+
+  @IsOptional()
+  @IsArray()
+  mentions?: string[]; // IDs de usuarios mencionados
 }
 
 export class UpdateCommentDto {

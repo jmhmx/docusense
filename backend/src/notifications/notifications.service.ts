@@ -24,6 +24,56 @@ export class NotificationsService {
     private documentsService: DocumentsService,
   ) {}
 
+  // Obtener notificaciones de un usuario
+  async getUserNotifications(userId: string): Promise<Notification[]> {
+    try {
+      return this.notificationsRepository.find({
+        where: { userId },
+        order: { createdAt: 'DESC' },
+        take: 50, // Limitar a las 50 más recientes
+      });
+    } catch (error) {
+      this.logger.error(`Error fetching notifications: ${error.message}`);
+      return [];
+    }
+  }
+
+  // Marcar notificación como leída
+  async markAsRead(notificationId: string, userId: string): Promise<boolean> {
+    try {
+      const notification = await this.notificationsRepository.findOne({
+        where: { id: notificationId, userId },
+      });
+
+      if (!notification) {
+        return false;
+      }
+
+      notification.isRead = true;
+      await this.notificationsRepository.save(notification);
+      return true;
+    } catch (error) {
+      this.logger.error(`Error marking notification as read: ${error.message}`);
+      return false;
+    }
+  }
+
+  // Marcar todas las notificaciones de un usuario como leídas
+  async markAllAsRead(userId: string): Promise<boolean> {
+    try {
+      await this.notificationsRepository.update(
+        { userId, isRead: false },
+        { isRead: true },
+      );
+      return true;
+    } catch (error) {
+      this.logger.error(
+        `Error marking all notifications as read: ${error.message}`,
+      );
+      return false;
+    }
+  }
+
   // Crear notificación para mención en comentario
   async createMentionNotification(
     documentId: string,
@@ -60,16 +110,23 @@ export class NotificationsService {
         this.server.to(userId).emit('notification', notification);
 
         // Enviar email (opcional)
-        this.emailService.sendMentionNotification(user.email, {
-          userName: user.name,
-          mentionedBy: author.name,
-          documentTitle: document.title,
-          documentUrl: `${process.env.FRONTEND_URL}/documents/${documentId}`,
-        });
+        try {
+          this.emailService.sendMentionNotification(user.email, {
+            userName: user.name,
+            mentionedBy: author.name,
+            documentTitle: document.title,
+            documentUrl: `${process.env.FRONTEND_URL}/documents/${documentId}`,
+          });
+        } catch (emailError) {
+          this.logger.error(
+            `Error sending email notification: ${emailError.message}`,
+          );
+          // Continuar aunque falle el envío de email
+        }
       }
     } catch (error) {
       this.logger.error(
-        `Error al crear notificaciones de mención: ${error.message}`,
+        `Error creating mention notifications: ${error.message}`,
       );
     }
   }

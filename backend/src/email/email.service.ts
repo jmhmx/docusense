@@ -84,4 +84,21 @@ export class EmailService {
       return false;
     }
   }
+
+  async sendMentionNotification(
+    email: string,
+    data: {
+      userName: string;
+      mentionedBy: string;
+      documentTitle: string;
+      documentUrl: string;
+    },
+  ): Promise<boolean> {
+    return this.sendTemplateEmail({
+      to: email,
+      subject: `${data.mentionedBy} te ha mencionado en un comentario`,
+      template: 'mention-notification', // Ajustar al nombre de tu plantilla
+      context: data,
+    });
+  }
 }

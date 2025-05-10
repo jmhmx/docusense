@@ -106,4 +106,8 @@ export class WebsocketGateway
   sendToTopic(topic: string, event: string, data: any) {
     this.server.to(topic).emit(event, data);
   }
+
+  sendNotificationToUser(userId: string, data: any) {
+    this.server.to(userId).emit('notification', data);
+  }
 }

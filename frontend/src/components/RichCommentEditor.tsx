@@ -41,11 +41,12 @@ const RichCommentEditor = ({
     }
   }, [mentionQuery, availableUsers]);
   
-  const handleKeyDown = (e: React.KeyboardEvent) => {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === '@') {
       // Iniciar mención
       setShowMentions(true);
       setMentionQuery('');
+      // Obtenemos el selectionStart de forma segura desde el textarea
       const start = e.currentTarget.selectionStart || 0;
       setMentionPosition({ start, end: start });
     } else if (showMentions && e.key === 'Escape') {

@@ -77,6 +77,8 @@ const DocumentViewer = () => {
     y: 0,
     comments: []
   });
+  const [comments, setComments] = useState<any[]>([]);
+
 
   const showContextualComments = (position: { x: number; y: number }, pageNumber: number) => {
     // Filtrar comentarios para esta posición específica
@@ -142,6 +144,7 @@ const DocumentViewer = () => {
       fetchDocument();
       fetchUnreadComments();
       fetchSignatures();
+      fetchComments();
     }
 
     if (id && currentPage) {
@@ -154,6 +157,16 @@ const DocumentViewer = () => {
       };
     }
   }, [id, currentPage]);
+
+  useEffect(() => {
+    if (document?.metadata?.pageCount) {
+      setTotalPages(document.metadata.pageCount);
+    }
+  }, [document]);
+
+  const handleCommentAdded = () => {
+    fetchComments();
+  };
   
 
   const fetchDocument = async () => {
@@ -167,6 +180,17 @@ const DocumentViewer = () => {
       setError(err?.response?.data?.message || 'Error loading the document. Please try again later.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchComments = async () => {
+    if (!id) return;
+    
+    try {
+      const response = await api.get(`/api/comments/document/${id}`);
+      setComments(response.data);
+    } catch (err) {
+      console.error('Error al cargar comentarios:', err);
     }
   };
 
@@ -812,7 +836,8 @@ const DocumentViewer = () => {
       {activeTab === 'comments' && id && (
         <DocumentComments 
           documentId={id}
-          currentPage={1}
+          currentPage={currentPage}
+          onCommentAdded={handleCommentAdded}
           onCommentsUpdated={(count) => {
             // Actualizar badge o contador de comentarios si es necesario
             setUnreadComments(count);

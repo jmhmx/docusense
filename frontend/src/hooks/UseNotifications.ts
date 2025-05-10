@@ -1,7 +1,7 @@
-// frontend/src/hooks/useNotifications.ts
 import { useEffect, useState, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
 import useAuth from './UseAuth';
+import { api } from '../api/client';
 
 type Notification = {
   id: string;
@@ -27,15 +27,14 @@ const useNotifications = () => {
   useEffect(() => {
     if (isAuthenticated && user) {
       const token = localStorage.getItem('token');
-      const socketInstance = io(
-        import.meta.env.VITE_API_URL || 'http://localhost:3000',
-        {
-          auth: {
-            token, // Token de autenticación
-          },
-          transports: ['websocket'],
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+
+      const socketInstance = io(apiUrl, {
+        auth: {
+          token, // Token de autenticación
         },
-      );
+        transports: ['websocket'],
+      });
 
       socketInstance.on('connect', () => {
         console.log('Conexión WebSocket establecida');
@@ -90,7 +89,6 @@ const useNotifications = () => {
     if (!isAuthenticated || !user) return;
 
     try {
-      const { api } = await import('../api/client');
       const response = await api.get('/api/notifications');
       setNotifications(response.data);
 
@@ -134,7 +132,6 @@ const useNotifications = () => {
       if (!isAuthenticated || !user) return;
 
       try {
-        const { api } = await import('../api/client');
         await api.patch(`/api/notifications/${notificationId}/read`);
 
         // Actualizar estado local
@@ -158,7 +155,6 @@ const useNotifications = () => {
     if (!isAuthenticated || !user) return;
 
     try {
-      const { api } = await import('../api/client');
       await api.post('/api/notifications/read-all');
 
       // Actualizar estado local

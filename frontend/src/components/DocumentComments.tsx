@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { api } from '../api/client';
 import useAuth from '../hooks/UseAuth';
-import Button from './Button';
 import RichCommentEditor from './RichCommentEditor';
 
 interface User {
@@ -64,33 +63,32 @@ const DocumentComments = ({
   const [comments, setComments] = useState<Comment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [newComment, setNewComment] = useState('');
   const [replyTo, setReplyTo] = useState<string | null>(null);
   const [replyContent, setReplyContent] = useState('');
   const [showResolved, setShowResolved] = useState(false);
-  const [addingComment, setAddingComment] = useState(false);
+  //@ts-ignore
   const [permission, setPermission] = useState<string | null>(null);
   const [newCommentsAvailable, setNewCommentsAvailable] = useState(false);
   const [availableUsers, setAvailableUsers] = useState<User[]>([]);
+  const [canComment, setCanComment] = useState(false); // Declare before use
 
   // Para simular nuevos comentarios (en producción usarías websockets o polling)
-const checkForNewComments = () => {
-  const interval = setInterval(async () => {
-    if (documentId) {
-      try {
-        const response = await api.get(`/api/comments/document/${documentId}/unread-count`);
-        if (response.data > 0) {
-          setNewCommentsAvailable(true);
+  const checkForNewComments = () => {
+    const interval = setInterval(async () => {
+      if (documentId) {
+        try {
+          const response = await api.get(`/api/comments/document/${documentId}/unread-count`);
+          if (response.data > 0) {
+            setNewCommentsAvailable(true);
+          }
+        } catch (err) {
+          console.error('Error al verificar nuevos comentarios:', err);
         }
-      } catch (err) {
-        console.error('Error al verificar nuevos comentarios:', err);
       }
-    }
-  }, 30000); // Verificar cada 30 segundos
+    }, 30000); // Verificar cada 30 segundos
 
-  return () => clearInterval(interval);
-};
-
+    return () => clearInterval(interval);
+  };
 
   useEffect(() => {
     fetchComments();
@@ -104,7 +102,7 @@ const checkForNewComments = () => {
     if (onCommentsUpdated) {
       onCommentsUpdated(comments.filter(c => !c.isResolved).length);
     }
-  }, [comments]);
+  }, [comments, onCommentsUpdated]);
 
   useEffect(() => {
     // Cargar usuarios disponibles para menciones
@@ -127,15 +125,20 @@ const checkForNewComments = () => {
       const response = await api.get(`/api/sharing/document/${documentId}/check-permission?action=comment`);
       if (response.data.canAccess) {
         setPermission('comment');
+        setCanComment(true);
       } else {
         const viewResponse = await api.get(`/api/sharing/document/${documentId}/check-permission?action=view`);
         if (viewResponse.data.canAccess) {
           setPermission('view');
+          setCanComment(false);
+        } else {
+          setCanComment(false);
         }
       }
     } catch (err) {
       console.error('Error checking permissions:', err);
       setPermission(null);
+      setCanComment(false);
     }
   };
 
@@ -162,13 +165,10 @@ const checkForNewComments = () => {
   const addComment = async (commentData: any) => {
     if (!commentData.content.trim()) return;
     
-    setAddingComment(true);
     try {
-      const response = await api.post('/api/comments', commentData);
+      await api.post('/api/comments', commentData);
       
       // Si hay menciones, se habrán procesado automáticamente en el backend
-      
-      setNewComment('');
       fetchComments();
       if (onCommentAdded) {
         onCommentAdded();
@@ -176,8 +176,6 @@ const checkForNewComments = () => {
     } catch (err: any) {
       console.error('Error al añadir comentario:', err);
       setError(err?.response?.data?.message || 'Error al añadir comentario');
-    } finally {
-      setAddingComment(false);
     }
   };
 
@@ -236,8 +234,6 @@ const checkForNewComments = () => {
       minute: '2-digit',
     });
   };
-
-  const canComment = permission === 'comment';
 
   const renderComment = (comment: Comment, isReply = false) => {
     const isCurrentUser = user?.id === comment.userId;

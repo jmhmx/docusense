@@ -7,7 +7,6 @@ import DocumentEncrypt from '../components/DocumentEncrypt';
 import DocumentSharing from '../components/DocumentSharing';
 import DocumentComments from '../components/DocumentComments';
 import PDFViewer from '../components/PDFViewer';
-//import DocumentPreview from '../components/DocumentPreview';
 import DocumentBlockchainVerification from '../components/DocumentBlockchainVerification';
 import MultiSignatureManager from '../components/MultiSignatureManager';
 import MultiSignatureVerification from '../components/MultiSignatureVerification';
@@ -15,7 +14,6 @@ import PDFSearch from '../components/PDFSearch';
 import PDFThumbnails from '../components/PDFThumbnails';
 import PDFAnnotationManager from '../components/PDFAnnotationManager';
 import { pdfjs } from 'react-pdf';
-
 
 // Set the worker source
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.js`;
@@ -60,7 +58,6 @@ const DocumentViewer = () => {
   const [unreadComments, setUnreadComments] = useState(0);
   //@ts-ignore
   const [multiSignatureEnabled, setMultiSignatureEnabled] = useState(true);
-  //@ts-ignore
   const [signatures, setSignatures] = useState<Signature[]>([]);
   const [currentPage, setCurrentPage] = useState<number>(1);
   //@ts-ignore
@@ -68,10 +65,6 @@ const DocumentViewer = () => {
   //@ts-ignore
   const [isLoadingSignatures, setIsLoadingSignatures] = useState(true);
   const [documentImageUrl, setDocumentImageUrl] = useState<string | null>(null);
-  //@ts-ignore
-  const [signatureOverlayVisible, setSignatureOverlayVisible] = useState(true);
-
-
 
   // Añadir esta función
   const fetchUnreadComments = async () => {
@@ -93,14 +86,14 @@ const DocumentViewer = () => {
     }
 
     if (id && currentPage) {
-    loadDocumentImage();    
-    // Limpieza al desmontar
-    return () => {
-      if (documentImageUrl) {
-        URL.revokeObjectURL(documentImageUrl);
-      }
-    };
-  }
+      loadDocumentImage();    
+      // Limpieza al desmontar
+      return () => {
+        if (documentImageUrl) {
+          URL.revokeObjectURL(documentImageUrl);
+        }
+      };
+    }
   }, [id, currentPage]);
   
 
@@ -133,18 +126,18 @@ const DocumentViewer = () => {
   };
 
   // Crear un objeto URL con datos binarios
-    const loadDocumentImage = async () => {
-      try {
-        const response = await api.get(`/api/documents/${id}/view?page=${currentPage}`, {
-          responseType: 'blob'
-        });
-        const imageUrl = URL.createObjectURL(response.data);
-        setDocumentImageUrl(imageUrl);
-      } catch (err) {
-        console.error('Error cargando imagen del documento:', err);
-        setError('Error al cargar la vista previa del documento');
-      }
-    };
+  const loadDocumentImage = async () => {
+    try {
+      const response = await api.get(`/api/documents/${id}/view?page=${currentPage}`, {
+        responseType: 'blob'
+      });
+      const imageUrl = URL.createObjectURL(response.data);
+      setDocumentImageUrl(imageUrl);
+    } catch (err) {
+      console.error('Error cargando imagen del documento:', err);
+      setError('Error al cargar la vista previa del documento');
+    }
+  };
 
   const handleProcessDocument = async () => {
     if (!id) return;
@@ -162,18 +155,6 @@ const DocumentViewer = () => {
     } finally {
       setProcessingDocument(false);
     }
-  };
-
-  const handleDownloadDocument = () => {
-    if (!document) return;
-    
-    // Create download link with backend request
-    const link = window.document.createElement('a');
-    link.href = `/api/documents/${id}/download`;
-    link.setAttribute('download', document.filename);
-    window.document.body.appendChild(link);
-    link.click();
-    window.document.body.removeChild(link);
   };
 
   const handleDocumentUpdated = () => {
@@ -211,40 +192,39 @@ const DocumentViewer = () => {
     }
   };
 
-const renderDocumentPreview = () => {
-  if (!document) return null;
-  
-  // Convertir firmas para el componente DocumentPreview
-  const formattedSignatures = signatures.map(sig => {
-    // Intentar parsear el objeto position
-    let position = { page: 1, x: 0, y: 0, width: 200, height: 100 };
-    try {
-      if (sig.position) {
-        position = JSON.parse(sig.position);
+  const renderDocumentPreview = () => {
+    if (!document) return null;
+    
+    // Convertir firmas para el componente DocumentPreview
+    const formattedSignatures = signatures.map(sig => {
+      // Intentar parsear el objeto position
+      let position = { page: 1, x: 0, y: 0, width: 200, height: 100 };
+      try {
+        if (sig.position) {
+          position = JSON.parse(sig.position);
+        }
+      } catch (e) {
+        console.error('Error parsing signature position:', e);
       }
-    } catch (e) {
-      console.error('Error parsing signature position:', e);
-    }
 
-    return {
-      id: sig.id,
-      position: {
-        page: position.page || 1,
-        x: position.x || 0,
-        y: position.y || 0,
-        width: position.width || 200,
-        height: position.height || 100
-      },
-      user: {
-        name: sig.user?.name || 'Usuario',
-        email: sig.user?.email
-      },
-      signedAt: sig.signedAt,
-      valid: sig.valid,
-      reason: sig.reason
-    };
-  });
-
+      return {
+        id: sig.id,
+        position: {
+          page: position.page || 1,
+          x: position.x || 0,
+          y: position.y || 0,
+          width: position.width || 200,
+          height: position.height || 100
+        },
+        user: {
+          name: sig.user?.name || 'Usuario',
+          email: sig.user?.email
+        },
+        signedAt: sig.signedAt,
+        valid: sig.valid,
+        reason: sig.reason
+      };
+    });
 
     if (document.mimeType?.includes('pdf')) {
       // Para PDFs, vamos a usar nuestro sistema mejorado
@@ -264,8 +244,8 @@ const renderDocumentPreview = () => {
             currentPage={currentPage}
             onPageSelect={(page) => setCurrentPage(page)}
           />
+          
           <PDFAnnotationManager documentId={id || ''}>
-            
             {documentImageUrl ? (
               <PDFViewer 
                 documentId={id || ''} 
@@ -277,33 +257,7 @@ const renderDocumentPreview = () => {
                 <div className="w-16 h-16 border-4 border-blue-500 rounded-full border-t-transparent animate-spin"></div>
               </div>
             )}
-            {signatureOverlayVisible && (
-            <div className="absolute inset-0 pointer-events-none">
-              {formattedSignatures.map(sig => (
-                <div
-                  key={sig.id}
-                  className="absolute border-2 border-blue-500 rounded shadow-sm bg-white/80"
-                  style={{
-                    left: `${sig.position.x}px`,
-                    top: `${sig.position.y}px`,
-                    width: `${sig.position.width}px`,
-                    height: `${sig.position.height}px`,
-                    display: sig.position.page === currentPage ? 'block' : 'none',
-                  }}
-                >
-                  <div className="p-2 text-xs">
-                    <p className="font-bold">{sig.user.name}</p>
-                    <p>{new Date(sig.signedAt).toLocaleDateString()}</p>
-                    {sig.reason && <p>{sig.reason}</p>}
-                  </div>
-                </div>
-              ))}
-            </div>
-            )}
-            
           </PDFAnnotationManager>
-          
-          
         </div>
       );
     } else if (document.mimeType?.includes('image')) {
@@ -325,7 +279,7 @@ const renderDocumentPreview = () => {
           </svg>
           <p className="mt-4 text-gray-600">Previsualización no disponible para este tipo de archivo.</p>
           <button 
-            onClick={handleDownloadDocument}
+            onClick={() => window.location.href = `/api/documents/${id}/download`}
             className="inline-flex items-center px-4 py-2 mt-4 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
           >
             Descargar para ver
@@ -401,104 +355,104 @@ const renderDocumentPreview = () => {
   };
 
   const renderContentTab = () => {
-  if (!document) return null;
+    if (!document) return null;
 
-  if (!document.extractedContent || Object.keys(document.extractedContent).length === 0) {
+    if (!document.extractedContent || Object.keys(document.extractedContent).length === 0) {
+      return (
+        <div className="p-6 mt-4 overflow-hidden text-center bg-white shadow sm:rounded-lg">
+          <svg xmlns="http://www.w3.org/2000/svg" className="w-12 h-12 mx-auto text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+          <h3 className="mt-2 text-sm font-medium text-gray-900">No hay contenido extraído</h3>
+          <p className="mt-1 text-sm text-gray-500">
+            Este documento aún no ha sido procesado o no se pudo extraer contenido.
+          </p>
+          <div className="mt-6">
+            <button
+              type="button"
+              onClick={handleProcessDocument}
+              disabled={processingDocument || document.status === 'processing'}
+              className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {processingDocument ? 'Procesando...' : 'Procesar documento'}
+            </button>
+          </div>
+        </div>
+      );
+    }
+
     return (
-      <div className="p-6 mt-4 overflow-hidden text-center bg-white shadow sm:rounded-lg">
-        <svg xmlns="http://www.w3.org/2000/svg" className="w-12 h-12 mx-auto text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-        </svg>
-        <h3 className="mt-2 text-sm font-medium text-gray-900">No hay contenido extraído</h3>
-        <p className="mt-1 text-sm text-gray-500">
-          Este documento aún no ha sido procesado o no se pudo extraer contenido.
-        </p>
-        <div className="mt-6">
-          <button
-            type="button"
-            onClick={handleProcessDocument}
-            disabled={processingDocument || document.status === 'processing'}
-            className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {processingDocument ? 'Procesando...' : 'Procesar documento'}
-          </button>
+      <div className="mt-4 overflow-hidden bg-white shadow sm:rounded-lg">
+        <div className="px-4 py-5 sm:px-6">
+          <h3 className="text-lg font-medium leading-6 text-gray-900">Extracción de contenido</h3>
+          <p className="max-w-2xl mt-1 text-sm text-gray-500">Texto e información extraídos del documento.</p>
+        </div>
+        <div className="px-4 py-5 border-t border-gray-200 sm:px-6">
+          {/* Verificar múltiples posibles ubicaciones del texto extraído */}
+          {(document.extractedContent.text || 
+            document.extractedContent.content || 
+            (document.extractedContent.extractedText)) && (
+            <div className="mt-2">
+              <h4 className="mb-2 text-sm font-medium text-gray-500">Texto extraído:</h4>
+              <div className="p-4 overflow-auto rounded-md bg-gray-50 max-h-96">
+                <p className="text-sm text-gray-900 whitespace-pre-wrap">
+                  {document.extractedContent.text || 
+                  document.extractedContent.content || 
+                  document.extractedContent.extractedText}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Verificar datos estructurados */}
+          {(document.extractedContent.data || 
+            document.extractedContent.structuredData ||
+            document.extractedContent.sheets) && (
+            <div className="mt-6">
+              <h4 className="mb-2 text-sm font-medium text-gray-500">Estructura:</h4>
+              <pre className="p-4 overflow-auto text-sm rounded-md bg-gray-50 max-h-96">
+                {JSON.stringify(
+                  document.extractedContent.data || 
+                  document.extractedContent.structuredData || 
+                  document.extractedContent.sheets, 
+                  null, 2
+                )}
+              </pre>
+            </div>
+          )}
+
+          {/* Mostrar mensaje si hay contenido extraído pero no en los formatos esperados */}
+          {(!document.extractedContent.text && 
+            !document.extractedContent.content && 
+            !document.extractedContent.extractedText &&
+            !document.extractedContent.data && 
+            !document.extractedContent.structuredData &&
+            !document.extractedContent.sheets) && (
+            <div className="mt-2">
+              <h4 className="mb-2 text-sm font-medium text-gray-500">Contenido extraído:</h4>
+              <pre className="p-4 overflow-auto text-sm rounded-md bg-gray-50 max-h-96">
+                {JSON.stringify(document.extractedContent, null, 2)}
+              </pre>
+            </div>
+          )}
+
+          {document.extractedContent.success === false && document.extractedContent.error ? (
+            <div className="p-4 mt-4 border-l-4 border-red-400 bg-red-50">
+              <div className="flex">
+                <div className="flex-shrink-0">
+                  <svg className="w-5 h-5 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <div className="ml-3">
+                  <p className="text-sm text-red-700">Error de extracción: {document.extractedContent.error}</p>
+                </div>
+              </div>
+            </div>
+          ) : null}
         </div>
       </div>
     );
-  }
-
-  return (
-    <div className="mt-4 overflow-hidden bg-white shadow sm:rounded-lg">
-      <div className="px-4 py-5 sm:px-6">
-        <h3 className="text-lg font-medium leading-6 text-gray-900">Extracción de contenido</h3>
-        <p className="max-w-2xl mt-1 text-sm text-gray-500">Texto e información extraídos del documento.</p>
-      </div>
-      <div className="px-4 py-5 border-t border-gray-200 sm:px-6">
-        {/* Verificar múltiples posibles ubicaciones del texto extraído */}
-        {(document.extractedContent.text || 
-          document.extractedContent.content || 
-          (document.extractedContent.extractedText)) && (
-          <div className="mt-2">
-            <h4 className="mb-2 text-sm font-medium text-gray-500">Texto extraído:</h4>
-            <div className="p-4 overflow-auto rounded-md bg-gray-50 max-h-96">
-              <p className="text-sm text-gray-900 whitespace-pre-wrap">
-                {document.extractedContent.text || 
-                 document.extractedContent.content || 
-                 document.extractedContent.extractedText}
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* Verificar datos estructurados */}
-        {(document.extractedContent.data || 
-          document.extractedContent.structuredData ||
-          document.extractedContent.sheets) && (
-          <div className="mt-6">
-            <h4 className="mb-2 text-sm font-medium text-gray-500">Estructura:</h4>
-            <pre className="p-4 overflow-auto text-sm rounded-md bg-gray-50 max-h-96">
-              {JSON.stringify(
-                document.extractedContent.data || 
-                document.extractedContent.structuredData || 
-                document.extractedContent.sheets, 
-                null, 2
-              )}
-            </pre>
-          </div>
-        )}
-
-        {/* Mostrar mensaje si hay contenido extraído pero no en los formatos esperados */}
-        {(!document.extractedContent.text && 
-          !document.extractedContent.content && 
-          !document.extractedContent.extractedText &&
-          !document.extractedContent.data && 
-          !document.extractedContent.structuredData &&
-          !document.extractedContent.sheets) && (
-          <div className="mt-2">
-            <h4 className="mb-2 text-sm font-medium text-gray-500">Contenido extraído:</h4>
-            <pre className="p-4 overflow-auto text-sm rounded-md bg-gray-50 max-h-96">
-              {JSON.stringify(document.extractedContent, null, 2)}
-            </pre>
-          </div>
-        )}
-
-        {document.extractedContent.success === false && document.extractedContent.error ? (
-          <div className="p-4 mt-4 border-l-4 border-red-400 bg-red-50">
-            <div className="flex">
-              <div className="flex-shrink-0">
-                <svg className="w-5 h-5 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                </svg>
-              </div>
-              <div className="ml-3">
-                <p className="text-sm text-red-700">Error de extracción: {document.extractedContent.error}</p>
-              </div>
-            </div>
-          </div>
-        ) : null}
-      </div>
-    </div>
-  );
   };
 
   const renderSignaturesTab = () => {
@@ -592,7 +546,7 @@ const renderDocumentPreview = () => {
               <div className="flex">
                 <div className="flex-shrink-0">
                   <svg className="w-5 h-5 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
                   </svg>
                 </div>
                 <div className="ml-3">
@@ -619,7 +573,6 @@ const renderDocumentPreview = () => {
     return null;
   }
   
-
   return (
     <div className="px-4 py-8 mx-auto max-w-7xl sm:px-6 lg:px-8">
       {/* Header */}
@@ -638,20 +591,10 @@ const renderDocumentPreview = () => {
                 <span className="mx-2 text-gray-500">•</span>
                 <span className="text-sm text-gray-500">{formatFileSize(document.fileSize)}</span>
                 <span className="mx-2 text-gray-500">•</span>
-                <span className="text-sm text-gray-500">Uploaded {formatDate(document.createdAt)}</span>
+                <span className="text-sm text-gray-500">Subido el {formatDate(document.createdAt)}</span>
               </div>
             </div>
             <div className="flex space-x-2">
-              <button
-                type="button"
-                onClick={handleDownloadDocument}
-                className="inline-flex items-center px-3 py-1.5 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="-ml-0.5 mr-1 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                </svg>
-                Descargar
-              </button>
               <button
                 type="button"
                 onClick={() => navigate('/dashboard')}

@@ -13,6 +13,10 @@ export class CreateCommentDto {
   @IsString()
   content: string;
 
+  @IsNotEmpty({ message: 'El ID del documento es requerido' })
+  @IsUUID()
+  documentId: string;
+
   @IsOptional()
   @IsUUID()
   parentId?: string;

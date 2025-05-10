@@ -1,14 +1,13 @@
-// backend/src/websocket/websocket.gateway.ts
 import {
   WebSocketGateway,
-  WebSocketServer,
   OnGatewayConnection,
   OnGatewayDisconnect,
+  WebSocketServer,
   SubscribeMessage,
 } from '@nestjs/websockets';
-import { Logger } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
 import { JwtService } from '@nestjs/jwt';
+import { Logger } from '@nestjs/common';
 
 @WebSocketGateway({
   cors: {
@@ -18,93 +17,93 @@ import { JwtService } from '@nestjs/jwt';
 export class WebsocketGateway
   implements OnGatewayConnection, OnGatewayDisconnect
 {
+  private readonly logger = new Logger(WebsocketGateway.name);
+  private userSockets: Map<string, Socket[]> = new Map();
+
   @WebSocketServer()
   server: Server;
 
-  private readonly logger = new Logger(WebsocketGateway.name);
-  private userSockets = new Map<string, string[]>();
-
-  constructor(private jwtService: JwtService) {}
+  constructor(private readonly jwtService: JwtService) {}
 
   async handleConnection(client: Socket) {
     try {
-      const token =
-        client.handshake.auth.token ||
-        client.handshake.headers.authorization?.split(' ')[1];
-
+      // Verificar token de autenticación
+      const token = client.handshake.auth.token;
       if (!token) {
+        this.logger.warn('Conexión sin token rechazada');
         client.disconnect();
         return;
       }
 
-      const decoded = this.jwtService.verify(token);
-      const userId = decoded.sub;
+      // Validar token
+      const payload = this.jwtService.verify(token);
+      const userId = payload.sub;
 
+      // Asignar usuario al socket
       client.data.userId = userId;
 
-      // Agregar a mapa de usuarios conectados
+      // Registrar socket para el usuario
       if (!this.userSockets.has(userId)) {
         this.userSockets.set(userId, []);
       }
-      this.userSockets.get(userId).push(client.id);
+      this.userSockets.get(userId).push(client);
 
-      this.logger.log(`Usuario ${userId} conectado con socketId ${client.id}`);
+      // Suscribir al usuario a su room personal
+      client.join(userId);
 
-      // Unir al usuario a su sala privada
-      client.join(`user-${userId}`);
+      this.logger.log(`Cliente conectado: ${userId}`);
     } catch (error) {
-      this.logger.error(`Error en conexión WebSocket: ${error.message}`);
+      this.logger.error(`Error en conexión de socket: ${error.message}`);
       client.disconnect();
     }
   }
 
   handleDisconnect(client: Socket) {
-    const userId = client.data.userId;
+    const userId = client.data?.userId;
     if (userId) {
-      // Eliminar de la lista de conexiones
-      const userConnections = this.userSockets.get(userId) || [];
-      const updatedConnections = userConnections.filter(
-        (id) => id !== client.id,
-      );
+      // Eliminar socket de la lista de sockets del usuario
+      const userSocketList = this.userSockets.get(userId);
+      if (userSocketList) {
+        const index = userSocketList.indexOf(client);
+        if (index !== -1) {
+          userSocketList.splice(index, 1);
+        }
 
-      if (updatedConnections.length === 0) {
-        this.userSockets.delete(userId);
-      } else {
-        this.userSockets.set(userId, updatedConnections);
+        // Si no quedan sockets para este usuario, eliminar la entrada
+        if (userSocketList.length === 0) {
+          this.userSockets.delete(userId);
+        }
       }
 
-      this.logger.log(`Usuario ${userId} desconectado`);
+      this.logger.log(`Cliente desconectado: ${userId}`);
     }
   }
 
   @SubscribeMessage('subscribe')
   handleSubscribe(client: Socket, payload: { topic: string }) {
-    const { topic } = payload;
-    client.join(topic);
-    this.logger.log(`Cliente ${client.id} suscrito a ${topic}`);
-    return { success: true, topic };
+    client.join(payload.topic);
+    this.logger.log(
+      `Usuario ${client.data.userId} suscrito a ${payload.topic}`,
+    );
+    return { success: true };
   }
 
   @SubscribeMessage('unsubscribe')
   handleUnsubscribe(client: Socket, payload: { topic: string }) {
-    const { topic } = payload;
-    client.leave(topic);
-    this.logger.log(`Cliente ${client.id} desuscrito de ${topic}`);
-    return { success: true, topic };
+    client.leave(payload.topic);
+    this.logger.log(
+      `Usuario ${client.data.userId} desuscrito de ${payload.topic}`,
+    );
+    return { success: true };
   }
 
-  sendNotificationToUser(userId: string, notification: any) {
-    this.server.to(`user-${userId}`).emit('notification', notification);
-    this.logger.log(`Notificación enviada a usuario ${userId}`);
+  // Método para enviar notificación a un usuario específico
+  sendToUser(userId: string, event: string, data: any) {
+    this.server.to(userId).emit(event, data);
   }
 
-  sendNotificationToTopic(topic: string, notification: any) {
-    this.server.to(topic).emit('notification', notification);
-    this.logger.log(`Notificación enviada a topic ${topic}`);
-  }
-
-  sendNotificationToAll(notification: any) {
-    this.server.emit('notification', notification);
-    this.logger.log('Notificación enviada a todos los usuarios');
+  // Método para enviar notificación a todos los suscriptores de un tema
+  sendToTopic(topic: string, event: string, data: any) {
+    this.server.to(topic).emit(event, data);
   }
 }

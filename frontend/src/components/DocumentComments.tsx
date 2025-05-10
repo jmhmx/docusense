@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { api } from '../api/client';
 import useAuth from '../hooks/UseAuth';
 import Button from './Button';
+import RichCommentEditor from './RichCommentEditor';
 
 interface User {
   id: string;
@@ -70,6 +71,7 @@ const DocumentComments = ({
   const [addingComment, setAddingComment] = useState(false);
   const [permission, setPermission] = useState<string | null>(null);
   const [newCommentsAvailable, setNewCommentsAvailable] = useState(false);
+  const [availableUsers, setAvailableUsers] = useState<User[]>([]);
 
   // Para simular nuevos comentarios (en producción usarías websockets o polling)
 const checkForNewComments = () => {
@@ -103,6 +105,22 @@ const checkForNewComments = () => {
       onCommentsUpdated(comments.filter(c => !c.isResolved).length);
     }
   }, [comments]);
+
+  useEffect(() => {
+    // Cargar usuarios disponibles para menciones
+    const fetchAvailableUsers = async () => {
+      try {
+        const response = await api.get('/api/users/available');
+        setAvailableUsers(response.data);
+      } catch (err) {
+        console.error('Error cargando usuarios disponibles:', err);
+      }
+    };
+  
+    if (canComment) {
+      fetchAvailableUsers();
+    }
+  }, [canComment]);
 
   const checkPermission = async () => {
     try {
@@ -141,33 +159,22 @@ const checkForNewComments = () => {
     }
   };
 
-  const addComment = async () => {
-    if (!newComment.trim()) return;
+  const addComment = async (commentData: any) => {
+    if (!commentData.content.trim()) return;
     
     setAddingComment(true);
     try {
-      const commentData = {
-        documentId,
-        content: newComment,
-        position: {
-          ...(currentPage && { page: currentPage }),
-          ...(position && { x: position.x, y: position.y }),
-          ...(selectedText && { selection: {
-            start: selectedText.start,
-            end: selectedText.end,
-            text: selectedText.text,
-          }}),
-        },
-      };
+      const response = await api.post('/api/comments', commentData);
       
-      await api.post('/api/comments', commentData);
+      // Si hay menciones, se habrán procesado automáticamente en el backend
+      
       setNewComment('');
       fetchComments();
       if (onCommentAdded) {
         onCommentAdded();
       }
     } catch (err: any) {
-      console.error('Error adding comment:', err);
+      console.error('Error al añadir comentario:', err);
       setError(err?.response?.data?.message || 'Error al añadir comentario');
     } finally {
       setAddingComment(false);
@@ -234,6 +241,36 @@ const checkForNewComments = () => {
 
   const renderComment = (comment: Comment, isReply = false) => {
     const isCurrentUser = user?.id === comment.userId;
+
+    const formatContent = (content: string) => {
+      // Dividir por @mentions y preservar el texto normal
+      const parts = content.split(/(@\w+)/g);
+      
+      return (
+        <>
+          {parts.map((part, index) => {
+            // Si es una mención, mostrar con estilo especial
+            if (part.startsWith('@')) {
+              const userName = part.substring(1);
+              const user = availableUsers.find(u => u.name === userName);
+              
+              return (
+                <span 
+                  key={index} 
+                  className="font-medium text-blue-600"
+                  title={user ? `${user.name} (${user.email})` : ''} 
+                >
+                  {part}
+                </span>
+              );
+            }
+            
+            // Texto normal
+            return <span key={index}>{part}</span>;
+          })}
+        </>
+      );
+    };
     
     return (
       <div key={comment.id} className={`mb-4 ${isReply ? 'ml-8' : ''} ${comment.isResolved ? 'opacity-60' : ''}`}>
@@ -257,7 +294,7 @@ const checkForNewComments = () => {
                   </span>
                 </div>
                 <div className="mt-1 text-sm text-gray-700 whitespace-pre-wrap">
-                  {comment.content}
+                  {formatContent(comment.content)}
                 </div>
                 
                 {comment.position?.selection && (
@@ -420,22 +457,30 @@ const checkForNewComments = () => {
       {/* New comment input */}
       {canComment && (
         <div className="mb-6">
-          <textarea
-            value={newComment}
-            onChange={(e) => setNewComment(e.target.value)}
-            placeholder="Añadir un comentario..."
-            className="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-            rows={3}
-          ></textarea>
-          <div className="flex justify-end mt-2">
-            <Button
-              onClick={addComment}
-              disabled={addingComment || !newComment.trim()}
-              size="small"
-            >
-              {addingComment ? 'Añadiendo...' : 'Comentar'}
-            </Button>
-          </div>
+          <RichCommentEditor
+            onSubmit={(content, mentions) => {
+              // Preparar datos del comentario
+              const commentData = {
+                documentId,
+                content,
+                position: {
+                  ...(currentPage && { page: currentPage }),
+                  ...(position && { x: position.x, y: position.y }),
+                  ...(selectedText && { selection: {
+                    start: selectedText.start,
+                    end: selectedText.end,
+                    text: selectedText.text,
+                  }}),
+                },
+                mentions // Nuevo campo para menciones
+              };
+              
+              // Enviar comentario
+              addComment(commentData);
+            }}
+            availableUsers={availableUsers} // Necesitamos cargar los usuarios disponibles
+            placeholder="Añadir un comentario... Usa @ para mencionar usuarios"
+          />
           
           {selectedText && (
             <div className="p-2 mt-2 text-xs italic text-gray-600 bg-gray-100 border-l-2 border-blue-300">

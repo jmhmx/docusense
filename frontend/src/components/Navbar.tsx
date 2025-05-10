@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import useAuth from '../hooks/UseAuth';
+import NotificationsMenu from './NotificationsMenu';
 
 const Navbar = () => {
   const { user, logout } = useAuth();
@@ -59,6 +60,8 @@ const Navbar = () => {
           <div className="hidden sm:ml-6 sm:flex sm:items-center">
             {user ? (
               <div className="flex items-center space-x-4">
+                {/* Añadir NotificationsMenu aquí */}
+                <NotificationsMenu />
                 <span className="text-sm text-gray-700">Hola, {user.name}</span>
                 <div className="relative">
                   <button

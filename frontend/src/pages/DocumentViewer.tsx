@@ -66,6 +66,65 @@ const DocumentViewer = () => {
   const [isLoadingSignatures, setIsLoadingSignatures] = useState(true);
   const [documentImageUrl, setDocumentImageUrl] = useState<string | null>(null);
 
+  const [contextualComments, setContextualComments] = useState<{
+    visible: boolean;
+    x: number;
+    y: number;
+    comments: any[];
+  }>({
+    visible: false,
+    x: 0,
+    y: 0,
+    comments: []
+  });
+
+  const showContextualComments = (position: { x: number; y: number }, pageNumber: number) => {
+    // Filtrar comentarios para esta posición específica
+    const commentsForPosition = comments.filter(comment => {
+      if (!comment.position) return false;
+      
+      // Verificar si es el mismo número de página
+      if (comment.position.page !== pageNumber) return false;
+      
+      // Calcular distancia a la posición
+      const commentX = comment.position.x || 0;
+      const commentY = comment.position.y || 0;
+      
+      // Si la posición está dentro del área del comentario o muy cerca (30px)
+      const distance = Math.sqrt(
+        Math.pow(position.x - commentX, 2) + 
+        Math.pow(position.y - commentY, 2)
+      );
+      
+      return distance < 30;
+    });
+    
+    if (commentsForPosition.length > 0) {
+      setContextualComments({
+        visible: true,
+        x: position.x,
+        y: position.y,
+        comments: commentsForPosition
+      });
+    }
+  };
+
+  const handleDocumentClick = (e: React.MouseEvent) => {
+    // Si hay comentarios contextuales visibles, ocultarlos
+    if (contextualComments.visible) {
+      setContextualComments(prev => ({ ...prev, visible: false }));
+      return;
+    }
+    
+    // Obtener posición relativa al contenedor del documento
+    const container = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX - container.left;
+    const y = e.clientY - container.top;
+    
+    // Mostrar comentarios para esta posición
+    showContextualComments({ x, y }, currentPage);
+  };
+
   // Añadir esta función
   const fetchUnreadComments = async () => {
     if (!id) return;
@@ -702,7 +761,43 @@ const DocumentViewer = () => {
       </div>
 
       {/* Tab content */}
-      {activeTab === 'preview' && renderDocumentPreview()}
+      {activeTab === 'preview' && (
+        <div onClick={handleDocumentClick} className="relative">
+          {renderDocumentPreview()}
+          
+          {/* Popup de comentarios contextuales */}
+          {contextualComments.visible && contextualComments.comments.length > 0 && (
+            <div 
+              className="absolute z-20 p-2 bg-white border border-gray-200 rounded-md shadow-lg"
+              style={{ 
+                left: `${contextualComments.x}px`, 
+                top: `${contextualComments.y}px`,
+                maxWidth: '300px'
+              }}
+            >
+              <div className="mb-2 text-xs font-medium text-gray-700">
+                {contextualComments.comments.length} comentario(s) en esta área
+              </div>
+              <div className="space-y-2 overflow-y-auto max-h-60">
+                {contextualComments.comments.map(comment => (
+                  <div key={comment.id} className="p-2 text-xs border-b border-gray-100">
+                    <div className="font-medium">{comment.user?.name || 'Usuario'}</div>
+                    <div className="mt-1 text-gray-600">{comment.content}</div>
+                  </div>
+                ))}
+              </div>
+              <div className="flex justify-end mt-2">
+                <button
+                  onClick={() => setActiveTab('comments')}
+                  className="px-2 py-1 text-xs text-white bg-blue-600 rounded hover:bg-blue-700"
+                >
+                  Ver todos
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
       {activeTab === 'metadata' && renderMetadataTab()}
       {activeTab === 'content' && renderContentTab()}
       {activeTab === 'analysis' && id && <DocumentAnalysis documentId={id} />}

@@ -18,6 +18,7 @@ import { WebsocketModule } from './websocket/websocket.module';
 import { AnnotationsModule } from './annotations/annotations.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { CommentsModule } from './comments/comments.module';
 
 @Module({
   controllers: [HealthController],
@@ -60,6 +61,7 @@ import { NotificationsModule } from './notifications/notifications.module';
     AnnotationsModule,
     AnalyticsModule,
     NotificationsModule,
+    CommentsModule,
   ],
 })
 export class AppModule {}

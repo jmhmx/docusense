@@ -19,35 +19,16 @@ import {
   UpdateCommentDto,
   CommentFilterDto,
 } from './dto/comment.dto';
-import { NotificationsService } from '../notifications/notifications.service';
 
-@Controller('api/comments')
+@Controller('api/comments-sharing')
 export class CommentsController {
-  constructor(
-    private readonly commentsService: CommentsService,
-    private readonly notificationsService: NotificationsService,
-  ) {}
+  constructor(private readonly commentsService: CommentsService) {}
 
   @Post()
   @UseGuards(JwtAuthGuard)
   async create(@Body() createCommentDto: CreateCommentDto, @Request() req) {
     // Crear el comentario
-    const comment = await this.commentsService.create(
-      createCommentDto,
-      req.user.id,
-    );
-
-    // Procesar menciones si existen
-    if (createCommentDto.mentions && createCommentDto.mentions.length > 0) {
-      await this.notificationsService.createMentionNotification(
-        comment.documentId,
-        comment.id,
-        createCommentDto.mentions,
-        req.user.id,
-      );
-    }
-
-    return comment;
+    return this.commentsService.create(createCommentDto, req.user.id);
   }
 
   @UseGuards(JwtAuthGuard)

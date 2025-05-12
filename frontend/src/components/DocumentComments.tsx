@@ -51,6 +51,204 @@ interface DocumentCommentsProps {
   onCommentsUpdated?: (count: number) => void;
 }
 
+// Componente para renderizar un comentario individual
+const CommentItem = ({ 
+  comment, 
+  isReply = false, 
+  onReply, 
+  onResolve, 
+  onDelete, 
+  canComment, 
+  currentUser, 
+  availableUsers 
+}) => {
+  const [showReplies, setShowReplies] = useState(true);
+  const isCurrentUser = currentUser?.id === comment.userId;
+  const hasReplies = comment.replies && comment.replies.length > 0;
+  
+  // Función para formatear el contenido con menciones resaltadas
+  const formatContent = (content) => {
+    const parts = content.split(/(@\w+)/g);
+    
+    return (
+      <>
+        {parts.map((part, index) => {
+          if (part.startsWith('@')) {
+            const userName = part.substring(1);
+            const user = availableUsers.find(u => u.name === userName);
+            
+            return (
+              <span 
+                key={index} 
+                className="font-medium text-blue-600"
+                title={user ? `${user.name} (${user.email})` : ''} 
+              >
+                {part}
+              </span>
+            );
+          }
+          
+          return <span key={index}>{part}</span>;
+        })}
+      </>
+    );
+  };
+  
+  const formatDate = (dateStr) => {
+    return new Date(dateStr).toLocaleString('es-ES', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+  
+  return (
+    <div className={`mb-4 ${isReply ? 'ml-8' : ''} transition-all duration-200`}>
+      <div className={`p-4 bg-white border rounded-lg ${comment.isResolved 
+        ? 'border-green-200 bg-green-50 bg-opacity-20' 
+        : 'border-gray-200'}`}
+      >
+        <div className="flex items-start justify-between">
+          <div className="flex items-start">
+            <div className="mr-3">
+              <div className="flex items-center justify-center w-8 h-8 bg-blue-100 rounded-full">
+                <span className="text-sm font-medium text-blue-800">
+                  {comment.user?.name?.substring(0, 2).toUpperCase() || '??'}
+                </span>
+              </div>
+            </div>
+            <div>
+              <div className="flex items-center">
+                <span className="text-sm font-medium text-gray-900">
+                  {comment.user?.name || 'Usuario desconocido'}
+                </span>
+                <span className="ml-2 text-xs text-gray-500">
+                  {formatDate(comment.createdAt)}
+                </span>
+                
+                {comment.isResolved && (
+                  <span className="inline-flex items-center px-2 py-0.5 ml-2 text-xs font-medium rounded-full bg-green-100 text-green-800">
+                    <svg className="w-3 h-3 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                    </svg>
+                    Resuelto
+                  </span>
+                )}
+              </div>
+              <div className="mt-1 text-sm text-gray-700 whitespace-pre-wrap">
+                {formatContent(comment.content)}
+              </div>
+              
+              {comment.position?.selection && (
+                <div className="p-2 mt-2 text-xs italic text-gray-600 border-l-2 border-gray-300 bg-gray-50">
+                  {comment.position.selection.text}
+                </div>
+              )}
+            </div>
+          </div>
+          
+          <div className="flex items-center space-x-2">
+            {!isReply && canComment && (
+              <button
+                onClick={() => onReply(comment.id)}
+                className="inline-flex items-center px-2 py-1 text-xs font-medium text-blue-600 rounded-md bg-blue-50 hover:bg-blue-100"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                </svg>
+                Responder
+              </button>
+            )}
+            
+            {canComment && (
+              <>
+                {!comment.isResolved && (
+                  <button
+                    onClick={() => onResolve(comment.id, true)}
+                    className="inline-flex items-center px-2 py-1 text-xs font-medium text-green-600 rounded-md bg-green-50 hover:bg-green-100"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    Resolver
+                  </button>
+                )}
+                
+                {comment.isResolved && (
+                  <button
+                    onClick={() => onResolve(comment.id, false)}
+                    className="inline-flex items-center px-2 py-1 text-xs font-medium text-gray-600 bg-gray-100 rounded-md hover:bg-gray-200"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    Reabrir
+                  </button>
+                )}
+              </>
+            )}
+            
+            {isCurrentUser && (
+              <button
+                onClick={() => onDelete(comment.id)}
+                className="inline-flex items-center px-2 py-1 text-xs font-medium text-red-600 rounded-md bg-red-50 hover:bg-red-100"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+                Eliminar
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+      
+      {/* Replies */}
+      {hasReplies && (
+        <div className="mt-2">
+          <div className="flex items-center mb-1">
+            <button 
+              onClick={() => setShowReplies(!showReplies)}
+              className="flex items-center text-xs text-gray-500 hover:text-gray-700"
+            >
+              <svg 
+                xmlns="http://www.w3.org/2000/svg" 
+                className={`w-4 h-4 mr-1 transition-transform ${showReplies ? 'transform rotate-90' : ''}`} 
+                fill="none" 
+                viewBox="0 0 24 24" 
+                stroke="currentColor"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+              {comment.replies.length} respuesta{comment.replies.length !== 1 ? 's' : ''}
+            </button>
+          </div>
+          
+          {showReplies && (
+            <div className="pl-4 border-l-2 border-gray-200">
+              {comment.replies.map(reply => (
+                <CommentItem
+                  key={reply.id}
+                  comment={reply}
+                  isReply={true}
+                  onReply={onReply}
+                  onResolve={onResolve}
+                  onDelete={onDelete}
+                  canComment={canComment}
+                  currentUser={currentUser}
+                  availableUsers={availableUsers}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
 const DocumentComments = ({
   documentId,
   currentPage = 1,
@@ -66,15 +264,13 @@ const DocumentComments = ({
   const [replyTo, setReplyTo] = useState<string | null>(null);
   const [replyContent, setReplyContent] = useState('');
   const [showResolved, setShowResolved] = useState(false);
-  //@ts-ignore
   const [permission, setPermission] = useState<string | null>(null);
   const [newCommentsAvailable, setNewCommentsAvailable] = useState(false);
   const [availableUsers, setAvailableUsers] = useState<User[]>([]);
   const [canComment, setCanComment] = useState(false);
-  //@ts-ignore
   const [unreadCount, setUnreadCount] = useState(0);
 
-  // Para simular nuevos comentarios (en producción usarías websockets o polling)
+  // Para verificar nuevos comentarios periódicamente (con websockets o polling)
   const checkForNewComments = () => {
     const interval = setInterval(async () => {
       if (documentId) {
@@ -111,17 +307,25 @@ const DocumentComments = ({
     // Cargar usuarios disponibles para menciones
     const fetchAvailableUsers = async () => {
       try {
-        const response = await api.get('/api/users/available');
+        // Usamos la API específica que verifica permisos en el documento
+        const response = await api.get(`/api/comments/document/${documentId}/available-users`);
         setAvailableUsers(response.data);
       } catch (err) {
         console.error('Error cargando usuarios disponibles:', err);
+        // Fallback a la API general de usuarios si la específica falla
+        try {
+          const generalResponse = await api.get('/api/users/available');
+          setAvailableUsers(generalResponse.data);
+        } catch (fallbackErr) {
+          console.error('Error en fallback de usuarios:', fallbackErr);
+        }
       }
     };
   
     if (canComment) {
       fetchAvailableUsers();
     }
-  }, [canComment]);
+  }, [canComment, documentId]);
 
   const checkPermission = async () => {
     try {
@@ -151,9 +355,10 @@ const DocumentComments = ({
       const response = await api.get(`/api/comments/document/${documentId}?includeReplies=true`);
       setComments(response.data);
       
-      // Marcar comentarios como leídos - CORREGIDO
+      // Marcar comentarios como leídos
       try {
         await markCommentsAsRead();
+        setNewCommentsAvailable(false);
       } catch (err) {
         console.error('Error marking comments as read:', err);
       }
@@ -165,7 +370,7 @@ const DocumentComments = ({
     }
   };
 
-  // Función CORREGIDA para marcar comentarios como leídos
+  // Función para marcar comentarios como leídos
   const markCommentsAsRead = async () => {
     try {
       await api.post(`/api/comments/document/${documentId}/mark-read`);
@@ -177,7 +382,7 @@ const DocumentComments = ({
     }
   };
 
-  // Función CORREGIDA para obtener conteo de no leídos
+  // Función para obtener conteo de no leídos
   const fetchUnreadCount = async () => {
     try {
       const response = await api.get(`/api/comments/document/${documentId}/unread-count`);
@@ -252,189 +457,106 @@ const DocumentComments = ({
     }
   };
 
-  const formatDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleString('es-ES', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+  const handleReply = (commentId: string) => {
+    if (replyTo === commentId) {
+      setReplyTo(null);
+    } else {
+      setReplyTo(commentId);
+      setReplyContent('');
+    }
   };
 
-  const renderComment = (comment: Comment, isReply = false) => {
-    const isCurrentUser = user?.id === comment.userId;
-
-    const formatContent = (content: string) => {
-      // Dividir por @mentions y preservar el texto normal
-      const parts = content.split(/(@\w+)/g);
-      
+  // Función para renderizar comentarios
+  const renderComments = () => {
+    if (loading) {
       return (
-        <>
-          {parts.map((part, index) => {
-            // Si es una mención, mostrar con estilo especial
-            if (part.startsWith('@')) {
-              const userName = part.substring(1);
-              const user = availableUsers.find(u => u.name === userName);
-              
-              return (
-                <span 
-                  key={index} 
-                  className="font-medium text-blue-600"
-                  title={user ? `${user.name} (${user.email})` : ''} 
-                >
-                  {part}
-                </span>
-              );
-            }
-            
-            // Texto normal
-            return <span key={index}>{part}</span>;
-          })}
-        </>
+        <div className="py-10 text-center">
+          <svg className="w-8 h-8 mx-auto text-blue-500 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+        </div>
       );
-    };
+    }
     
-    return (
-      <div key={comment.id} className={`mb-4 ${isReply ? 'ml-8' : ''} ${comment.isResolved ? 'opacity-60' : ''}`}>
-        <div className="p-4 bg-white border border-gray-200 rounded-lg">
-          <div className="flex items-start justify-between">
-            <div className="flex items-start">
-              <div className="mr-3">
-                <div className="flex items-center justify-center w-8 h-8 bg-blue-100 rounded-full">
-                  <span className="text-sm font-medium text-blue-800">
-                    {comment.user?.name?.substring(0, 2).toUpperCase() || '??'}
-                  </span>
-                </div>
-              </div>
-              <div>
-                <div className="flex items-center">
-                  <span className="text-sm font-medium text-gray-900">
-                    {comment.user?.name || 'Usuario desconocido'}
-                  </span>
-                  <span className="ml-2 text-xs text-gray-500">
-                    {formatDate(comment.createdAt)}
-                  </span>
-                </div>
-                <div className="mt-1 text-sm text-gray-700 whitespace-pre-wrap">
-                  {formatContent(comment.content)}
-                </div>
-                
-                {comment.position?.selection && (
-                  <div className="p-2 mt-2 text-xs italic text-gray-600 border-l-2 border-gray-300 bg-gray-50">
-                    {comment.position.selection.text}
-                  </div>
-                )}
-              </div>
-            </div>
-            
-            <div className="flex items-center space-x-2">
-              {comment.isResolved && (
-                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
-                  <svg className="w-3 h-3 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                  </svg>
-                  Resuelto
-                </span>
-              )}
-              
-              {!isReply && canComment && (
-                <button
-                  onClick={() => {
-                    if (replyTo === comment.id) {
-                      setReplyTo(null);
-                    } else {
-                      setReplyTo(comment.id);
-                      setReplyContent('');
-                    }
-                  }}
-                  className="text-xs text-blue-600 hover:text-blue-800"
-                >
-                  Responder
-                </button>
-              )}
-              
-              {canComment && (
-                <>
-                  {!comment.isResolved && (
-                    <button
-                      onClick={() => resolveComment(comment.id, true)}
-                      className="text-xs text-green-600 hover:text-green-800"
-                    >
-                      Resolver
-                    </button>
-                  )}
-                  
-                  {comment.isResolved && (
-                    <button
-                      onClick={() => resolveComment(comment.id, false)}
-                      className="text-xs text-gray-600 hover:text-gray-800"
-                    >
-                      Reabrir
-                    </button>
-                  )}
-                </>
-              )}
-              
-              {isCurrentUser && (
-                <button
-                  onClick={() => deleteComment(comment.id)}
-                  className="text-xs text-red-600 hover:text-red-800"
-                >
-                  Eliminar
-                </button>
-              )}
-            </div>
-          </div>
-          
-          {/* Reply Input */}
-          {replyTo === comment.id && canComment && (
-            <div className="pt-3 mt-3 border-t border-gray-100">
-              <div className="flex">
-                <textarea
-                  value={replyContent}
-                  onChange={(e) => setReplyContent(e.target.value)}
-                  placeholder="Escribe una respuesta..."
-                  className="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                  rows={2}
-                ></textarea>
-              </div>
-              <div className="flex justify-end mt-2 space-x-2">
-                <button
-                  onClick={() => setReplyTo(null)}
-                  className="px-3 py-1 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={() => addReply(comment.id)}
-                  disabled={!replyContent.trim()}
-                  className="px-3 py-1 text-xs font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Responder
-                </button>
-              </div>
-            </div>
+    // Filtrar comentarios para la visualización
+    const mainComments = comments.filter(comment => !comment.parentId);
+    const filteredComments = showResolved 
+      ? mainComments 
+      : mainComments.filter(comment => !comment.isResolved);
+      
+    if (filteredComments.length === 0) {
+      return (
+        <div className="py-8 text-center text-gray-500">
+          {mainComments.length === 0 ? (
+            <p>No hay comentarios en este documento.</p>
+          ) : (
+            <p>No hay comentarios sin resolver.</p>
           )}
         </div>
-        
-        {/* Replies */}
-        {comment.replies && comment.replies.length > 0 && (
-          <div className="mt-2">
-            {comment.replies.map(reply => renderComment(reply, true))}
-          </div>
-        )}
+      );
+    }
+    
+    return (
+      <div className="space-y-4">
+        {filteredComments.map(comment => (
+          <CommentItem
+            key={comment.id}
+            comment={comment}
+            onReply={handleReply}
+            onResolve={resolveComment}
+            onDelete={deleteComment}
+            canComment={canComment}
+            currentUser={user}
+            availableUsers={availableUsers}
+          />
+        ))}
       </div>
     );
   };
 
-  // Filtrar comentarios principales (no respuestas)
-  const mainComments = comments.filter(comment => !comment.parentId);
-  
-  // Filtrar según estado de resolución
-  const filteredComments = showResolved 
-    ? mainComments 
-    : mainComments.filter(comment => !comment.isResolved);
+  // Renderizar componente de respuesta
+  const renderReplyForm = () => {
+    if (!replyTo) return null;
+    
+    const parentComment = comments.find(c => c.id === replyTo);
+    if (!parentComment) return null;
+    
+    return (
+      <div className="p-4 mb-4 rounded-lg bg-blue-50">
+        <div className="mb-2 text-sm font-medium text-blue-700">
+          Respondiendo a {parentComment.user?.name || 'Usuario'}:
+        </div>
+        <div className="p-2 mb-3 text-sm bg-white border border-blue-100 rounded">
+          {parentComment.content}
+        </div>
+        <div className="flex">
+          <textarea
+            value={replyContent}
+            onChange={(e) => setReplyContent(e.target.value)}
+            placeholder="Escribe una respuesta..."
+            className="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+            rows={3}
+          ></textarea>
+        </div>
+        <div className="flex justify-end mt-2 space-x-2">
+          <button
+            onClick={() => setReplyTo(null)}
+            className="px-3 py-1 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={() => addReply(replyTo)}
+            disabled={!replyContent.trim()}
+            className="px-3 py-1 text-xs font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Responder
+          </button>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="p-4 rounded-lg bg-gray-50">
@@ -443,7 +565,7 @@ const DocumentComments = ({
           Comentarios
           {!loading && (
             <span className="ml-2 text-sm text-gray-500">
-              ({mainComments.filter(c => !c.isResolved).length})
+              ({comments.filter(c => !c.isResolved && !c.parentId).length})
             </span>
           )}
         </h3>
@@ -477,8 +599,11 @@ const DocumentComments = ({
         </div>
       )}
       
-      {/* New comment input */}
-      {canComment && (
+      {/* Formulario de respuesta */}
+      {renderReplyForm()}
+      
+      {/* Nuevo comentario input */}
+      {canComment && !replyTo && (
         <div className="mb-6">
           <RichCommentEditor
             onSubmit={(content, mentions) => {
@@ -495,13 +620,13 @@ const DocumentComments = ({
                     text: selectedText.text,
                   }}),
                 },
-                mentions // Nuevo campo para menciones
+                mentions // Campo para menciones
               };
               
               // Enviar comentario
               addComment(commentData);
             }}
-            availableUsers={availableUsers} // Necesitamos cargar los usuarios disponibles
+            availableUsers={availableUsers}
             placeholder="Añadir un comentario... Usa @ para mencionar usuarios"
           />
           
@@ -513,31 +638,9 @@ const DocumentComments = ({
         </div>
       )}
       
-      {/* Comments list */}
-      {loading ? (
-        <div className="py-10 text-center">
-          <svg className="w-8 h-8 mx-auto text-blue-500 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-          </svg>
-        </div>
-      ) : (
-        <div>
-          {filteredComments.length === 0 ? (
-            <div className="py-8 text-center text-gray-500">
-              {mainComments.length === 0 ? (
-                <p>No hay comentarios en este documento.</p>
-              ) : (
-                <p>No hay comentarios sin resolver.</p>
-              )}
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {filteredComments.map(comment => renderComment(comment))}
-            </div>
-          )}
-        </div>
-      )}
+      {/* Lista de comentarios */}
+      {renderComments()}
+      
       {/* Notificación de nuevos comentarios */}
       {newCommentsAvailable && (
         <div className="fixed z-50 p-4 text-white bg-blue-500 rounded-md shadow-lg bottom-4 right-4 animate-bounce">

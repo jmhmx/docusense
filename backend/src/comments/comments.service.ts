@@ -152,6 +152,14 @@ export class CommentsService {
         }
       }
 
+      // Validar menciones antes de crear el comentario
+      if (createCommentDto.mentions && createCommentDto.mentions.length > 0) {
+        createCommentDto.mentions = await this.validateMentions(
+          createCommentDto.documentId,
+          createCommentDto.mentions,
+        );
+      }
+
       // Crear el comentario
       const comment = this.commentsRepository.create({
         documentId,

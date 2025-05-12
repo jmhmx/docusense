@@ -9,6 +9,7 @@ import { Document } from '../documents/entities/document.entity';
 import { UsersModule } from '../users/users.module';
 import { DocumentsModule } from '../documents/documents.module';
 import { AuditModule } from '../audit/audit.module';
+import { forwardRef as forwardRefNest } from '@nestjs/common';
 import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
@@ -22,7 +23,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
     UsersModule,
     forwardRef(() => DocumentsModule), // Usar forwardRef para evitar dependencia circular
     AuditModule,
-    NotificationsModule, // Importamos el módulo de notificaciones
+    forwardRef(() => NotificationsModule), // Usar forwardRef también para NotificationsModule
   ],
   controllers: [SharingController],
   providers: [SharingService],

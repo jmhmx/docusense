@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { NotificationsService } from './notifications.service';
 import { NotificationsController } from './notifications.controller';
@@ -13,7 +13,7 @@ import { WebsocketModule } from '../websocket/websocket.module';
     TypeOrmModule.forFeature([Notification]),
     EmailModule,
     UsersModule,
-    DocumentsModule,
+    forwardRef(() => DocumentsModule), // Usar forwardRef para evitar la dependencia circular
     WebsocketModule,
   ],
   controllers: [NotificationsController],

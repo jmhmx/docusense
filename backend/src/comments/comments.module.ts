@@ -7,6 +7,7 @@ import { SharingModule } from '../sharing/sharing.module';
 import { AuditModule } from '../audit/audit.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { DocumentsModule } from '../documents/documents.module';
+import { UsersModule } from '../users/users.module'; // Importamos UsersModule
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { DocumentsModule } from '../documents/documents.module';
     forwardRef(() => DocumentsModule), // También para documentos
     AuditModule,
     forwardRef(() => NotificationsModule), // También para notificaciones
+    UsersModule, // Añadimos el módulo de usuarios
   ],
   controllers: [CommentsController],
   providers: [CommentsService],

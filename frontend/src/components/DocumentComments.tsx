@@ -51,6 +51,17 @@ interface DocumentCommentsProps {
   onCommentsUpdated?: (count: number) => void;
 }
 
+interface CommentItemProps {
+  comment: Comment;
+  isReply?: boolean;
+  onReply: (commentId: string) => void;
+  onResolve: (commentId: string, isResolved: boolean) => void;
+  onDelete: (commentId: string) => void;
+  canComment: boolean;
+  currentUser: User | null;
+  availableUsers: User[];
+}
+
 // Componente para renderizar un comentario individual
 const CommentItem = ({ 
   comment, 
@@ -61,13 +72,13 @@ const CommentItem = ({
   canComment, 
   currentUser, 
   availableUsers 
-}) => {
+}: CommentItemProps) => {
   const [showReplies, setShowReplies] = useState(true);
   const isCurrentUser = currentUser?.id === comment.userId;
-  const hasReplies = comment.replies && comment.replies.length > 0;
+  const hasReplies = comment.replies ? comment.replies.length > 0 : false;
   
   // Función para formatear el contenido con menciones resaltadas
-  const formatContent = (content) => {
+  const formatContent = (content: string) => {
     const parts = content.split(/(@\w+)/g);
     
     return (
@@ -94,7 +105,7 @@ const CommentItem = ({
     );
   };
   
-  const formatDate = (dateStr) => {
+  const formatDate = (dateStr: string) => {
     return new Date(dateStr).toLocaleString('es-ES', {
       year: 'numeric',
       month: 'short',
@@ -222,11 +233,11 @@ const CommentItem = ({
               >
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
               </svg>
-              {comment.replies.length} respuesta{comment.replies.length !== 1 ? 's' : ''}
+              {comment.replies?.length || 0} respuesta{(comment.replies?.length || 0) !== 1 ? 's' : ''}
             </button>
           </div>
           
-          {showReplies && (
+          {showReplies && comment.replies && (
             <div className="pl-4 border-l-2 border-gray-200">
               {comment.replies.map(reply => (
                 <CommentItem
@@ -264,11 +275,13 @@ const DocumentComments = ({
   const [replyTo, setReplyTo] = useState<string | null>(null);
   const [replyContent, setReplyContent] = useState('');
   const [showResolved, setShowResolved] = useState(false);
-  const [permission, setPermission] = useState<string | null>(null);
+  //@ts-ignore
+  const [userPermission, setUserPermission] = useState<string | null>(null);
   const [newCommentsAvailable, setNewCommentsAvailable] = useState(false);
   const [availableUsers, setAvailableUsers] = useState<User[]>([]);
   const [canComment, setCanComment] = useState(false);
-  const [unreadCount, setUnreadCount] = useState(0);
+  //@ts-ignore
+  const [unreadCommentsCount, setUnreadCommentsCount] = useState(0);
 
   // Para verificar nuevos comentarios periódicamente (con websockets o polling)
   const checkForNewComments = () => {
@@ -331,12 +344,12 @@ const DocumentComments = ({
     try {
       const response = await api.get(`/api/sharing/document/${documentId}/check-permission?action=comment`);
       if (response.data.canAccess) {
-        setPermission('comment');
+        setUserPermission('comment');
         setCanComment(true);
       } else {
         const viewResponse = await api.get(`/api/sharing/document/${documentId}/check-permission?action=view`);
         if (viewResponse.data.canAccess) {
-          setPermission('view');
+          setUserPermission('view');
           setCanComment(false);
         } else {
           setCanComment(false);
@@ -344,7 +357,7 @@ const DocumentComments = ({
       }
     } catch (err) {
       console.error('Error checking permissions:', err);
-      setPermission(null);
+      setUserPermission(null);
       setCanComment(false);
     }
   };
@@ -375,7 +388,7 @@ const DocumentComments = ({
     try {
       await api.post(`/api/comments/document/${documentId}/mark-read`);
       console.log('Comentarios marcados como leídos correctamente');
-      setUnreadCount(0);
+      setUnreadCommentsCount(0);
     } catch (err) {
       console.error('Error marking comments as read:', err);
       throw err;
@@ -386,7 +399,7 @@ const DocumentComments = ({
   const fetchUnreadCount = async () => {
     try {
       const response = await api.get(`/api/comments/document/${documentId}/unread-count`);
-      setUnreadCount(response.data);
+      setUnreadCommentsCount(response.data);
       return response.data;
     } catch (err) {
       console.error('Error al obtener comentarios no leídos:', err);

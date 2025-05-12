@@ -53,6 +53,33 @@ export class CommentsController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @Get('document/:documentId/available-users')
+  async getAvailableUsersForMentions(
+    @Param('documentId') documentId: string,
+    @Request() req,
+  ) {
+    try {
+      this.logger.log(
+        `Obteniendo usuarios disponibles para menciones en documento ${documentId}`,
+      );
+
+      // Obtener usuarios que tienen acceso al documento
+      const users =
+        await this.commentsService.getUsersWithAccessToDocument(documentId);
+
+      return users;
+    } catch (error) {
+      this.logger.error(
+        `Error obteniendo usuarios para menciones: ${error.message}`,
+        error.stack,
+      );
+      throw new BadRequestException(
+        `Error al obtener usuarios para menciones: ${error.message}`,
+      );
+    }
+  }
+
+  @UseGuards(JwtAuthGuard)
   @Get('document/:documentId')
   async getDocumentComments(
     @Param('documentId') documentId: string,

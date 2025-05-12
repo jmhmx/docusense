@@ -15,6 +15,7 @@ import { UpdateCommentDto } from './dto/update-comment.dto';
 import { SharingService } from '../sharing/sharing.service';
 import { AuditLogService, AuditAction } from '../audit/audit-log.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { UsersService } from '../users/users.service';
 
 @Injectable()
 export class CommentsService {
@@ -28,7 +29,53 @@ export class CommentsService {
     private readonly auditLogService: AuditLogService,
     @Inject(forwardRef(() => NotificationsService))
     private readonly notificationsService: NotificationsService,
+    @Inject(forwardRef(() => UsersService))
+    private readonly usersService: UsersService,
   ) {}
+
+  /**
+   * Obtiene los usuarios con permiso para un documento
+   */
+  async getUsersWithAccessToDocument(documentId: string): Promise<string[]> {
+    try {
+      const users = await this.sharingService.getDocumentUsers(
+        documentId,
+        null,
+      );
+      return users.map((user) => user.id);
+    } catch (error) {
+      this.logger.error(
+        `Error obteniendo usuarios con acceso: ${error.message}`,
+      );
+      return [];
+    }
+  }
+
+  /**
+   * Valida que los usuarios mencionados tengan acceso al documento
+   */
+  async validateMentions(
+    documentId: string,
+    mentions: string[],
+  ): Promise<string[]> {
+    if (!mentions || mentions.length === 0) return [];
+
+    // Obtener usuarios con acceso al documento
+    const usersWithAccess = await this.getUsersWithAccessToDocument(documentId);
+
+    // Filtrar solo usuarios con acceso
+    const validMentions = mentions.filter((mention) =>
+      usersWithAccess.includes(mention),
+    );
+
+    if (validMentions.length < mentions.length) {
+      this.logger.warn(
+        `Se eliminaron ${mentions.length - validMentions.length} menciones a usuarios sin acceso al documento`,
+      );
+    }
+
+    return validMentions;
+  }
 
   /**
    * Crea un nuevo comentario en un documento
@@ -243,28 +290,51 @@ export class CommentsService {
         throw new NotFoundException(`Comentario con ID ${id} no encontrado`);
       }
 
-      // Comprobar permisos: el autor siempre puede modificar su comentario
-      let canModify = comment.userId === userId;
-
-      // Si no es el autor, verificar si tiene permisos de edición en el documento
-      if (!canModify) {
-        try {
-          canModify = await this.sharingService.canUserModifyDocument(
-            userId,
-            comment.documentId,
+      // Si trata de resolver un comentario, verificar si es el propietario del comentario padre
+      if (updateCommentDto.isResolved !== undefined) {
+        // Si es un comentario principal, solo el autor puede resolverlo
+        if (!comment.parentId && comment.userId !== userId) {
+          throw new ForbiddenException(
+            'Solo el autor del comentario puede marcarlo como resuelto',
           );
-        } catch (err) {
-          this.logger.warn(
-            `Error verificando permisos de modificación: ${err.message}`,
-          );
-          canModify = false;
         }
-      }
 
-      if (!canModify) {
-        throw new ForbiddenException(
-          'No tiene permiso para modificar este comentario',
-        );
+        // Si es una respuesta, verificar el comentario padre
+        if (comment.parentId) {
+          const parentComment = await this.commentsRepository.findOneBy({
+            id: comment.parentId,
+          });
+
+          if (parentComment && parentComment.userId !== userId) {
+            throw new ForbiddenException(
+              'Solo el autor del comentario principal puede marcar como resuelto',
+            );
+          }
+        }
+      } else {
+        // Para otras actualizaciones, comprobar permisos normales: el autor siempre puede modificar su comentario
+        let canModify = comment.userId === userId;
+
+        // Si no es el autor, verificar si tiene permisos de edición en el documento
+        if (!canModify) {
+          try {
+            canModify = await this.sharingService.canUserModifyDocument(
+              userId,
+              comment.documentId,
+            );
+          } catch (err) {
+            this.logger.warn(
+              `Error verificando permisos de modificación: ${err.message}`,
+            );
+            canModify = false;
+          }
+        }
+
+        if (!canModify) {
+          throw new ForbiddenException(
+            'No tiene permiso para modificar este comentario',
+          );
+        }
       }
 
       // Si se está marcando como resuelto, registrar quién lo resolvió

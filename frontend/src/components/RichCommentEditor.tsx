@@ -33,18 +33,21 @@ const RichCommentEditor = ({
   const editorRef = useRef<HTMLTextAreaElement>(null);
   
   useEffect(() => {
-    if (mentionQuery.length > 0) {
+    if (mentionQuery.length > 0 && Array.isArray(availableUsers)) {
+      // Verificar que availableUsers es un array y cada elemento tiene una propiedad name
       const filtered = availableUsers.filter(user => 
-        user.name.toLowerCase().includes(mentionQuery.toLowerCase())
+        user && user.name && user.name.toLowerCase().includes(mentionQuery.toLowerCase())
       );
       setFilteredUsers(filtered);
+    } else {
+      setFilteredUsers([]);
     }
   }, [mentionQuery, availableUsers]);
   
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === '@') {
       // Iniciar mención solo si hay usuarios disponibles
-      if (availableUsers.length > 0) {
+      if (Array.isArray(availableUsers) && availableUsers.length > 0) {
         setShowMentions(true);
         setMentionQuery('');
         const start = e.currentTarget.selectionStart || 0;

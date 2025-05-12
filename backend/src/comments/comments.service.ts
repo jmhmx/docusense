@@ -377,7 +377,7 @@ export class CommentsService {
           .leftJoinAndSelect('replies.user', 'replyUser');
 
         // Ordenar para que los padres vengan primero
-        queryBuilder.orderBy('comment.parentId', 'ASC NULLS FIRST');
+        queryBuilder.orderBy('COALESCE(comment.parentId, comment.id)', 'ASC');
         // Y luego por fecha de creación
         queryBuilder.addOrderBy('comment.createdAt', 'ASC');
       }

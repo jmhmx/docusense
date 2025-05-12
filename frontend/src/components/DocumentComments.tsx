@@ -70,15 +70,17 @@ const DocumentComments = ({
   const [permission, setPermission] = useState<string | null>(null);
   const [newCommentsAvailable, setNewCommentsAvailable] = useState(false);
   const [availableUsers, setAvailableUsers] = useState<User[]>([]);
-  const [canComment, setCanComment] = useState(false); // Declare before use
+  const [canComment, setCanComment] = useState(false);
+  //@ts-ignore
+  const [unreadCount, setUnreadCount] = useState(0);
 
   // Para simular nuevos comentarios (en producción usarías websockets o polling)
   const checkForNewComments = () => {
     const interval = setInterval(async () => {
       if (documentId) {
         try {
-          const response = await api.get(`/api/comments/document/${documentId}/unread-count`);
-          if (response.data > 0) {
+          const response = await fetchUnreadCount();
+          if (response > 0) {
             setNewCommentsAvailable(true);
           }
         } catch (err) {
@@ -93,6 +95,7 @@ const DocumentComments = ({
   useEffect(() => {
     fetchComments();
     checkPermission();
+    fetchUnreadCount();
     const cleanup = checkForNewComments();
     return cleanup;
   }, [documentId]);
@@ -148,9 +151,9 @@ const DocumentComments = ({
       const response = await api.get(`/api/comments/document/${documentId}?includeReplies=true`);
       setComments(response.data);
       
-      // Marcar comentarios como leídos
+      // Marcar comentarios como leídos - CORREGIDO
       try {
-        await api.post(`/api/comments/document/${documentId}/mark-read`);
+        await markCommentsAsRead();
       } catch (err) {
         console.error('Error marking comments as read:', err);
       }
@@ -159,6 +162,30 @@ const DocumentComments = ({
       setError(err?.response?.data?.message || 'Error al cargar comentarios');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Función CORREGIDA para marcar comentarios como leídos
+  const markCommentsAsRead = async () => {
+    try {
+      await api.post(`/api/comments/document/${documentId}/mark-read`);
+      console.log('Comentarios marcados como leídos correctamente');
+      setUnreadCount(0);
+    } catch (err) {
+      console.error('Error marking comments as read:', err);
+      throw err;
+    }
+  };
+
+  // Función CORREGIDA para obtener conteo de no leídos
+  const fetchUnreadCount = async () => {
+    try {
+      const response = await api.get(`/api/comments/document/${documentId}/unread-count`);
+      setUnreadCount(response.data);
+      return response.data;
+    } catch (err) {
+      console.error('Error al obtener comentarios no leídos:', err);
+      return 0;
     }
   };
 

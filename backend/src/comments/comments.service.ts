@@ -564,32 +564,47 @@ export class CommentsService {
       const unreadComments = await this.commentsRepository
         .createQueryBuilder('comment')
         .where('comment.documentId = :documentId', { documentId })
-        .andWhere(
-          'comment.readBy IS NULL OR NOT(:userId = ANY(comment.readBy))',
-          { userId },
-        )
         .getMany();
 
       if (unreadComments.length === 0) {
         return;
       }
 
-      // Actualizar el arreglo de lectores de cada comentario
+      // Iterar y actualizar cada comentario, manejando correctamente el array readBy
+      let updatedCount = 0;
       for (const comment of unreadComments) {
-        comment.readBy = [...(comment.readBy || []), userId];
+        // Si el usuario ya está en readBy, omitimos este comentario
+        if (comment.readBy && comment.readBy.includes(userId)) {
+          continue;
+        }
+
+        // Actualizar el arreglo readBy, asegurando que sea un array
+        comment.readBy = Array.isArray(comment.readBy)
+          ? [...comment.readBy, userId]
+          : [userId];
+
+        updatedCount++;
       }
 
-      // Guardar todos los comentarios actualizados
-      await this.commentsRepository.save(unreadComments);
-      this.logger.log(
-        `${unreadComments.length} comentarios marcados como leídos para el usuario ${userId}`,
-      );
+      // Solo guardar si hubo cambios
+      if (updatedCount > 0) {
+        await this.commentsRepository.save(unreadComments);
+        this.logger.log(
+          `${updatedCount} comentarios marcados como leídos para el usuario ${userId}`,
+        );
+      } else {
+        this.logger.log(
+          `No hubo comentarios para marcar como leídos para el usuario ${userId}`,
+        );
+      }
     } catch (error) {
       this.logger.error(
         `Error marcando comentarios como leídos: ${error.message}`,
         error.stack,
       );
-      throw error;
+      throw new BadRequestException(
+        `Error al marcar comentarios como leídos: ${error.message}`,
+      );
     }
   }
 
@@ -620,24 +635,30 @@ export class CommentsService {
         );
       }
 
-      // Contar comentarios no leídos
-      const count = await this.commentsRepository
+      // Contar comentarios no leídos - CORREGIDO
+      // Problema: El error "op ANY/ALL (array) requires array on right side"
+      // se produce porque estamos usando readBy que puede ser null
+      const comments = await this.commentsRepository
         .createQueryBuilder('comment')
         .where('comment.documentId = :documentId', { documentId })
         .andWhere('comment.userId != :userId', { userId }) // No contar comentarios propios
-        .andWhere(
-          'comment.readBy IS NULL OR NOT(:userId = ANY(comment.readBy))',
-          { userId },
-        )
-        .getCount();
+        .getMany();
 
-      return count;
+      // Filtramos manualmente los que no están leídos por el usuario
+      const unreadCount = comments.filter((comment) => {
+        // Si readBy es null o no incluye el userId, es no leído
+        return !comment.readBy || !comment.readBy.includes(userId);
+      }).length;
+
+      return unreadCount;
     } catch (error) {
       this.logger.error(
         `Error contando comentarios no leídos: ${error.message}`,
         error.stack,
       );
-      throw error;
+      throw new BadRequestException(
+        `Error al contar comentarios no leídos: ${error.message}`,
+      );
     }
   }
 }

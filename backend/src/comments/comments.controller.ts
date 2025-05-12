@@ -1,3 +1,4 @@
+// backend/src/comments/comments.controller.ts
 import {
   Controller,
   Get,
@@ -11,6 +12,7 @@ import {
   Headers,
   Ip,
   Query,
+  Logger,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CommentsService } from './comments.service';
@@ -19,6 +21,8 @@ import { UpdateCommentDto } from './dto/update-comment.dto';
 
 @Controller('api/comments')
 export class CommentsController {
+  private readonly logger = new Logger(CommentsController.name);
+
   constructor(private readonly commentsService: CommentsService) {}
 
   @Post()
@@ -29,6 +33,9 @@ export class CommentsController {
     @Headers() headers,
     @Ip() ip: string,
   ) {
+    this.logger.log(
+      `Usuario ${req.user.id} creando comentario para documento ${createCommentDto.documentId}`,
+    );
     const userAgent = headers['user-agent'] || 'Unknown';
     return this.commentsService.create(
       createCommentDto,
@@ -42,19 +49,26 @@ export class CommentsController {
   @Get('document/:documentId')
   getDocumentComments(
     @Param('documentId') documentId: string,
-    @Query('includeReplies') includeReplies: boolean,
+    @Query('includeReplies') includeReplies: string,
     @Request() req,
   ) {
+    this.logger.log(
+      `Usuario ${req.user.id} solicitando comentarios del documento ${documentId}`,
+    );
+    // Convertir el parámetro de consulta a booleano
+    const includeRepliesBoolean =
+      includeReplies === 'true' || includeReplies === '1';
     return this.commentsService.getDocumentComments(
       documentId,
       req.user.id,
-      includeReplies === undefined ? true : includeReplies,
+      includeRepliesBoolean,
     );
   }
 
   @UseGuards(JwtAuthGuard)
   @Get(':id')
   findOne(@Param('id') id: string, @Request() req) {
+    this.logger.log(`Usuario ${req.user.id} buscando comentario ${id}`);
     return this.commentsService.findOne(id, req.user.id);
   }
 
@@ -67,6 +81,7 @@ export class CommentsController {
     @Headers() headers,
     @Ip() ip: string,
   ) {
+    this.logger.log(`Usuario ${req.user.id} actualizando comentario ${id}`);
     const userAgent = headers['user-agent'] || 'Unknown';
     return this.commentsService.update(
       id,
@@ -85,6 +100,7 @@ export class CommentsController {
     @Headers() headers,
     @Ip() ip: string,
   ) {
+    this.logger.log(`Usuario ${req.user.id} eliminando comentario ${id}`);
     const userAgent = headers['user-agent'] || 'Unknown';
     return this.commentsService.remove(id, req.user.id, ip, userAgent);
   }
@@ -92,6 +108,9 @@ export class CommentsController {
   @UseGuards(JwtAuthGuard)
   @Get('replies/:commentId')
   getCommentReplies(@Param('commentId') commentId: string, @Request() req) {
+    this.logger.log(
+      `Usuario ${req.user.id} solicitando respuestas al comentario ${commentId}`,
+    );
     return this.commentsService.getCommentReplies(commentId, req.user.id);
   }
 
@@ -101,6 +120,9 @@ export class CommentsController {
     @Param('documentId') documentId: string,
     @Request() req,
   ) {
+    this.logger.log(
+      `Usuario ${req.user.id} marcando como leídos los comentarios del documento ${documentId}`,
+    );
     return this.commentsService.markDocumentCommentsAsRead(
       documentId,
       req.user.id,

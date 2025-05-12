@@ -1,3 +1,4 @@
+// backend/src/comments/entities/comment.entity.ts
 import {
   Entity,
   Column,
@@ -55,8 +56,8 @@ export class Comment {
   @Column({ type: 'jsonb', nullable: true })
   position?: Record<string, any>;
 
-  // Nuevos campos para mejora de comentarios
-  @Column({ type: 'jsonb', nullable: true })
+  // Nuevos campos para menciones y otras funcionalidades
+  @Column({ type: 'simple-array', nullable: true })
   mentions?: string[]; // IDs de usuarios mencionados
 
   @Column({ default: false })
@@ -68,7 +69,7 @@ export class Comment {
   @Column({ nullable: true })
   attachmentUrl?: string;
 
-  @Column({ type: 'jsonb', nullable: true })
+  @Column({ type: 'simple-array', nullable: true })
   readBy?: string[]; // IDs de usuarios que han leído el comentario
 
   @CreateDateColumn({ name: 'created_at' })

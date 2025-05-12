@@ -1,7 +1,9 @@
+// backend/src/sharing/sharing.module.ts
 import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { SharingService } from './sharing.service';
 import { SharingController } from './sharing.controller';
+import { CommentsService } from './comments.service';
 import { DocumentPermission } from './entities/document-permission.entity';
 import { ShareLink } from './entities/share-link.entity';
 import { DocumentComment } from './entities/document-comment.entity';
@@ -9,7 +11,7 @@ import { Document } from '../documents/entities/document.entity';
 import { UsersModule } from '../users/users.module';
 import { DocumentsModule } from '../documents/documents.module';
 import { AuditModule } from '../audit/audit.module';
-import { forwardRef as forwardRefNest } from '@nestjs/common';
+import { CommentsModule } from '../comments/comments.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
@@ -21,9 +23,10 @@ import { NotificationsModule } from '../notifications/notifications.module';
       DocumentComment,
     ]),
     UsersModule,
-    forwardRef(() => DocumentsModule), // Usar forwardRef para evitar dependencia circular
+    forwardRef(() => DocumentsModule),
     AuditModule,
-    forwardRef(() => NotificationsModule), // Usar forwardRef también para NotificationsModule
+    forwardRef(() => CommentsModule),
+    forwardRef(() => NotificationsModule),
   ],
   controllers: [SharingController],
   providers: [SharingService],

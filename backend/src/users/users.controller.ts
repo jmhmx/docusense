@@ -1,3 +1,4 @@
+// backend/src/users/users.controller.ts - actualizado
 import {
   Controller,
   Get,
@@ -10,6 +11,7 @@ import {
   UnauthorizedException,
   BadRequestException,
   Req,
+  Logger,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -19,6 +21,8 @@ import { AuditLogService, AuditAction } from '../audit/audit-log.service';
 
 @Controller('api/users')
 export class UsersController {
+  private readonly logger = new Logger(UsersController.name);
+
   constructor(
     private readonly usersService: UsersService,
     private readonly auditLogService: AuditLogService,
@@ -37,15 +41,28 @@ export class UsersController {
   }
 
   @UseGuards(JwtAuthGuard)
-  @Get('available-signers')
-  async getAvailableSigners() {
+  @Get('available')
+  async getAvailableUsers() {
     try {
-      console.log('Iniciando búsqueda de firmantes disponibles');
+      this.logger.log(
+        'Iniciando búsqueda de usuarios disponibles para menciones',
+      );
       const users = await this.usersService.findAll();
-      console.log('Usuarios encontrados:', users.length);
-      return users;
+
+      // Mapear solo los datos necesarios para mostrar en menciones
+      const mappedUsers = users.map((user) => ({
+        id: user.id,
+        name: user.name,
+        email: user.email,
+      }));
+
+      this.logger.log(`Retornando ${mappedUsers.length} usuarios disponibles`);
+      return mappedUsers;
     } catch (error) {
-      console.error('Error detallado al obtener usuarios:', error);
+      this.logger.error(
+        `Error al obtener usuarios disponibles: ${error.message}`,
+        error.stack,
+      );
       throw new BadRequestException(
         `Error al obtener usuarios disponibles: ${error.message}`,
       );
@@ -112,6 +129,4 @@ export class UsersController {
       );
     }
   }
-
-  
 }

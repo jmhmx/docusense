@@ -59,20 +59,11 @@ export class CommentsController {
     @Request() req,
   ) {
     try {
-      this.logger.log(
-        `Obteniendo usuarios disponibles para menciones en documento ${documentId}`,
+      // Usa el método existente en el servicio
+      return await this.commentsService.getUsersWithAccessToDocument(
+        documentId,
       );
-
-      // Obtener usuarios que tienen acceso al documento
-      const users =
-        await this.commentsService.getUsersWithAccessToDocument(documentId);
-
-      return users;
     } catch (error) {
-      this.logger.error(
-        `Error obteniendo usuarios para menciones: ${error.message}`,
-        error.stack,
-      );
       throw new BadRequestException(
         `Error al obtener usuarios para menciones: ${error.message}`,
       );

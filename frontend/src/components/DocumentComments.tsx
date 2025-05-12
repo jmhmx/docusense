@@ -75,7 +75,7 @@ const CommentItem = ({
 }: CommentItemProps) => {
   const [showReplies, setShowReplies] = useState(true);
   const isCurrentUser = currentUser?.id === comment.userId;
-  const hasReplies = comment.replies ? comment.replies.length > 0 : false;
+  const hasReplies = comment.replies && comment.replies.length > 0;
   
   // Función para formatear el contenido con menciones resaltadas
   const formatContent = (content: string) => {
@@ -225,7 +225,6 @@ const CommentItem = ({
               className="flex items-center text-xs text-gray-500 hover:text-gray-700"
             >
               <svg 
-                xmlns="http://www.w3.org/2000/svg" 
                 className={`w-4 h-4 mr-1 transition-transform ${showReplies ? 'transform rotate-90' : ''}`} 
                 fill="none" 
                 viewBox="0 0 24 24" 
@@ -233,13 +232,13 @@ const CommentItem = ({
               >
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
               </svg>
-              {comment.replies?.length || 0} respuesta{(comment.replies?.length || 0) !== 1 ? 's' : ''}
+              {comment.replies?.length} respuesta{comment.replies?.length !== 1 ? 's' : ''}
             </button>
           </div>
           
-          {showReplies && comment.replies && (
-            <div className="pl-4 border-l-2 border-gray-200">
-              {comment.replies.map(reply => (
+          {showReplies && (
+            <div className="pl-4 mt-2 border-l-2 border-gray-200">
+              {comment.replies?.map(reply => (
                 <CommentItem
                   key={reply.id}
                   comment={reply}
@@ -317,7 +316,6 @@ const DocumentComments = ({
   }, [comments, onCommentsUpdated]);
 
   useEffect(() => {
-    // Cargar usuarios disponibles para menciones
     const fetchAvailableUsers = async () => {
       try {
         // Usamos la API específica que verifica permisos en el documento
@@ -492,41 +490,41 @@ const DocumentComments = ({
       );
     }
     
-    // Filtrar comentarios para la visualización
-    const mainComments = comments.filter(comment => !comment.parentId);
-    const filteredComments = showResolved 
-      ? mainComments 
-      : mainComments.filter(comment => !comment.isResolved);
-      
-    if (filteredComments.length === 0) {
-      return (
-        <div className="py-8 text-center text-gray-500">
-          {mainComments.length === 0 ? (
-            <p>No hay comentarios en este documento.</p>
-          ) : (
-            <p>No hay comentarios sin resolver.</p>
-          )}
-        </div>
-      );
-    }
+    // Filtrar solo comentarios principales (sin parentId)
+  const mainComments = comments.filter(comment => !comment.parentId);
+  const filteredComments = showResolved 
+    ? mainComments 
+    : mainComments.filter(comment => !comment.isResolved);
     
+  if (filteredComments.length === 0) {
     return (
-      <div className="space-y-4">
-        {filteredComments.map(comment => (
-          <CommentItem
-            key={comment.id}
-            comment={comment}
-            onReply={handleReply}
-            onResolve={resolveComment}
-            onDelete={deleteComment}
-            canComment={canComment}
-            currentUser={user}
-            availableUsers={availableUsers}
-          />
-        ))}
+      <div className="py-8 text-center text-gray-500">
+        {mainComments.length === 0 ? (
+          <p>No hay comentarios en este documento.</p>
+        ) : (
+          <p>No hay comentarios sin resolver.</p>
+        )}
       </div>
     );
-  };
+  }
+  
+  return (
+    <div className="space-y-4">
+      {filteredComments.map(comment => (
+        <CommentItem
+          key={comment.id}
+          comment={comment}
+          onReply={handleReply}
+          onResolve={resolveComment}
+          onDelete={deleteComment}
+          canComment={canComment}
+          currentUser={user}
+          availableUsers={availableUsers}
+        />
+      ))}
+    </div>
+  );
+};
 
   // Renderizar componente de respuesta
   const renderReplyForm = () => {

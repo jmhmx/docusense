@@ -43,25 +43,20 @@ const RichCommentEditor = ({
   
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === '@') {
-      // Iniciar mención
-      setShowMentions(true);
-      setMentionQuery('');
-      // Obtenemos el selectionStart de forma segura desde el textarea
-      const start = e.currentTarget.selectionStart || 0;
-      setMentionPosition({ start, end: start });
+      // Iniciar mención solo si hay usuarios disponibles
+      if (availableUsers.length > 0) {
+        setShowMentions(true);
+        setMentionQuery('');
+        const start = e.currentTarget.selectionStart || 0;
+        setMentionPosition({ start, end: start });
+      }
     } else if (showMentions && e.key === 'Escape') {
-      // Cancelar mención
       setShowMentions(false);
     } else if (showMentions && e.key === 'Enter' && filteredUsers.length > 0) {
-      // Seleccionar primera opción de mención
       e.preventDefault();
       insertMention(filteredUsers[0]);
-    } else if (showMentions && e.key === 'ArrowDown') {
-      // Navegar por opciones
-      e.preventDefault();
-      // Aquí se implementaría la navegación por las opciones
     }
-  };
+  }
   
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newValue = e.target.value;

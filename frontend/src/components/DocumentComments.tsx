@@ -318,22 +318,41 @@ const DocumentComments = ({
   useEffect(() => {
     const fetchAvailableUsers = async () => {
       try {
-        // Usamos la API específica que verifica permisos en el documento
-        const response = await api.get(`/api/comments/document/${documentId}/available-users`);
-        setAvailableUsers(response.data);
-      } catch (err) {
-        console.error('Error cargando usuarios disponibles:', err);
-        // Fallback a la API general de usuarios si la específica falla
-        try {
-          const generalResponse = await api.get('/api/users/available');
-          setAvailableUsers(generalResponse.data);
-        } catch (fallbackErr) {
-          console.error('Error en fallback de usuarios:', fallbackErr);
+        // Intentar primero con la API específica para documentos compartidos
+        const response = await api.get(`/api/sharing/document/${documentId}/users`);
+        
+        if (response.data && Array.isArray(response.data) && response.data.length > 0) {
+          // Mapear los datos al formato esperado por el componente
+          const mappedUsers = response.data.map(user => ({
+            id: user.id,
+            name: user.name,
+            email: user.email
+          }));
+          setAvailableUsers(mappedUsers);
+          console.log("Usuarios disponibles:", mappedUsers);
+        } else {
+          // Si no hay datos en la respuesta específica, intentar con el endpoint general
+          fallbackToGeneralUsers();
         }
+      } catch (err) {
+        console.error('Error cargando usuarios compartidos:', err);
+        fallbackToGeneralUsers();
       }
     };
   
-    if (canComment) {
+    const fallbackToGeneralUsers = async () => {
+      try {
+        const response = await api.get('/api/users/available');
+        if (response.data && Array.isArray(response.data)) {
+          setAvailableUsers(response.data);
+          console.log("Usuarios disponibles (fallback):", response.data);
+        }
+      } catch (fallbackErr) {
+        console.error('Error en fallback de usuarios:', fallbackErr);
+      }
+    };
+  
+    if (documentId) {
       fetchAvailableUsers();
     }
   }, [canComment, documentId]);

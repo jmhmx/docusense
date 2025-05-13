@@ -490,41 +490,61 @@ const DocumentComments = ({
       );
     }
     
-    // Filtrar solo comentarios principales (sin parentId)
-  const mainComments = comments.filter(comment => !comment.parentId);
-  const filteredComments = showResolved 
-    ? mainComments 
-    : mainComments.filter(comment => !comment.isResolved);
+    // Procesar los comentarios para asegurar que las respuestas estén anidadas correctamente
+    // Primero, identificar los comentarios principales
+    const mainComments = comments.filter(comment => !comment.parentId);
     
-  if (filteredComments.length === 0) {
+    // Crear un mapa para buscar comentarios por ID más eficientemente
+    const commentMap = new Map();
+    comments.forEach(comment => {
+      commentMap.set(comment.id, { ...comment, replies: [] });
+    });
+    
+    // Asignar cada respuesta a su comentario padre
+    comments.forEach(comment => {
+      if (comment.parentId && commentMap.has(comment.parentId)) {
+        const parentComment = commentMap.get(comment.parentId);
+        parentComment.replies.push(commentMap.get(comment.id));
+      }
+    });
+    
+    // Actualizar la lista de comentarios principales con sus respuestas organizadas
+    const processedMainComments = mainComments.map(comment => commentMap.get(comment.id));
+    
+    // Filtrar comentarios resueltos si es necesario
+    const filteredComments = showResolved 
+      ? processedMainComments 
+      : processedMainComments.filter(comment => !comment.isResolved);
+      
+    if (filteredComments.length === 0) {
+      return (
+        <div className="py-8 text-center text-gray-500">
+          {mainComments.length === 0 ? (
+            <p>No hay comentarios en este documento.</p>
+          ) : (
+            <p>No hay comentarios sin resolver.</p>
+          )}
+        </div>
+      );
+    }
+    
     return (
-      <div className="py-8 text-center text-gray-500">
-        {mainComments.length === 0 ? (
-          <p>No hay comentarios en este documento.</p>
-        ) : (
-          <p>No hay comentarios sin resolver.</p>
-        )}
+      <div className="space-y-4">
+        {filteredComments.map(comment => (
+          <CommentItem
+            key={comment.id}
+            comment={comment}
+            onReply={handleReply}
+            onResolve={resolveComment}
+            onDelete={deleteComment}
+            canComment={canComment}
+            currentUser={user}
+            availableUsers={availableUsers}
+          />
+        ))}
       </div>
     );
-  }
-  
-  return (
-    <div className="space-y-4">
-      {filteredComments.map(comment => (
-        <CommentItem
-          key={comment.id}
-          comment={comment}
-          onReply={handleReply}
-          onResolve={resolveComment}
-          onDelete={deleteComment}
-          canComment={canComment}
-          currentUser={user}
-          availableUsers={availableUsers}
-        />
-      ))}
-    </div>
-  );
-};
+  };
 
   // Renderizar componente de respuesta
   const renderReplyForm = () => {

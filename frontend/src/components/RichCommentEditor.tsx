@@ -31,6 +31,8 @@ const RichCommentEditor = ({
   const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
   
   const editorRef = useRef<HTMLTextAreaElement>(null);
+
+  console.log(availableUsers)
   
   useEffect(() => {
     if (mentionQuery.length > 0 && Array.isArray(availableUsers)) {
@@ -55,11 +57,14 @@ const RichCommentEditor = ({
       }
     } else if (showMentions && e.key === 'Escape') {
       setShowMentions(false);
-    } else if (showMentions && e.key === 'Enter' && filteredUsers.length > 0) {
+    } else if (showMentions && (e.key === 'Enter' || e.key === 'Tab') && filteredUsers.length > 0) {
       e.preventDefault();
       insertMention(filteredUsers[0]);
+    } else if (showMentions && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+      // Añadir navegación con flechas (implementación opcional)
+      e.preventDefault();
     }
-  }
+  };
   
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newValue = e.target.value;
@@ -68,9 +73,18 @@ const RichCommentEditor = ({
     // Si hay una mención activa, actualizar la consulta
     if (showMentions) {
       const currentPos = e.target.selectionStart || 0;
-      const mentionText = newValue.substring(mentionPosition.start, currentPos);
-      setMentionQuery(mentionText.replace('@', ''));
-      setMentionPosition({ ...mentionPosition, end: currentPos });
+      // Extraer texto desde @ hasta la posición actual del cursor
+      const mentionStartPos = mentionPosition.start;
+      const mentionText = newValue.substring(mentionStartPos, currentPos);
+      
+      if (mentionText.startsWith('@')) {
+        // Quitar el @ para la búsqueda
+        setMentionQuery(mentionText.substring(1));
+        setMentionPosition({ start: mentionStartPos, end: currentPos });
+      } else {
+        // Si ya no empieza con @, cerrar el panel
+        setShowMentions(false);
+      }
     }
   };
   
@@ -155,7 +169,11 @@ const RichCommentEditor = ({
         
         {/* Sugerencias de menciones */}
         {showMentions && filteredUsers.length > 0 && (
-          <div className="absolute z-10 w-64 mt-1 overflow-auto bg-white border border-gray-200 rounded-md shadow-lg max-h-60">
+          <div className="absolute z-10 w-64 mt-1 overflow-auto bg-white border border-gray-200 rounded-md shadow-lg max-h-60" style={{
+            // Posicionar el panel en relación con la posición del cursor
+            top: '100%',
+            left: '0'
+          }}>
             <ul className="py-1">
               {filteredUsers.map(user => (
                 <li 

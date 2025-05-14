@@ -1,102 +1,242 @@
 import { Link } from 'react-router-dom';
 import useAuth from '../hooks/UseAuth';
+import { motion } from 'framer-motion';
 
 const Home = () => {
   const { isAuthenticated } = useAuth();
 
+  const featureVariants = {
+    hidden: { opacity: 0, y: 50 },
+    visible: { opacity: 1, y: 0 },
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100">
-      {/* Hero Section */}
-      <section className="pt-20 pb-16 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
-        <div className="text-center">
-          <h1 className="text-5xl md:text-6xl font-extrabold text-gray-900 mb-6">
-            <span className="text-blue-600">Docu</span>Sense <br/> <span className="text-xs text-blue-600">by Engine Core</span>
+    <div className="min-h-screen overflow-x-hidden bg-gradient-to-b from-gray-50 to-gray-100">
+      {/* SEO Meta Tags */}
+      <title>DocuSense - Firma Electrónica y Gestión Documental en México</title>
+      <meta name="description" content="Plataforma líder en firma electrónica en México con cumplimiento legal (SAT, LFEA), biometría, blockchain y precios accesibles para PYMES y profesionales." />
+      <meta name="keywords" content="firma electrónica méxico, e.firma SAT, LFEA, biometría, blockchain, gestión documental, PYMES méxico, contadores, abogados" />
+      <meta name="author" content="Engine Core" />
+      <meta name="robots" content="index, follow" />
+      <link rel="canonical" href="https://www.docusense.mx/" /> {/* Replace with your actual domain */}
+
+      {/* Hero Section - Full Width */}
+      <section className="relative px-4 pt-20 pb-16 overflow-hidden text-center sm:px-6 lg:px-8 bg-blue-50"> {/* Added bg-blue-50 for better contrast */}
+        <div className="absolute inset-0 z-0">
+          {/* SVG Animation as Background */}
+          <img src="/hero2.jpg" alt="Document management and electronic signature animation" className="object-cover w-full h-full opacity-75"/> {/* Adjusted opacity */}
+        </div>
+        <motion.div
+          initial={{ opacity: 0, y: -50 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8 }}
+          className="relative z-10 mx-auto max-w-7xl" // Content centered within max-width
+        >
+          <h1 className="mb-6 text-5xl font-extrabold text-gray-900 md:text-6xl drop-shadow-sm"> {/* Added drop-shadow */}
+            <span className="text-blue-700">Docu</span>Sense: <br className="sm:hidden"/> Firma Electrónica <span className="text-blue-700">Segura y Legal</span> en México
           </h1>
-          <p className="text-xl md:text-2xl text-gray-600 max-w-3xl mx-auto mb-10">
-            Gestiona y analiza tus documentos de forma inteligente con tecnología de última generación
+          <p className="max-w-3xl mx-auto mb-10 text-xl text-gray-700 md:text-2xl drop-shadow-sm"> {/* Adjusted text color and added drop-shadow */}
+            Cumple con el Código de Comercio y la LFEA. Integra e.firma SAT, biometría y blockchain para máxima validez y seguridad.
           </p>
-          <div className="flex flex-col sm:flex-row justify-center gap-4 mb-16">
+          <div className="flex flex-col justify-center gap-4 mb-16 sm:flex-row">
             {isAuthenticated ? (
-              <Link to="/dashboard" className="inline-flex justify-center items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
-                Ir al Dashboard
-              </Link>
+              <motion.div
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+              >
+                <Link to="/dashboard" className="inline-flex items-center justify-center px-8 py-4 text-base font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                  Ir al Dashboard
+                </Link>
+              </motion.div>
             ) : (
               <>
-                <Link to="/register" className="inline-flex justify-center items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
-                  Comenzar Gratis
-                </Link>
-                <Link to="/login" className="inline-flex justify-center items-center px-6 py-3 border border-gray-300 text-base font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
-                  Iniciar Sesión
-                </Link>
+                <motion.div
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  <Link to="/register" className="inline-flex items-center justify-center px-8 py-4 text-base font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                    Comenzar Gratis
+                  </Link>
+                </motion.div>
+                <motion.div
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  <Link to="/login" className="inline-flex items-center justify-center px-8 py-4 text-base font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                    Iniciar Sesión
+                  </Link>
+                </motion.div>
               </>
             )}
           </div>
-          <div className="relative h-64 sm:h-80 md:h-96 max-w-5xl mx-auto">
-            <div className="absolute inset-0 bg-blue-100 rounded-lg shadow-lg p-4">
-              <div className="h-full bg-white rounded border border-gray-200 flex items-center justify-center">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-20 h-20 text-blue-500 mx-auto opacity-50">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
-                </svg>
-              </div>
-            </div>
-          </div>
-        </div>
+        </motion.div>
       </section>
 
-      {/* Features Section */}
-      <section className="py-16 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
-        <h2 className="text-3xl font-bold text-gray-900 text-center mb-12">
-          Características principales
+      {/* Key Differentiators Section (Based on idea.md) */}
+      <section className="px-4 py-16 mx-auto sm:px-6 lg:px-8 max-w-7xl">
+        <h2 className="mb-12 text-3xl font-bold text-center text-gray-900">
+          ¿Por qué DocuSense? Nuestros Diferenciadores Clave
         </h2>
-        <div className="grid md:grid-cols-3 gap-8">
-          <div className="bg-white p-8 rounded-lg shadow-md">
-            <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mb-4">
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-blue-600">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
-              </svg>
+        <div className="grid gap-8 md:grid-cols-3">
+          <motion.div
+            variants={featureVariants}
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true }}
+            transition={{ duration: 0.6, delay: 0.1 }}
+            className="p-8 transition-shadow duration-300 bg-white rounded-lg shadow-md hover:shadow-lg"
+          >
+            <div className="flex items-center justify-center w-12 h-12 mb-4 bg-blue-100 rounded-lg">
+               <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/></svg>
             </div>
-            <h3 className="text-xl font-semibold text-gray-900 mb-3">Almacenamiento Seguro</h3>
+            <h3 className="mb-3 text-xl font-semibold text-gray-900">Especialización en México</h3>
             <p className="text-gray-600">
-              Guarda tus documentos importantes en una plataforma protegida y accesible desde cualquier lugar.
+              Cumplimos con Código de Comercio, LFEA e integramos e.firma SAT para trámites fiscales y legales.
             </p>
+          </motion.div>
+
+          <motion.div
+            variants={featureVariants}
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true }}
+            transition={{ duration: 0.6, delay: 0.2 }}
+            className="p-8 transition-shadow duration-300 bg-white rounded-lg shadow-md hover:shadow-lg"
+          >
+            <div className="flex items-center justify-center w-12 h-12 mb-4 bg-green-100 rounded-lg">
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 11c0 3.517-1.045 6.79-3 9.5m-1-6a9 9 0 010-6m9 6a9 9 0 010-6m-9 6c0-1.657 1.343-3 3-3s3 1.343 3 3m-3 0v1.5m-3.343-1.657A4.502 4.502 0 0112 4.5c.83 0 1.613.138 2.352.383m-7.5 7.5a4.502 4.502 0 0113.5 0m-12 3h.01M12 21l-3-3m3 3l3-3"/></svg>
+            </div>
+            <h3 className="mb-3 text-xl font-semibold text-gray-900">Tecnología Innovadora</h3>
+            <p className="text-gray-600">
+              Implementamos firma con biometría (huella, facial) y blockchain para auditoría inmutable.
+            </p>
+          </motion.div>
+
+          <motion.div
+            variants={featureVariants}
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true }}
+            transition={{ duration: 0.6, delay: 0.3 }}
+            className="p-8 transition-shadow duration-300 bg-white rounded-lg shadow-md hover:shadow-lg"
+          >
+            <div className="flex items-center justify-center w-12 h-12 mb-4 bg-yellow-100 rounded-lg">
+               <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2-4h6m3 0v6m0 0v.5c0 1.1.9 2 2 2h.5a2 2 0 002-2v-.5a2 2 0 00-2-2H17z"/></svg>
+            </div>
+            <h3 className="mb-3 text-xl font-semibold text-gray-900">Precios y Planes Flexibles</h3>
+            <p className="text-gray-600">
+              Ofrecemos "pago por firma" y planes económicos para PYMES y freelancers, sin forzar suscripciones costosas.
+            </p>
+          </motion.div>
+        </div>
+      </section>
+
+       {/* Benefits Section - Static */}
+       <section className="px-4 py-16 mx-auto rounded-lg sm:px-6 lg:px-8 max-w-7xl bg-blue-50">
+        <h2 className="mb-12 text-3xl font-bold text-center text-gray-900">
+          Beneficios para tu Negocio
+        </h2>
+        <div className="grid gap-8 md:grid-cols-2">
+          <div className="flex items-start">
+             <div className="flex-shrink-0">
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-8 h-8 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" /></svg>
+             </div>
+             <div className="ml-4">
+                <h3 className="mb-2 text-xl font-semibold text-gray-900">Ahorra Tiempo y Costos</h3>
+                <p className="text-gray-600">Agiliza la firma de documentos y reduce gastos en impresión, envío y archivo físico.</p>
+             </div>
           </div>
-          
-          <div className="bg-white p-8 rounded-lg shadow-md">
-            <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mb-4">
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-blue-600">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3v11.25A2.25 2.25 0 006 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0118 16.5h-2.25m-7.5 0h7.5m-7.5 0l-1 3m8.5-3l1 3m0 0l.5 1.5m-.5-1.5h-9.5m0 0l-.5 1.5m.75-9l3-3 2.148 2.148A12.061 12.061 0 0116.5 7.605" />
-              </svg>
-            </div>
-            <h3 className="text-xl font-semibold text-gray-900 mb-3">Analítica Inteligente</h3>
-            <p className="text-gray-600">
-              Extrae información clave de tus documentos automáticamente con nuestro sistema de procesamiento.
-            </p>
+           <div className="flex items-start">
+             <div className="flex-shrink-0">
+                 <svg xmlns="http://www.w3.org/2000/svg" className="w-8 h-8 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.003 12.003 0 002.944 12H4c0 1.381.168 2.725.47 4H4.5l1.5-1.5a6 6 0 013-3v-2a6 6 0 0112 0v2a6 6 0 01-3 3l1.5 1.5h.03c.302-1.275.47-2.619.47-4zm-9 0a6 6 0 0112 0"/></svg>
+             </div>
+             <div className="ml-4">
+                <h3 className="mb-2 text-xl font-semibold text-gray-900">Mayor Seguridad Jurídica</h3>
+                <p className="text-gray-600">Documentos con validez probatoria, sellos de tiempo y auditoría inmutable con blockchain.</p>
+             </div>
           </div>
-          
-          <div className="bg-white p-8 rounded-lg shadow-md">
-            <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mb-4">
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-blue-600">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
-              </svg>
-            </div>
-            <h3 className="text-xl font-semibold text-gray-900 mb-3">Organización Eficiente</h3>
-            <p className="text-gray-600">
-              Categoriza y encuentra tus documentos al instante con búsquedas avanzadas y metadatos personalizados.
-            </p>
+           <div className="flex items-start">
+             <div className="flex-shrink-0">
+                 <svg xmlns="http://www.w3.org/2000/svg" className="w-8 h-8 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+             </div>
+             <div className="ml-4">
+                <h3 className="mb-2 text-xl font-semibold text-gray-900">Experiencia de Usuario Intuitiva</h3>
+                <p className="text-gray-600">Interfaz amigable, soporte localizado en español y guías para trámites comunes en México.</p>
+             </div>
+          </div>
+           <div className="flex items-start">
+             <div className="flex-shrink-0">
+                 <svg xmlns="http://www.w3.org/2000/svg" className="w-8 h-8 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 20l4-16m4 4l4 4-4 4M6 16L2 12l4-4"/></svg>
+             </div>
+             <div className="ml-4">
+                <h3 className="mb-2 text-xl font-semibold text-gray-900">Fácil Integración</h3>
+                <p className="text-gray-600">API robusta para conectar DocuSense con tus sistemas existentes (Contpaq, Aspel, etc.).</p>
+             </div>
           </div>
         </div>
       </section>
 
-      {/* Testimonials Section */}
-      <section className="py-16 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto bg-blue-50 rounded-lg">
-        <h2 className="text-3xl font-bold text-gray-900 text-center mb-12">
+
+
+       {/* Use Cases Section */}
+       <section className="px-4 py-16 mx-auto sm:px-6 lg:px-8 max-w-7xl">
+         <h2 className="mb-12 text-3xl font-bold text-center text-gray-900">
+           Casos de Uso en México
+         </h2>
+         <div className="grid gap-8 md:grid-cols-3">
+           <motion.div
+             variants={featureVariants}
+             initial="hidden"
+             whileInView="visible"
+             viewport={{ once: true }}
+             transition={{ duration: 0.6, delay: 0.1 }}
+             className="p-8 transition-shadow duration-300 bg-white rounded-lg shadow-md hover:shadow-lg"
+           >
+              <h3 className="mb-3 text-xl font-semibold text-gray-900">Sector Fiscal (SAT)</h3>
+              <p className="text-gray-600">Firma de CFDI, contratos laborales digitales, avisos fiscales y más, cumpliendo con requisitos del SAT.</p>
+           </motion.div>
+            <motion.div
+             variants={featureVariants}
+             initial="hidden"
+             whileInView="visible"
+             viewport={{ once: true }}
+             transition={{ duration: 0.6, delay: 0.2 }}
+             className="p-8 transition-shadow duration-300 bg-white rounded-lg shadow-md hover:shadow-lg"
+           >
+              <h3 className="mb-3 text-xl font-semibold text-gray-900">Sector Legal</h3>
+              <p className="text-gray-600">Firma de contratos de arrendamiento, servicios profesionales, acuerdos de confidencialidad con validez legal.</p>
+           </motion.div>
+             <motion.div
+             variants={featureVariants}
+             initial="hidden"
+             whileInView="visible"
+             viewport={{ once: true }}
+             transition={{ duration: 0.6, delay: 0.3 }}
+             className="p-8 transition-shadow duration-300 bg-white rounded-lg shadow-md hover:shadow-lg"
+           >
+              <h3 className="mb-3 text-xl font-semibold text-gray-900">PYMES y Freelancers</h3>
+              <p className="text-gray-600">Simplifica la firma de contratos con clientes, proveedores y empleados de forma económica y segura.</p>
+           </motion.div>
+         </div>
+       </section>
+
+
+      {/* Testimonials Section (Retained and slightly enhanced) */}
+      <section className="px-4 py-16 mx-auto rounded-lg sm:px-6 lg:px-8 max-w-7xl bg-blue-50">
+        <h2 className="mb-12 text-3xl font-bold text-center text-gray-900">
           Lo que dicen nuestros usuarios
         </h2>
-        <div className="grid md:grid-cols-2 gap-8">
-          <div className="bg-white p-6 rounded-lg shadow-md">
+        <div className="grid gap-8 md:grid-cols-2">
+          <motion.div
+            initial={{ opacity: 0, rotateY: 90 }}
+            whileInView={{ opacity: 1, rotateY: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6, delay: 0.1 }}
+            className="p-6 bg-white rounded-lg shadow-md"
+          >
             <div className="flex items-center mb-4">
-              <div className="w-12 h-12 bg-blue-200 rounded-full flex items-center justify-center mr-4">
-                <span className="text-blue-700 font-bold">MS</span>
+              <div className="flex items-center justify-center w-12 h-12 mr-4 bg-blue-200 rounded-full">
+                <span className="font-bold text-blue-700">MS</span>
               </div>
               <div>
                 <h3 className="font-semibold text-gray-900">María Sánchez</h3>
@@ -104,15 +244,21 @@ const Home = () => {
               </div>
             </div>
             <p className="text-gray-600">
-              "DocuSense ha revolucionado la forma en que gestiono los documentos fiscales de mis clientes. 
+              "DocuSense ha revolucionado la forma en que gestiono los documentos fiscales de mis clientes.
               La capacidad de extraer datos automáticamente me ahorra horas de trabajo cada semana."
             </p>
-          </div>
-          
-          <div className="bg-white p-6 rounded-lg shadow-md">
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, rotateY: 90 }}
+            whileInView={{ opacity: 1, rotateY: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6, delay: 0.2 }}
+            className="p-6 bg-white rounded-lg shadow-md"
+          >
             <div className="flex items-center mb-4">
-              <div className="w-12 h-12 bg-green-200 rounded-full flex items-center justify-center mr-4">
-                <span className="text-green-700 font-bold">JL</span>
+              <div className="flex items-center justify-center w-12 h-12 mr-4 bg-green-200 rounded-full">
+                <span className="font-bold text-green-700">JL</span>
               </div>
               <div>
                 <h3 className="font-semibold text-gray-900">Juan López</h3>
@@ -120,39 +266,43 @@ const Home = () => {
               </div>
             </div>
             <p className="text-gray-600">
-              "La organización por categorías y la búsqueda avanzada me permite encontrar cualquier 
+              "La organización por categorías y la búsqueda avanzada me permite encontrar cualquier
               documento legal en segundos. Una herramienta indispensable para mi bufete."
             </p>
-          </div>
+          </motion.div>
         </div>
       </section>
 
       {/* CTA Section */}
-      <section className="py-16 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto text-center">
-        <h2 className="text-3xl font-bold text-gray-900 mb-6">
-          Comienza a organizar tus documentos hoy mismo
+      <section className="px-4 py-16 mx-auto text-center sm:px-6 lg:px-8 max-w-7xl">
+        <h2 className="mb-6 text-3xl font-bold text-gray-900">
+          Comienza a Firmar Documentos Digitalmente Hoy Mismo
         </h2>
-        <p className="text-xl text-gray-600 max-w-3xl mx-auto mb-8">
-          Regístrate gratis y descubre cómo DocuSense puede transformar la forma en que gestionas tus documentos.
+        <p className="max-w-3xl mx-auto mb-8 text-xl text-gray-600">
+          Regístrate gratis y descubre cómo DocuSense puede transformar la forma en que gestionas y firmas tus documentos con total validez legal en México.
         </p>
-        <div className="inline-flex rounded-md shadow">
-          <Link to="/register" className="inline-flex items-center justify-center px-8 py-4 border border-transparent text-base font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700">
-            Comenzar ahora
+        <motion.div
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          className="inline-flex rounded-md shadow"
+        >
+          <Link to="/register" className="inline-flex items-center justify-center px-8 py-4 text-base font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700">
+            Crear Cuenta Gratis
           </Link>
-        </div>
+        </motion.div>
       </section>
 
       {/* Footer */}
-      <footer className="bg-gray-800 text-white py-12 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-8">
+      <footer className="px-4 py-12 text-white bg-gray-800 sm:px-6 lg:px-8">
+        <div className="grid grid-cols-1 gap-8 mx-auto max-w-7xl md:grid-cols-4">
           <div>
-            <h3 className="text-xl font-bold mb-4">DocuSense</h3>
+            <h3 className="mb-4 text-xl font-bold">DocuSense</h3>
             <p className="text-gray-400">
-              La plataforma para gestionar y analizar documentos de forma inteligente.
+              La plataforma para gestionar y firmar documentos de forma segura y legal en México.
             </p>
           </div>
           <div>
-            <h4 className="text-lg font-semibold mb-4">Producto</h4>
+            <h4 className="mb-4 text-lg font-semibold">Producto</h4>
             <ul className="space-y-2">
               <li><a href="#" className="text-gray-400 hover:text-white">Características</a></li>
               <li><a href="#" className="text-gray-400 hover:text-white">Precios</a></li>
@@ -160,7 +310,7 @@ const Home = () => {
             </ul>
           </div>
           <div>
-            <h4 className="text-lg font-semibold mb-4">Empresa</h4>
+            <h4 className="mb-4 text-lg font-semibold">Empresa</h4>
             <ul className="space-y-2">
               <li><a href="#" className="text-gray-400 hover:text-white">Sobre nosotros</a></li>
               <li><a href="#" className="text-gray-400 hover:text-white">Blog</a></li>
@@ -168,14 +318,14 @@ const Home = () => {
             </ul>
           </div>
           <div>
-            <h4 className="text-lg font-semibold mb-4">Legal</h4>
+            <h4 className="mb-4 text-lg font-semibold">Legal</h4>
             <ul className="space-y-2">
-              <li><a href="#" className="text-gray-400 hover:text-white">Privacidad</a></li>
-              <li><a href="#" className="text-gray-400 hover:text-white">Términos de servicio</a></li>
+              <li><a href="#" className="text-gray-400 hover:text-white">Aviso de Privacidad</a></li>
+              <li><a href="#" className="text-gray-400 hover:text-white">Términos de Servicio</a></li>
             </ul>
           </div>
         </div>
-        <div className="max-w-7xl mx-auto pt-8 mt-8 border-t border-gray-700 text-center text-gray-400">
+        <div className="pt-8 mx-auto mt-8 text-center text-gray-400 border-t border-gray-700 max-w-7xl">
           <p>© 2025 DocuSense. Todos los derechos reservados.</p>
         </div>
       </footer>

@@ -33,7 +33,7 @@ const Home = () => {
           className="relative z-10 mx-auto max-w-7xl" // Content centered within max-width
         >
           <h1 className="mb-6 text-5xl font-extrabold text-gray-900 md:text-6xl drop-shadow-sm"> {/* Added drop-shadow */}
-            <span className="text-blue-700">Docu</span>Sense: <br className="sm:hidden"/> Firma Electrónica <span className="text-blue-700">Segura y Legal</span> en México
+          Firma Electrónica <span className="text-blue-700">Segura y Legal</span> en México
           </h1>
           <p className="max-w-3xl mx-auto mb-10 text-xl text-gray-700 md:text-2xl drop-shadow-sm"> {/* Adjusted text color and added drop-shadow */}
             Cumple con el Código de Comercio y la LFEA. Integra e.firma SAT, biometría y blockchain para máxima validez y seguridad.

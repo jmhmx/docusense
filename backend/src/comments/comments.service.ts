@@ -16,6 +16,9 @@ import { SharingService } from '../sharing/sharing.service';
 import { AuditLogService, AuditAction } from '../audit/audit-log.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { UsersService } from '../users/users.service';
+import { EmailService } from '../email/email.service';
+import { ConfigService } from '@nestjs/config';
+import { DocumentsService } from 'src/documents/documents.service';
 
 @Injectable()
 export class CommentsService {
@@ -31,6 +34,9 @@ export class CommentsService {
     private readonly notificationsService: NotificationsService,
     @Inject(forwardRef(() => UsersService))
     private readonly usersService: UsersService,
+    private readonly configService: ConfigService,
+    private readonly emailService: EmailService,
+    private readonly documentsService: DocumentsService,
   ) {}
 
   /**
@@ -224,6 +230,9 @@ export class CommentsService {
         }
       }
 
+      //Enviar notificaciones por correo a los usuarios con acceso al documento
+      await this.notifyUsersAboutComment(savedComment, userId, parentId);
+
       // Retornar el comentario creado
       return savedComment;
     } catch (error) {
@@ -232,6 +241,94 @@ export class CommentsService {
         error.stack,
       );
       throw error;
+    }
+  }
+
+  // Método para notificar a usuarios sobre un nuevo comentario
+  private async notifyUsersAboutComment(
+    comment: Comment,
+    authorId: string,
+    parentId?: string,
+  ): Promise<void> {
+    try {
+      // Obtener el documento
+      const document = await this.documentsService.findOne(comment.documentId);
+      if (!document) {
+        throw new Error(`Documento ${comment.documentId} no encontrado`);
+      }
+
+      // Obtener el autor del comentario
+      const author = await this.usersService.findOne(authorId);
+      if (!author) {
+        throw new Error(`Usuario ${authorId} no encontrado`);
+      }
+
+      const frontendUrl =
+        this.configService.get<string>('FRONTEND_URL') ||
+        'http://localhost:3001';
+      const documentUrl = `${frontendUrl}/documents/${comment.documentId}`;
+
+      if (parentId) {
+        // Si es una respuesta a un comentario, notificar al autor del comentario original
+        const parentComment = await this.commentsRepository.findOne({
+          where: { id: parentId },
+        });
+
+        if (parentComment && parentComment.userId !== authorId) {
+          const parentAuthor = await this.usersService.findOne(
+            parentComment.userId,
+          );
+
+          if (parentAuthor) {
+            await this.emailService.sendCommentReplyEmail(parentAuthor.email, {
+              userName: parentAuthor.name,
+              responderName: author.name,
+              documentTitle: document.title,
+              documentUrl: documentUrl,
+              originalComment: parentComment.content,
+              replyContent: comment.content,
+            });
+            this.logger.log(
+              `Notificación de respuesta enviada a ${parentAuthor.email}`,
+            );
+          }
+        }
+      } else {
+        // Si es un comentario nuevo, notificar a todos los usuarios con acceso
+        try {
+          // Obtener usuarios con acceso al documento
+          const usersWithAccess = await this.sharingService.getDocumentUsers(
+            comment.documentId,
+            authorId,
+          );
+
+          // Filtrar al autor del comentario para no enviarle notificación
+          const usersToNotify = usersWithAccess.filter(
+            (user) => user.id !== authorId,
+          );
+
+          for (const user of usersToNotify) {
+            await this.emailService.sendNewCommentEmail(user.email, {
+              userName: user.name,
+              commenterName: author.name,
+              documentTitle: document.title,
+              documentUrl: documentUrl,
+              commentContent: comment.content,
+            });
+            this.logger.log(
+              `Notificación de nuevo comentario enviada a ${user.email}`,
+            );
+          }
+        } catch (error) {
+          this.logger.error(
+            `Error al obtener usuarios para notificar: ${error.message}`,
+          );
+        }
+      }
+    } catch (error) {
+      this.logger.error(
+        `Error enviando notificaciones de comentario: ${error.message}`,
+      );
     }
   }
 

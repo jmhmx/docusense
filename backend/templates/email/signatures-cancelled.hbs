@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Proceso de Firmas Cancelado</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      margin: 0;
+      padding: 0;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    .header {
+      background-color: #1a5276;
+      color: white;
+      padding: 20px;
+      text-align: center;
+    }
+
+    .content {
+      padding: 20px;
+    }
+
+    .footer {
+      background-color: #f5f5f5;
+      padding: 10px 20px;
+      text-align: center;
+      font-size: 12px;
+      color: #777;
+    }
+
+    .button {
+      display: inline-block;
+      background-color: #1a5276;
+      color: white;
+      padding: 10px 20px;
+      text-decoration: none;
+      border-radius: 4px;
+    }
+
+    .alert-box {
+      background-color: #ffecec;
+      border-left: 4px solid #e74c3c;
+      padding: 15px;
+      margin: 20px 0;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>Proceso de Firmas Cancelado</h1>
+    </div>
+    <div class="content">
+      <p>Hola {{userName}},</p>
+
+      <div class="alert-box">
+        <p><strong>Notificación importante:</strong></p>
+        <p>El proceso de firmas para el documento <strong>{{documentTitle}}</strong> ha sido cancelado por <strong>{{cancelerName}}</strong>.</p>
+        {{#if cancellationReason}}
+        <p><strong>Motivo de la cancelación:</strong> {{cancellationReason}}</p>
+        {{/if}}
+      </div>
+
+      <p>Las firmas que ya se habían completado se mantendrán en el registro, pero el proceso de múltiples firmas ya no está activo.</p>
+
+      <p>Si tienes alguna duda sobre esta cancelación, te recomendamos contactar al propietario del documento.</p>
+
+      <p>Puedes acceder al documento haciendo clic en el siguiente botón:</p>
+
+      <p style="text-align: center; margin-top: 30px;">
+        <a href="{{documentUrl}}" class="button">Ver documento</a>
+      </p>
+    </div>
+    <div class="footer">
+      <p>Este es un correo automático, por favor no respondas a este mensaje.</p>
+      <p>© 2025 DocuSense - Todos los derechos reservados</p>
+    </div>
+  </div>
+</body>
+</html>

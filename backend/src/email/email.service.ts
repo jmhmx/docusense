@@ -1,4 +1,3 @@
-// backend/src/email/email.service.ts
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
@@ -19,6 +18,11 @@ interface EmailOptions {
     content?: Buffer;
     contentType?: string;
   }>;
+}
+
+interface Signer {
+  name: string;
+  date: string;
 }
 
 @Injectable()
@@ -150,6 +154,154 @@ export class EmailService {
     }
   }
 
+  // Método para enviar email de bienvenida
+  async sendWelcomeEmail(
+    email: string,
+    name: string,
+    dashboardUrl: string,
+  ): Promise<boolean> {
+    this.logger.log(`Enviando email de bienvenida a ${email}`);
+    return this.sendTemplateEmail({
+      to: email,
+      subject: '¡Bienvenido a DocuSense!',
+      template: 'welcome-email',
+      context: {
+        name,
+        dashboardUrl,
+      },
+    });
+  }
+
+  // Método para notificar documento compartido
+  async sendSharedDocumentEmail(
+    email: string,
+    data: {
+      userName: string;
+      sharerName: string;
+      documentTitle: string;
+      documentUrl: string;
+      permissionLevel: string;
+      message?: string;
+    },
+  ): Promise<boolean> {
+    this.logger.log(`Enviando notificación de documento compartido a ${email}`);
+    return this.sendTemplateEmail({
+      to: email,
+      subject: `${data.sharerName} ha compartido un documento contigo`,
+      template: 'shared-document',
+      context: data,
+    });
+  }
+
+  // Método para notificar nuevo comentario
+  async sendNewCommentEmail(
+    email: string,
+    data: {
+      userName: string;
+      commenterName: string;
+      documentTitle: string;
+      documentUrl: string;
+      commentContent: string;
+    },
+  ): Promise<boolean> {
+    this.logger.log(`Enviando notificación de nuevo comentario a ${email}`);
+    return this.sendTemplateEmail({
+      to: email,
+      subject: `Nuevo comentario en "${data.documentTitle}"`,
+      template: 'new-comment',
+      context: data,
+    });
+  }
+
+  // Método para notificar respuesta a comentario
+  async sendCommentReplyEmail(
+    email: string,
+    data: {
+      userName: string;
+      responderName: string;
+      documentTitle: string;
+      documentUrl: string;
+      originalComment: string;
+      replyContent: string;
+    },
+  ): Promise<boolean> {
+    this.logger.log(
+      `Enviando notificación de respuesta a comentario a ${email}`,
+    );
+    return this.sendTemplateEmail({
+      to: email,
+      subject: `${data.responderName} ha respondido a tu comentario`,
+      template: 'comment-reply',
+      context: data,
+    });
+  }
+
+  // Método para notificar firma de documento
+  async sendDocumentSignedEmail(
+    email: string,
+    data: {
+      userName: string;
+      signerName: string;
+      documentTitle: string;
+      documentUrl: string;
+      signatureDate: string;
+      signatureReason?: string;
+      pendingSigners?: string;
+      completedSigners?: number;
+      totalRequiredSigners?: number;
+    },
+  ): Promise<boolean> {
+    this.logger.log(`Enviando notificación de documento firmado a ${email}`);
+    return this.sendTemplateEmail({
+      to: email,
+      subject: `${data.signerName} ha firmado el documento "${data.documentTitle}"`,
+      template: 'document-signed',
+      context: data,
+    });
+  }
+
+  // Método para notificar que todas las firmas han sido completadas
+  async sendSignaturesCompletedEmail(
+    email: string,
+    data: {
+      userName: string;
+      documentTitle: string;
+      documentUrl: string;
+      signers: Signer[];
+    },
+  ): Promise<boolean> {
+    this.logger.log(`Enviando notificación de firmas completadas a ${email}`);
+    return this.sendTemplateEmail({
+      to: email,
+      subject: `Proceso de firmas completado: "${data.documentTitle}"`,
+      template: 'signatures-completed',
+      context: data,
+    });
+  }
+
+  // Método para notificar cancelación de proceso de firmas
+  async sendSignaturesCancelledEmail(
+    email: string,
+    data: {
+      userName: string;
+      cancelerName: string;
+      documentTitle: string;
+      documentUrl: string;
+      cancellationReason?: string;
+    },
+  ): Promise<boolean> {
+    this.logger.log(
+      `Enviando notificación de cancelación de firmas a ${email}`,
+    );
+    return this.sendTemplateEmail({
+      to: email,
+      subject: `Proceso de firmas cancelado: "${data.documentTitle}"`,
+      template: 'signatures-cancelled',
+      context: data,
+    });
+  }
+
+  // Método existente para enviar notificación de mención
   async sendMentionNotification(
     email: string,
     data: {

@@ -7,8 +7,8 @@ import { SharingModule } from '../sharing/sharing.module';
 import { AuditModule } from '../audit/audit.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { DocumentsModule } from '../documents/documents.module';
-import { UsersModule } from '../users/users.module'; // Importamos UsersModule
-
+import { UsersModule } from '../users/users.module';
+import { EmailModule } from '../email/email.module';
 @Module({
   imports: [
     TypeOrmModule.forFeature([Comment]),
@@ -16,7 +16,8 @@ import { UsersModule } from '../users/users.module'; // Importamos UsersModule
     forwardRef(() => DocumentsModule), // También para documentos
     AuditModule,
     forwardRef(() => NotificationsModule), // También para notificaciones
-    UsersModule, // Añadimos el módulo de usuarios
+    UsersModule,
+    EmailModule,
   ],
   controllers: [CommentsController],
   providers: [CommentsService],

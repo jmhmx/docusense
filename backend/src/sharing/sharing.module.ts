@@ -13,6 +13,7 @@ import { DocumentsModule } from '../documents/documents.module';
 import { AuditModule } from '../audit/audit.module';
 import { CommentsModule } from '../comments/comments.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { EmailModule } from '../email/email.module';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
     AuditModule,
     forwardRef(() => CommentsModule),
     forwardRef(() => NotificationsModule),
+    EmailModule,
   ],
   controllers: [SharingController],
   providers: [SharingService],

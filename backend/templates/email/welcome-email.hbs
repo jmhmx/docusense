@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Bienvenido a DocuSense</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      margin: 0;
+      padding: 0;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    .header {
+      background-color: #1a5276;
+      color: white;
+      padding: 20px;
+      text-align: center;
+    }
+
+    .content {
+      padding: 20px;
+    }
+
+    .footer {
+      background-color: #f5f5f5;
+      padding: 10px 20px;
+      text-align: center;
+      font-size: 12px;
+      color: #777;
+    }
+
+    .button {
+      display: inline-block;
+      background-color: #1a5276;
+      color: white;
+      padding: 10px 20px;
+      text-decoration: none;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>¡Bienvenido a DocuSense!</h1>
+    </div>
+    <div class="content">
+      <p>Hola {{name}},</p>
+
+      <p>¡Bienvenido a DocuSense! Tu cuenta ha sido creada correctamente.</p>
+
+      <p>Con DocuSense podrás:</p>
+      <ul>
+        <li>Gestionar documentos de manera segura</li>
+        <li>Firmar documentos digitalmente</li>
+        <li>Compartir documentos con otros usuarios</li>
+        <li>Comentar y colaborar en tiempo real</li>
+      </ul>
+
+      <p>Para comenzar a utilizar todas las funcionalidades, haz clic en el siguiente botón:</p>
+
+      <p style="text-align: center; margin-top: 30px;">
+        <a href="{{dashboardUrl}}" class="button">Acceder a DocuSense</a>
+      </p>
+    </div>
+    <div class="footer">
+      <p>Este es un correo automático, por favor no respondas a este mensaje.</p>
+      <p>© 2025 DocuSense - Todos los derechos reservados</p>
+    </div>
+  </div>
+</body>
+</html>

@@ -8,12 +8,16 @@ import * as crypto from 'crypto'; // Usar el módulo nativo de Node.js
 import { UsersService } from 'src/users/users.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import { EmailService } from '../email/email.service';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class AuthService {
   constructor(
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
+    private readonly emailService: EmailService, // Añadido servicio de email
+    private readonly configService: ConfigService, // Añadido servicio de configuración
   ) {}
 
   // Función para hashear contraseñas usando crypto
@@ -63,6 +67,15 @@ export class AuthService {
 
     // Generar token
     const token = this.generateToken(user.id);
+
+    // Enviar correo de bienvenida
+    const frontendUrl =
+      this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3001';
+    await this.emailService.sendWelcomeEmail(
+      user.email,
+      user.name,
+      `${frontendUrl}/dashboard`,
+    );
 
     return {
       user: {

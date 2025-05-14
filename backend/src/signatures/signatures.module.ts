@@ -10,6 +10,8 @@ import { AuditModule } from '../audit/audit.module';
 import { Document } from '../documents/entities/document.entity';
 import { BlockchainModule } from '../blockchain/blockchain.module';
 import { SatModule } from '../sat/sat.module';
+import { EmailModule } from '../email/email.module';
+import { SharingModule } from '../sharing/sharing.module';
 
 @Module({
   imports: [
@@ -20,6 +22,8 @@ import { SatModule } from '../sat/sat.module';
     AuditModule,
     forwardRef(() => BlockchainModule),
     SatModule,
+    EmailModule,
+    forwardRef(() => SharingModule),
   ],
   controllers: [SignaturesController],
   providers: [SignaturesService],

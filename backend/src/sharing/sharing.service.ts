@@ -31,6 +31,7 @@ import {
   AccessShareLinkDto,
   UpdatePermissionDto,
 } from './dto/share-document.dto';
+import { EmailService } from '../email/email.service';
 
 @Injectable()
 export class SharingService {
@@ -49,6 +50,7 @@ export class SharingService {
     private readonly auditLogService: AuditLogService,
     private readonly dataSource: DataSource,
     private readonly configService: ConfigService,
+    private readonly emailService: EmailService,
   ) {}
 
   /**
@@ -66,6 +68,7 @@ export class SharingService {
       permissionLevel,
       expiresAt,
       notifyUser = true,
+      message,
     } = shareDocumentDto;
 
     // Verificar si el documento existe
@@ -79,7 +82,7 @@ export class SharingService {
       );
     }
 
-    // Verificar si el usuario que comparte tiene permiso de editor u owner
+    // Verificar si el usuario que comparte tiene permiso
     const sharerPermission = await this.permissionsRepository.findOne({
       where: {
         documentId,
@@ -91,7 +94,7 @@ export class SharingService {
       },
     });
 
-    // Si no hay permisos explícitos, verificar si es el propietario del documento
+    // Si no hay permisos explícitos, verificar si es el propietario
     if (!sharerPermission && document.userId !== sharerUserId) {
       throw new ForbiddenException(
         'No tiene permiso para compartir este documento',
@@ -105,7 +108,6 @@ export class SharingService {
 
       if (!targetUser) {
         // Si estamos en modo desarrollo, podemos crear usuarios automáticamente
-        // En producción probablemente querrías enviar una invitación por email
         if (this.configService.get('NODE_ENV') === 'development') {
           // Generar contraseña temporal
           const tempPassword = crypto.randomBytes(8).toString('hex');
@@ -185,7 +187,24 @@ export class SharingService {
 
       // Notificar al usuario si se solicitó
       if (notifyUser) {
-        // Aquí iría la lógica para enviar una notificación por email
+        // Obtener información del usuario que comparte
+        const sharerUser = await this.usersService.findOne(sharerUserId);
+
+        // Obtener URL del frontend
+        const frontendUrl =
+          this.configService.get<string>('FRONTEND_URL') ||
+          'http://localhost:3001';
+
+        // Enviar email de notificación
+        await this.emailService.sendSharedDocumentEmail(targetUser.email, {
+          userName: targetUser.name,
+          sharerName: sharerUser.name,
+          documentTitle: document.title,
+          documentUrl: `${frontendUrl}/documents/${documentId}`,
+          permissionLevel: this.translatePermissionLevel(permissionLevel),
+          message: message,
+        });
+
         this.logger.log(
           `Notificación enviada a ${email} por actualización de permisos`,
         );
@@ -228,11 +247,40 @@ export class SharingService {
 
     // Notificar al usuario si se solicitó
     if (notifyUser) {
-      // Aquí iría la lógica para enviar una notificación por email
+      // Obtener información del usuario que comparte
+      const sharerUser = await this.usersService.findOne(sharerUserId);
+
+      // Obtener URL del frontend
+      const frontendUrl =
+        this.configService.get<string>('FRONTEND_URL') ||
+        'http://localhost:3001';
+
+      // Enviar email de notificación
+      await this.emailService.sendSharedDocumentEmail(targetUser.email, {
+        userName: targetUser.name,
+        sharerName: sharerUser.name,
+        documentTitle: document.title,
+        documentUrl: `${frontendUrl}/documents/${documentId}`,
+        permissionLevel: this.translatePermissionLevel(permissionLevel),
+        message: message,
+      });
+
       this.logger.log(`Notificación enviada a ${email} por nuevo permiso`);
     }
 
     return savedPermission;
+  }
+
+  // Función auxiliar para traducir los niveles de permiso a texto más amigable
+  private translatePermissionLevel(permissionLevel: PermissionLevel): string {
+    const translations = {
+      [PermissionLevel.VIEWER]: 'Lector',
+      [PermissionLevel.COMMENTER]: 'Comentarista',
+      [PermissionLevel.EDITOR]: 'Editor',
+      [PermissionLevel.OWNER]: 'Propietario',
+    };
+
+    return translations[permissionLevel] || permissionLevel;
   }
 
   /**

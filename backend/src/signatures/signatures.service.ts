@@ -17,6 +17,10 @@ import { Document } from '../documents/entities/document.entity';
 import { BlockchainService } from '../blockchain/blockchain.service';
 import { EfirmaService } from '../sat/efirma.service';
 import { TokenService } from '../sat/token.service';
+import { EmailService } from '../email/email.service';
+import { ConfigService } from '@nestjs/config';
+import { SharingService } from '../sharing/sharing.service';
+
 export interface SignatureVerificationResult {
   isValid: boolean;
   reason?: string;
@@ -39,6 +43,9 @@ export class SignaturesService {
     private readonly blockchainService: BlockchainService,
     private readonly efirmaService: EfirmaService,
     private readonly tokenService: TokenService,
+    private readonly emailService: EmailService,
+    private readonly configService: ConfigService,
+    private readonly sharingService: SharingService,
   ) {}
 
   async signDocumentWithEfirma(
@@ -1106,71 +1113,6 @@ export class SignaturesService {
   }
 
   /**
-   * Cancela un proceso de firmas múltiples
-   */
-  async cancelMultiSignatureProcess(
-    documentId: string,
-    userId: string,
-  ): Promise<void> {
-    // Verificar documento
-    const document = await this.documentsRepository.findOne({
-      where: { id: documentId },
-    });
-
-    if (!document) {
-      throw new NotFoundException(`Documento no encontrado: ${documentId}`);
-    }
-
-    // Verificar que el solicitante es el dueño
-    if (document.userId !== userId) {
-      throw new UnauthorizedException(
-        'Solo el propietario puede cancelar firmas múltiples',
-      );
-    }
-
-    // Verificar que existe un proceso activo
-    if (!document.metadata?.multiSignatureProcess) {
-      throw new BadRequestException(
-        'No hay un proceso de firmas múltiples activo para este documento',
-      );
-    }
-
-    // Actualizar metadatos del documento
-    const updatedMetadata = { ...document.metadata };
-    delete updatedMetadata.multiSignatureProcess;
-    delete updatedMetadata.pendingSigners;
-    delete updatedMetadata.requiredSigners;
-    delete updatedMetadata.initiatedAt;
-    delete updatedMetadata.completedSigners;
-
-    document.metadata = updatedMetadata;
-
-    await this.documentsService.update(documentId, document);
-
-    // Registrar en blockchain
-    await this.blockchainService.updateDocumentRecord(
-      documentId,
-      this.cryptoService.generateHash(document.filePath),
-      'MULTI_SIGNATURE_CANCELLED',
-      userId,
-      {
-        timestamp: new Date().toISOString(),
-      },
-    );
-
-    // Registrar en auditoría
-    await this.auditLogService.log(
-      AuditAction.DOCUMENT_UPDATE,
-      userId,
-      documentId,
-      {
-        action: 'multi_signature_cancel',
-        title: document.title,
-      },
-    );
-  }
-
-  /**
    * Obtiene el estado actual del proceso de firmas de un documento
    */
   async getDocumentSignatureStatus(documentId: string): Promise<any> {
@@ -1273,34 +1215,73 @@ export class SignaturesService {
       where: { id: documentId },
     });
 
+    // Obtener información del firmante para las notificaciones
+    const signer = await this.usersService.findOne(userId);
+    if (!signer) {
+      this.logger.error(`No se pudo encontrar el usuario firmante: ${userId}`);
+      return signature;
+    }
+
+    // Obtener URL del frontend
+    const frontendUrl =
+      this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3001';
+    const documentUrl = `${frontendUrl}/documents/${documentId}`;
+
+    let pendingSignersMsg = '';
+    let completedSigners = 0;
+    let totalRequiredSigners = 0;
+    let isMultiSignatureProcess = false;
+
     if (document?.metadata?.multiSignatureProcess) {
+      isMultiSignatureProcess = true;
       // Actualizar estado del proceso
       const pendingSigners = document.metadata.pendingSigners || [];
+      totalRequiredSigners =
+        document.metadata.requiredSigners || pendingSigners.length;
 
       // Verificar si este usuario está en la lista de firmantes pendientes
       if (pendingSigners.includes(userId)) {
         // Obtener lista actual de completados o crear una nueva
-        const completedSigners = document.metadata.completedSigners || [];
+        const completedSignersArray = document.metadata.completedSigners || [];
+        completedSigners = completedSignersArray.length;
 
         // Añadir este firmante si no está ya
-        if (!completedSigners.includes(userId)) {
-          completedSigners.push(userId);
+        if (!completedSignersArray.includes(userId)) {
+          completedSignersArray.push(userId);
+          completedSigners = completedSignersArray.length;
 
           // Actualizar documento
           document.metadata = {
             ...document.metadata,
-            completedSigners,
+            completedSigners: completedSignersArray,
           };
 
           await this.documentsService.update(documentId, document);
 
+          // Obtener nombres de firmantes pendientes para las notificaciones
+          const pendingSignersArray = pendingSigners.filter(
+            (id) => !completedSignersArray.includes(id),
+          );
+
+          if (pendingSignersArray.length > 0) {
+            // Obtener nombres de los firmantes pendientes
+            const pendingUsers = await Promise.all(
+              pendingSignersArray.map((id) => this.usersService.findOne(id)),
+            );
+
+            pendingSignersMsg = pendingUsers
+              .filter((user) => user) // Filtrar usuarios no encontrados
+              .map((user) => user.name)
+              .join(', ');
+          }
+
           // Verificar si se ha alcanzado el quórum
           const requiredSigners =
             document.metadata.requiredSigners || pendingSigners.length;
-          if (
-            completedSigners.length >= requiredSigners &&
-            !document.metadata.processCompleted
-          ) {
+          const isProcessComplete =
+            completedSignersArray.length >= requiredSigners;
+
+          if (isProcessComplete && !document.metadata.processCompleted) {
             // Marcar proceso como completo
             document.metadata = {
               ...document.metadata,
@@ -1318,23 +1299,253 @@ export class SignaturesService {
               'system',
               {
                 requiredSigners,
-                totalSigners: completedSigners.length,
+                totalSigners: completedSignersArray.length,
                 timestamp: new Date().toISOString(),
               },
             );
 
-            // Notificar al dueño del documento
-            this.notifyDocumentOwner(
-              documentId,
-              completedSigners.length,
-              requiredSigners,
-            );
+            // Notificar a todos los participantes que se ha completado el proceso
+            await this.notifySignaturesCompleted(documentId, document, signer);
           }
         }
       }
     }
 
+    // Notificar a todos los usuarios con acceso al documento
+    await this.notifyDocumentSigned(
+      documentId,
+      document,
+      signer,
+      signature,
+      pendingSignersMsg,
+      completedSigners,
+      totalRequiredSigners,
+      isMultiSignatureProcess,
+    );
+
     return signature;
+  }
+
+  // Método para notificar a todos los usuarios con acceso al documento sobre una firma
+  private async notifyDocumentSigned(
+    documentId: string,
+    document: Document,
+    signer: any,
+    signature: Signature,
+    pendingSigners: string,
+    completedSigners: number,
+    totalRequiredSigners: number,
+    isMultiSignatureProcess: boolean,
+  ): Promise<void> {
+    try {
+      // Obtener usuarios con acceso al documento
+      const usersWithAccess = await this.sharingService.getDocumentUsers(
+        documentId,
+        signer.id,
+      );
+
+      // Filtrar al firmante para no enviarle notificación
+      const usersToNotify = usersWithAccess.filter(
+        (user) => user.id !== signer.id,
+      );
+
+      // Obtener URL del frontend
+      const frontendUrl =
+        this.configService.get<string>('FRONTEND_URL') ||
+        'http://localhost:3001';
+      const documentUrl = `${frontendUrl}/documents/${documentId}`;
+
+      for (const user of usersToNotify) {
+        await this.emailService.sendDocumentSignedEmail(user.email, {
+          userName: user.name,
+          signerName: signer.name,
+          documentTitle: document.title,
+          documentUrl: documentUrl,
+          signatureDate: signature.signedAt.toLocaleString(),
+          signatureReason: signature.reason,
+          pendingSigners:
+            isMultiSignatureProcess && pendingSigners
+              ? pendingSigners
+              : undefined,
+          completedSigners: isMultiSignatureProcess
+            ? completedSigners
+            : undefined,
+          totalRequiredSigners: isMultiSignatureProcess
+            ? totalRequiredSigners
+            : undefined,
+        });
+        this.logger.log(`Notificación de firma enviada a ${user.email}`);
+      }
+    } catch (error) {
+      this.logger.error(
+        `Error enviando notificaciones de firma: ${error.message}`,
+      );
+    }
+  }
+
+  private async notifySignaturesCompleted(
+    documentId: string,
+    document: Document,
+    lastSigner: any,
+  ): Promise<void> {
+    try {
+      // Obtener todas las firmas del documento
+      const signatures = await this.getDocumentSignatures(documentId);
+
+      // Obtener usuarios con acceso al documento
+      const usersWithAccess = await this.sharingService.getDocumentUsers(
+        documentId,
+        null,
+      );
+
+      // Obtener URL del frontend
+      const frontendUrl =
+        this.configService.get<string>('FRONTEND_URL') ||
+        'http://localhost:3001';
+      const documentUrl = `${frontendUrl}/documents/${documentId}`;
+
+      // Preparar datos de firmantes para la plantilla
+      const signers = await Promise.all(
+        signatures.map(async (signature) => {
+          const user = await this.usersService.findOne(signature.userId);
+          return {
+            name: user
+              ? user.name
+              : `Usuario ${signature.userId.substring(0, 6)}...`,
+            date: signature.signedAt.toLocaleString(),
+          };
+        }),
+      );
+
+      // Enviar notificación a todos los usuarios con acceso
+      for (const user of usersWithAccess) {
+        await this.emailService.sendSignaturesCompletedEmail(user.email, {
+          userName: user.name,
+          documentTitle: document.title,
+          documentUrl: documentUrl,
+          signers: signers,
+        });
+        this.logger.log(
+          `Notificación de proceso completado enviada a ${user.email}`,
+        );
+      }
+    } catch (error) {
+      this.logger.error(
+        `Error enviando notificaciones de proceso completado: ${error.message}`,
+      );
+    }
+  }
+
+  /**
+   * Cancela un proceso de firmas múltiples
+   */
+  async cancelMultiSignatureProcess(
+    documentId: string,
+    userId: string,
+  ): Promise<void> {
+    // Verificar documento
+    const document = await this.documentsRepository.findOne({
+      where: { id: documentId },
+    });
+
+    if (!document) {
+      throw new NotFoundException(`Documento no encontrado: ${documentId}`);
+    }
+
+    // Verificar que el solicitante es el dueño
+    if (document.userId !== userId) {
+      throw new UnauthorizedException(
+        'Solo el propietario puede cancelar firmas múltiples',
+      );
+    }
+
+    // Verificar que existe un proceso activo
+    if (!document.metadata?.multiSignatureProcess) {
+      throw new BadRequestException(
+        'No hay un proceso de firmas múltiples activo para este documento',
+      );
+    }
+
+    // Obtener el usuario que cancela el proceso
+    const canceler = await this.usersService.findOne(userId);
+
+    // Actualizar metadatos del documento
+    const updatedMetadata = { ...document.metadata };
+    delete updatedMetadata.multiSignatureProcess;
+    delete updatedMetadata.pendingSigners;
+    delete updatedMetadata.requiredSigners;
+    delete updatedMetadata.initiatedAt;
+    delete updatedMetadata.completedSigners;
+
+    document.metadata = updatedMetadata;
+
+    await this.documentsService.update(documentId, document);
+
+    // Registrar en blockchain
+    await this.blockchainService.updateDocumentRecord(
+      documentId,
+      this.cryptoService.generateHash(document.filePath),
+      'MULTI_SIGNATURE_CANCELLED',
+      userId,
+      {
+        timestamp: new Date().toISOString(),
+      },
+    );
+
+    // Registrar en auditoría
+    await this.auditLogService.log(
+      AuditAction.DOCUMENT_UPDATE,
+      userId,
+      documentId,
+      {
+        action: 'multi_signature_cancel',
+        title: document.title,
+      },
+    );
+
+    // Notificar a todos los participantes que se ha cancelado el proceso
+    await this.notifySignaturesCancelled(documentId, document, canceler);
+  }
+
+  // Método para notificar a todos cuando se cancela un proceso de firmas
+  private async notifySignaturesCancelled(
+    documentId: string,
+    document: Document,
+    canceler: any,
+  ): Promise<void> {
+    try {
+      // Obtener usuarios con acceso al documento
+      const usersWithAccess = await this.sharingService.getDocumentUsers(
+        documentId,
+        null,
+      );
+
+      // Obtener URL del frontend
+      const frontendUrl =
+        this.configService.get<string>('FRONTEND_URL') ||
+        'http://localhost:3001';
+      const documentUrl = `${frontendUrl}/documents/${documentId}`;
+
+      // Enviar notificación a todos los usuarios con acceso
+      for (const user of usersWithAccess) {
+        // Evitar enviar notificación al usuario que cancela el proceso
+        if (user.id !== canceler.id) {
+          await this.emailService.sendSignaturesCancelledEmail(user.email, {
+            userName: user.name,
+            cancelerName: canceler.name,
+            documentTitle: document.title,
+            documentUrl: documentUrl,
+          });
+          this.logger.log(
+            `Notificación de cancelación enviada a ${user.email}`,
+          );
+        }
+      }
+    } catch (error) {
+      this.logger.error(
+        `Error enviando notificaciones de cancelación: ${error.message}`,
+      );
+    }
   }
 
   /**

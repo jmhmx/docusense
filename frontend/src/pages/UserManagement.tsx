@@ -1,19 +1,19 @@
 import { useState, useEffect } from 'react';
-import { User } from '../types/user';
+import { User, UserFormData } from '../types/user';
 //import { api } from '../api/client';
 
 const UserManagement = () => {
   // Estados
-  const [users, setUsers] = useState([]);
-  const [filteredUsers, setFilteredUsers] = useState([]);
+  const [users, setUsers] = useState<User[]>([]);
+  const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
 
   // Estados para edición/creación
-  const [selectedUser, setSelectedUser] = useState(null);
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [showUserForm, setShowUserForm] = useState(false);
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<UserFormData>({
     name: '',
     email: '',
     password: '',
@@ -21,7 +21,7 @@ const UserManagement = () => {
   });
 
   // Estados para eliminación
-  const [userToDelete, setUserToDelete] = useState(null);
+  const [userToDelete, setUserToDelete] = useState<User | null>(null);
 
   // Cargar usuarios al iniciar
   useEffect(() => {
@@ -51,7 +51,7 @@ const UserManagement = () => {
     try {
       // En un entorno real, esta llamada API retornaría usuarios reales
       // Por ahora usaremos datos de ejemplo
-      const mockData = [
+      const mockData: User[] = [
         {
           id: '1',
           name: 'María López',
@@ -103,10 +103,12 @@ const UserManagement = () => {
   // Función para crear usuario
   const createUser = async () => {
     // Simulación de creación
-    const newUser = {
+    const newUser: User = {
       id: `${users.length + 1}`,
       ...formData,
       createdAt: new Date().toISOString(),
+      twoFactorEnabled: false,
+      biometricAuthEnabled: false,
     };
 
     setUsers([...users, newUser]);
@@ -149,7 +151,7 @@ const UserManagement = () => {
   };
 
   // Abrir formulario para editar
-  const handleEdit = (user) => {
+  const handleEdit = (user: User) => {
     setSelectedUser(user);
     setFormData({
       name: user.name,
@@ -167,7 +169,7 @@ const UserManagement = () => {
   };
 
   // Manejar cambios en el formulario
-  const handleFormChange = (e: any) => {
+  const handleFormChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.target;
     setFormData((prev) => ({
       ...prev,
@@ -176,7 +178,7 @@ const UserManagement = () => {
   };
 
   // Manejar envío del formulario
-  const handleSubmit = (e: any) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (selectedUser) {
       updateUser();
@@ -186,7 +188,7 @@ const UserManagement = () => {
   };
 
   // Formatear fecha
-  const formatDate = (dateStr) => {
+  const formatDate = (dateStr: string) => {
     return new Date(dateStr).toLocaleDateString('es-ES', {
       year: 'numeric',
       month: 'long',

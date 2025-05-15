@@ -1,6 +1,9 @@
 import { useState } from 'react';
 import AdminUserManagement from '../components/AdminUserManagement';
+import AnalyticsDashboard from './AnalyticsDashboard';
+import ConfigurationPanel from './ConfigurationPanel';
 import AdminSidebar from '../components/AdminSidebar';
+import SecurityDashboard from './SecurityDashboard';
 
 const AdminDashboard = () => {
   const [activeSection, setActiveSection] = useState<string>('users');
@@ -16,21 +19,9 @@ const AdminDashboard = () => {
       case 'users':
         return <AdminUserManagement />;
       case 'config':
-        return (
-          <div className='p-8'>
-            <h1 className='mb-4 text-2xl font-bold'>
-              Configuración del Sistema
-            </h1>
-            <p>Esta sección está en desarrollo.</p>
-          </div>
-        );
+        return <ConfigurationPanel />;
       case 'analytics':
-        return (
-          <div className='p-8'>
-            <h1 className='mb-4 text-2xl font-bold'>Analíticas</h1>
-            <p>Esta sección está en desarrollo.</p>
-          </div>
-        );
+        return <AnalyticsDashboard />;
       case 'logs':
         return (
           <div className='p-8'>
@@ -39,12 +30,7 @@ const AdminDashboard = () => {
           </div>
         );
       case 'security':
-        return (
-          <div className='p-8'>
-            <h1 className='mb-4 text-2xl font-bold'>Seguridad</h1>
-            <p>Esta sección está en desarrollo.</p>
-          </div>
-        );
+        return <SecurityDashboard />;
       default:
         return <AdminUserManagement />;
     }

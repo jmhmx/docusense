@@ -10,16 +10,47 @@ import {
   Param,
   BadRequestException,
   ForbiddenException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AdminService } from './admin.service';
 import { UpdateSystemConfigurationDto } from './dto/system-configuration.dto';
+import { ConfigService } from '@nestjs/config';
 
 // Guard personalizado para verificar permisos de administrador
 @Controller('api/admin')
 @UseGuards(JwtAuthGuard)
 export class AdminController {
-  constructor(private adminService: AdminService) {}
+  constructor(
+    private adminService: AdminService,
+    private configService: ConfigService,
+  ) {}
+
+  @Post('setup/initial-admin')
+  async createInitialAdmin(
+    @Body()
+    setupDto: {
+      email: string;
+      name: string;
+      password: string;
+      setupKey: string;
+    },
+  ) {
+    // Usar el servicio inyectado
+    const setupKey = this.configService.get<string>('ADMIN_SETUP_KEY');
+
+    debugger;
+
+    if (!setupKey || setupDto.setupKey !== setupKey) {
+      throw new UnauthorizedException('Clave de configuración inválida');
+    }
+
+    return this.adminService.createInitialAdmin(
+      setupDto.email,
+      setupDto.name,
+      setupDto.password,
+    );
+  }
 
   @Get('configuration')
   async getConfiguration(@Request() req) {

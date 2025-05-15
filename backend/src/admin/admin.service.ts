@@ -4,6 +4,7 @@ import {
   Logger,
   NotFoundException,
   BadRequestException,
+  ConflictException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -12,6 +13,10 @@ import { UpdateSystemConfigurationDto } from './dto/system-configuration.dto';
 import { EmailService } from '../email/email.service';
 import { BlockchainService } from '../blockchain/blockchain.service';
 import { AuditLogService, AuditAction } from '../audit/audit-log.service';
+import { User } from '../users/entities/user.entity';
+import { AuthService } from 'src/auth/auth.service';
+import { UsersService } from 'src/users/users.service';
+import * as crypto from 'crypto';
 
 @Injectable()
 export class AdminService {
@@ -48,9 +53,13 @@ export class AdminService {
   constructor(
     @InjectRepository(SystemConfiguration)
     private systemConfigRepository: Repository<SystemConfiguration>,
+    @InjectRepository(User)
+    private usersRepository: Repository<User>,
     private emailService: EmailService,
     private blockchainService: BlockchainService,
     private auditLogService: AuditLogService,
+    private authService: AuthService,
+    private usersService: UsersService,
   ) {
     this.initializeConfiguration();
   }
@@ -276,5 +285,65 @@ export class AdminService {
       certificatesIssued: 78,
       signedDocuments: 156,
     };
+  }
+
+  async createInitialAdmin(
+    email: string,
+    name: string,
+    password: string,
+  ): Promise<User> {
+    // Verificar si ya existe algún administrador
+    const adminCount = await this.usersRepository.count({
+      where: { isAdmin: true },
+    });
+    if (adminCount > 0) {
+      throw new BadRequestException(
+        'Ya existe al menos un administrador en el sistema',
+      );
+    }
+
+    // Verificar si el email ya está registrado
+    const existingUser = await this.usersService.findByEmail(email);
+    if (existingUser) {
+      throw new ConflictException('El correo electrónico ya está registrado');
+    }
+
+    // Hashear la contraseña
+    const hashedPassword = await this.hashPassword(password);
+
+    // Crear el usuario administrador
+    const adminUser = this.usersRepository.create({
+      email,
+      name,
+      password: hashedPassword,
+      isAdmin: true,
+    });
+
+    const savedUser = await this.usersRepository.save(adminUser);
+
+    // Registrar en el log de auditoría
+    await this.auditLogService.log(
+      AuditAction.USER_CREATE,
+      'system',
+      savedUser.id,
+      {
+        action: 'initial_admin_setup',
+      },
+    );
+
+    // Ocultar la contraseña antes de devolver
+    delete savedUser.password;
+    return savedUser;
+  }
+
+  private async hashPassword(password: string): Promise<string> {
+    // Generar un salt aleatorio
+    const salt = crypto.randomBytes(16).toString('hex');
+    // Hashear la contraseña con el salt
+    const hash = crypto
+      .pbkdf2Sync(password, salt, 1000, 64, 'sha512')
+      .toString('hex');
+    // Devolver "salt:hash" para almacenar ambos
+    return `${salt}:${hash}`;
   }
 }

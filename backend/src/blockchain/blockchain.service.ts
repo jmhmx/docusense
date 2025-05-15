@@ -569,4 +569,29 @@ export class BlockchainService {
       };
     }
   }
+
+  /**
+   * Prueba la conexión con la blockchain
+   * @returns true si la conexión es exitosa, false en caso contrario
+   */
+  async testConnection(): Promise<boolean> {
+    try {
+      // Aquí iría la lógica real para probar la conexión
+      // Por ejemplo, intentar obtener el número de bloque actual
+
+      // Para un ejemplo simple, simulamos una conexión exitosa
+      return true;
+
+      /* Implementación real sería algo como:
+      const blockNumber = await this.web3.eth.getBlockNumber();
+      return blockNumber > 0;
+      */
+    } catch (error) {
+      this.logger.error(
+        `Error de conexión con blockchain: ${error.message}`,
+        error.stack,
+      );
+      return false;
+    }
+  }
 }

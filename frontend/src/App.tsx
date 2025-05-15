@@ -15,6 +15,7 @@ import AdminRoute from './components/AdminRoute';
 import AdminDashboard from './pages/AdminDashboard';
 import UserManagement from './pages/UserManagement';
 import ConfigurationPanel from './pages/ConfigurationPanel';
+import InitialSetup from './pages/InitialSetup';
 
 function App() {
   // Determinar si estamos en ambiente de desarrollo
@@ -102,6 +103,10 @@ function App() {
                     replace
                   />
                 }
+              />
+              <Route
+                path='/setup'
+                element={<InitialSetup />}
               />
             </Routes>
           </div>

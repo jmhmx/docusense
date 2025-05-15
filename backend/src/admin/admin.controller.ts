@@ -19,7 +19,6 @@ import { ConfigService } from '@nestjs/config';
 
 // Guard personalizado para verificar permisos de administrador
 @Controller('api/admin')
-@UseGuards(JwtAuthGuard)
 export class AdminController {
   constructor(
     private adminService: AdminService,
@@ -36,6 +35,11 @@ export class AdminController {
       setupKey: string;
     },
   ) {
+    console.log(
+      'ADMIN_SETUP_KEY:',
+      this.configService.get<string>('ADMIN_SETUP_KEY'),
+    );
+    console.log('Received setupKey:', setupDto.setupKey);
     // Usar el servicio inyectado
     const setupKey = this.configService.get<string>('ADMIN_SETUP_KEY');
 
@@ -52,6 +56,7 @@ export class AdminController {
     );
   }
 
+  @UseGuards(JwtAuthGuard)
   @Get('configuration')
   async getConfiguration(@Request() req) {
     // Verificar que el usuario tiene permisos de administrador
@@ -72,6 +77,7 @@ export class AdminController {
     };
   }
 
+  @UseGuards(JwtAuthGuard)
   @Put('configuration')
   async updateConfiguration(
     @Body() updateConfigDto: UpdateSystemConfigurationDto,
@@ -98,6 +104,7 @@ export class AdminController {
     };
   }
 
+  @UseGuards(JwtAuthGuard)
   @Post('configuration/reset/:section')
   async resetSectionToDefault(
     @Param('section') section: string,
@@ -129,6 +136,7 @@ export class AdminController {
     };
   }
 
+  @UseGuards(JwtAuthGuard)
   @Post('configuration/test-email')
   async testEmailConfiguration(@Request() req) {
     // Verificar que el usuario tiene permisos de administrador
@@ -150,6 +158,7 @@ export class AdminController {
     };
   }
 
+  @UseGuards(JwtAuthGuard)
   @Post('configuration/test-blockchain')
   async testBlockchainConnection(@Request() req) {
     // Verificar que el usuario tiene permisos de administrador
@@ -171,6 +180,7 @@ export class AdminController {
     };
   }
 
+  @UseGuards(JwtAuthGuard)
   @Get('stats')
   async getSystemStats(@Request() req) {
     // Verificar que el usuario tiene permisos de administrador
@@ -183,6 +193,7 @@ export class AdminController {
     return this.adminService.getSystemStats();
   }
 
+  @UseGuards(JwtAuthGuard)
   @Get('recent-users')
   async getRecentUsers(@Request() req) {
     // Verificar que el usuario tiene permisos de administrador
@@ -219,6 +230,7 @@ export class AdminController {
     ];
   }
 
+  @UseGuards(JwtAuthGuard)
   @Get('security-events')
   async getSecurityEvents(@Request() req) {
     // Verificar que el usuario tiene permisos de administrador
@@ -257,6 +269,7 @@ export class AdminController {
     ];
   }
 
+  @UseGuards(JwtAuthGuard)
   @Get('users')
   async getAllUsers(@Request() req) {
     // Verificar que el usuario tiene permisos de administrador

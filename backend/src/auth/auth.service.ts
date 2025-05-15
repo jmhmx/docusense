@@ -66,7 +66,7 @@ export class AuthService {
     });
 
     // Generar token
-    const token = this.generateToken(user.id);
+    const token = this.generateToken(user.id, user.isAdmin);
 
     // Enviar correo de bienvenida
     const frontendUrl =
@@ -103,20 +103,21 @@ export class AuthService {
     }
 
     // Generar token
-    const token = this.generateToken(user.id);
+    const token = this.generateToken(user.id, user.isAdmin);
 
     return {
       user: {
         id: user.id,
         email: user.email,
         name: user.name,
+        isAdmin: user.isAdmin,
       },
       token,
     };
   }
 
-  private generateToken(userId: string) {
-    const payload = { sub: userId };
+  private generateToken(userId: string, isAdmin: boolean) {
+    const payload = { sub: userId, isAdmin };
     return this.jwtService.sign(payload);
   }
 }

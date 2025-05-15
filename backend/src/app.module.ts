@@ -19,6 +19,7 @@ import { AnnotationsModule } from './annotations/annotations.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { CommentsModule } from './comments/comments.module';
+import { AdminModule } from './admin/admin.module';
 
 @Module({
   controllers: [HealthController],
@@ -62,6 +63,7 @@ import { CommentsModule } from './comments/comments.module';
     AnalyticsModule,
     NotificationsModule,
     CommentsModule,
+    AdminModule,
   ],
 })
 export class AppModule {}

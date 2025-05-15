@@ -4,386 +4,368 @@ import useAuth from '../hooks/UseAuth';
 import { api } from '../api/client';
 import Button from '../components/Button';
 
-// Tipos para estadísticas del dashboard
-interface AdminStats {
+// Tipos para estadísticas
+interface SystemStats {
   totalUsers: number;
   activeUsers: number;
   totalDocuments: number;
-  documentsToday: number;
-  processingQueue: number;
   storageUsed: number;
-  userChange: number;
-  documentChange: number;
+  certificatesIssued: number;
+  signedDocuments: number;
 }
 
-// Tipos para actividades recientes
-interface RecentActivity {
+interface UserActivity {
   id: string;
-  action: string;
-  userId: string;
-  userName: string;
-  resourceId?: string;
-  resourceType?: string;
-  timestamp: string;
-  details?: any;
+  name: string;
+  email: string;
+  lastActivity: string;
+  documentsCount: number;
 }
 
-const AdminDashboard = () => {
+interface AdminDashboardProps {
+  onNavigate?: (route: string) => void;
+}
+
+const AdminDashboard = ({ onNavigate }: AdminDashboardProps) => {
   const { user } = useAuth();
   const navigate = useNavigate();
   
-  // Estados para datos del panel
-  const [stats, setStats] = useState<AdminStats | null>(null);
+  // Estados para datos de administración
+  const [stats, setStats] = useState<SystemStats | null>(null);
+  const [recentUsers, setRecentUsers] = useState<UserActivity[]>([]);
+  const [securityEvents, setSecurityEvents] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
-  
-  // Estado para la pestaña activa
-  const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'config' | 'logs'>('overview');
+  const [error, setError] = useState('');
 
-  // Cargar datos al iniciar
+  // Cargar datos del dashboard administrativo
   useEffect(() => {
-    // Verificar si el usuario es administrador
-    if (!user?.isAdmin) {
-      navigate('/dashboard');
-      return;
-    }
-    
-    fetchDashboardData();
-  }, [user, navigate]);
-
-  // Función para obtener datos del panel
-  const fetchDashboardData = async () => {
-    setIsLoading(true);
-    setError(null);
-    
-    try {
-      // Obtener estadísticas
-      const statsResponse = await api.get('/api/admin/stats');
-      setStats(statsResponse.data);
+    const fetchAdminData = async () => {
+      setIsLoading(true);
+      setError('');
       
-      // Obtener actividad reciente
-      const activityResponse = await api.get('/api/admin/activity');
-      setRecentActivity(activityResponse.data);
-    } catch (err: any) {
-      console.error('Error al cargar datos del panel de administración:', err);
-      setError('No se pudieron cargar los datos. Verifica tu conexión y permisos.');
-    } finally {
-      setIsLoading(false);
+      try {
+        // Cargar estadísticas del sistema
+        const statsResponse = await api.get('/api/admin/stats');
+        setStats(statsResponse.data);
+        
+        // Cargar usuarios recientes
+        const usersResponse = await api.get('/api/admin/recent-users');
+        setRecentUsers(usersResponse.data);
+        
+        // Cargar eventos de seguridad
+        const securityResponse = await api.get('/api/admin/security-events');
+        setSecurityEvents(securityResponse.data);
+      } catch (err: any) {
+        console.error('Error cargando datos administrativos:', err);
+        setError('No se pudieron cargar los datos administrativos');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    fetchAdminData();
+  }, []);
+
+  // Función para navegar a diferentes secciones del panel admin
+  const handleNavigate = (route: string) => {
+    if (onNavigate) {
+      onNavigate(route);
+    } else {
+      navigate(`/admin/${route}`);
     }
   };
 
-  // Navegación entre pestañas
-  const handleTabChange = (tab: 'overview' | 'users' | 'config' | 'logs') => {
-    // Para pestañas que son páginas separadas, redirigir
-    switch (tab) {
-      case 'users':
-        navigate('/admin/users');
-        return;
-      case 'config':
-        navigate('/admin/configuration');
-        return;
-      case 'logs':
-        navigate('/admin/logs');
-        return;
-      default:
-        setActiveTab(tab);
-    }
-  };
-
-  // Formatear bytes a unidades legibles
-  const formatStorageSize = (bytes: number) => {
+  // Función para formatear bytes a una unidad legible
+  const formatBytes = (bytes: number): string => {
     if (bytes === 0) return '0 Bytes';
+    
     const k = 1024;
     const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
+    
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
-  // Formatear fecha
-  const formatDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleString('es-ES', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
-
-  // Componente para las tarjetas de estadísticas
-  const StatCard = ({ title, value, icon, change }: { title: string, value: string | number, icon: JSX.Element, change?: number }) => (
+  // Componente para tarjeta de estadísticas
+  const StatCard = ({ title, value, icon, color }: { title: string, value: string | number, icon: JSX.Element, color: string }) => (
     <div className="p-6 bg-white rounded-lg shadow">
       <div className="flex items-center">
-        <div className="flex items-center justify-center flex-shrink-0 w-12 h-12 bg-blue-100 rounded-full">
+        <div className={`flex-shrink-0 p-3 ${color} rounded-md`}>
           {icon}
         </div>
-        <div className="ml-4">
-          <h3 className="text-lg font-medium text-gray-900">{title}</h3>
-          <div className="flex items-baseline">
-            <p className="text-2xl font-semibold text-gray-900">{value}</p>
-            {change !== undefined && (
-              <p className={`ml-2 text-sm ${change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                {change > 0 && '+'}{change}%
-              </p>
-            )}
-          </div>
+        <div className="ml-5">
+          <p className="text-sm font-medium text-gray-500">{title}</p>
+          <p className="mt-1 text-2xl font-semibold text-gray-900">{value}</p>
         </div>
       </div>
     </div>
   );
-
+  
+  // Mostrar estado de carga
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="w-12 h-12 border-4 border-blue-500 rounded-full border-t-transparent animate-spin"></div>
+      <div className="flex items-center justify-center min-h-[70vh]">
+        <div className="flex flex-col items-center">
+          <svg className="w-12 h-12 text-blue-500 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+          <p className="mt-4 text-lg font-medium text-gray-700">Cargando panel de administración...</p>
+        </div>
       </div>
     );
   }
 
+  // Mostrar error si ocurrió alguno
   if (error) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen">
-        <div className="p-4 mb-4 text-red-700 bg-red-100 rounded-lg">
-          <p>{error}</p>
+      <div className="p-4 mt-8 rounded-md bg-red-50">
+        <div className="flex">
+          <div className="flex-shrink-0">
+            <svg className="w-5 h-5 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+            </svg>
+          </div>
+          <div className="ml-3">
+            <h3 className="text-sm font-medium text-red-800">{error}</h3>
+            <div className="mt-4">
+              <Button onClick={() => window.location.reload()}>
+                Reintentar
+              </Button>
+            </div>
+          </div>
         </div>
-        <Button onClick={fetchDashboardData}>Reintentar</Button>
       </div>
     );
   }
 
   return (
-    <div className="px-4 py-6 mx-auto max-w-7xl sm:px-6 lg:px-8">
+    <div className="px-4 py-6 max-w-7xl">
+      {/* Encabezado */}
       <div className="mb-8">
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-gray-900">Panel de Administración</h1>
-          <div className="flex space-x-2">
-            <Button 
-              onClick={() => fetchDashboardData()} 
-              variant="secondary"
-              size="small"
-            >
-              Actualizar
-            </Button>
-          </div>
-        </div>
+        <h1 className="text-2xl font-bold text-gray-900">Panel de Administración</h1>
         <p className="mt-1 text-sm text-gray-500">
-          Administración general del sistema DocuSense
+          Bienvenido al panel de administración de DocuSense. Gestiona usuarios, documentos y configuración del sistema.
         </p>
       </div>
       
-      {/* Navegación de pestañas */}
-      <div className="mb-6 border-b border-gray-200">
-        <nav className="flex -mb-px space-x-8">
-          <button
-            onClick={() => handleTabChange('overview')}
-            className={`pb-4 text-sm font-medium border-b-2 ${
-              activeTab === 'overview'
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            }`}
-          >
-            Vista General
-          </button>
-          <button
-            onClick={() => handleTabChange('users')}
-            className="pb-4 text-sm font-medium text-gray-500 border-b-2 border-transparent hover:text-gray-700 hover:border-gray-300"
-          >
-            Usuarios
-          </button>
-          <button
-            onClick={() => handleTabChange('config')}
-            className="pb-4 text-sm font-medium text-gray-500 border-b-2 border-transparent hover:text-gray-700 hover:border-gray-300"
-          >
-            Configuración
-          </button>
-          <button
-            onClick={() => handleTabChange('logs')}
-            className="pb-4 text-sm font-medium text-gray-500 border-b-2 border-transparent hover:text-gray-700 hover:border-gray-300"
-          >
-            Registros
-          </button>
-        </nav>
+      {/* Estadísticas generales */}
+      <div className="grid grid-cols-1 gap-5 mb-8 md:grid-cols-2 lg:grid-cols-4">
+        <StatCard 
+          title="Usuarios Totales" 
+          value={stats?.totalUsers || 0} 
+          icon={
+            <svg className="w-6 h-6 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+            </svg>
+          }
+          color="bg-blue-500"
+        />
+        
+        <StatCard 
+          title="Documentos" 
+          value={stats?.totalDocuments || 0} 
+          icon={
+            <svg className="w-6 h-6 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+          }
+          color="bg-green-500"
+        />
+        
+        <StatCard 
+          title="Almacenamiento" 
+          value={formatBytes(stats?.storageUsed || 0)} 
+          icon={
+            <svg className="w-6 h-6 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" />
+            </svg>
+          }
+          color="bg-purple-500"
+        />
+        
+        <StatCard 
+          title="Documentos Firmados" 
+          value={stats?.signedDocuments || 0} 
+          icon={
+            <svg className="w-6 h-6 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+            </svg>
+          }
+          color="bg-indigo-500"
+        />
       </div>
       
-      {/* Contenido principal */}
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
-        {/* Tarjetas de estadísticas */}
-        {stats && (
-          <>
-            <StatCard 
-              title="Usuarios Totales" 
-              value={stats.totalUsers}
-              change={stats.userChange}
-              icon={
-                <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+      {/* Accesos rápidos */}
+      <div className="mb-8">
+        <h2 className="mb-4 text-lg font-medium text-gray-900">Acciones Rápidas</h2>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <button
+            onClick={() => handleNavigate('users')}
+            className="p-4 text-left transition-colors duration-200 bg-white rounded-lg shadow hover:bg-gray-50"
+          >
+            <div className="flex items-center">
+              <div className="p-2 bg-blue-100 rounded-md">
+                <svg className="w-6 h-6 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                 </svg>
-              }
-            />
-            <StatCard 
-              title="Documentos Totales" 
-              value={stats.totalDocuments}
-              change={stats.documentChange}
-              icon={
-                <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+              </div>
+              <div className="ml-4">
+                <p className="text-base font-medium text-gray-900">Gestionar Usuarios</p>
+                <p className="mt-1 text-sm text-gray-500">Administrar usuarios del sistema</p>
+              </div>
+            </div>
+          </button>
+          
+          <button
+            onClick={() => handleNavigate('documents')}
+            className="p-4 text-left transition-colors duration-200 bg-white rounded-lg shadow hover:bg-gray-50"
+          >
+            <div className="flex items-center">
+              <div className="p-2 bg-green-100 rounded-md">
+                <svg className="w-6 h-6 text-green-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
-              }
-            />
-            <StatCard 
-              title="Documentos Hoy" 
-              value={stats.documentsToday}
-              icon={
-                <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </div>
+              <div className="ml-4">
+                <p className="text-base font-medium text-gray-900">Documentos</p>
+                <p className="mt-1 text-sm text-gray-500">Ver y gestionar documentos</p>
+              </div>
+            </div>
+          </button>
+          
+          <button
+            onClick={() => handleNavigate('security')}
+            className="p-4 text-left transition-colors duration-200 bg-white rounded-lg shadow hover:bg-gray-50"
+          >
+            <div className="flex items-center">
+              <div className="p-2 bg-red-100 rounded-md">
+                <svg className="w-6 h-6 text-red-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                 </svg>
-              }
-            />
-            <StatCard 
-              title="Almacenamiento" 
-              value={formatStorageSize(stats.storageUsed)}
-              icon={
-                <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4" />
+              </div>
+              <div className="ml-4">
+                <p className="text-base font-medium text-gray-900">Seguridad</p>
+                <p className="mt-1 text-sm text-gray-500">Ajustes y logs de seguridad</p>
+              </div>
+            </div>
+          </button>
+          
+          <button
+            onClick={() => handleNavigate('settings')}
+            className="p-4 text-left transition-colors duration-200 bg-white rounded-lg shadow hover:bg-gray-50"
+          >
+            <div className="flex items-center">
+              <div className="p-2 bg-gray-100 rounded-md">
+                <svg className="w-6 h-6 text-gray-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                 </svg>
-              }
-            />
-          </>
-        )}
+              </div>
+              <div className="ml-4">
+                <p className="text-base font-medium text-gray-900">Configuración</p>
+                <p className="mt-1 text-sm text-gray-500">Ajustes del sistema</p>
+              </div>
+            </div>
+          </button>
+        </div>
       </div>
       
-      {/* Actividad Reciente */}
-      <div className="mt-8">
-        <h2 className="text-lg font-medium text-gray-900">Actividad Reciente</h2>
-        <div className="mt-3 overflow-hidden bg-white shadow sm:rounded-md">
+      {/* Actividad reciente */}
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+        {/* Usuarios recientes */}
+        <div className="overflow-hidden bg-white rounded-lg shadow">
+          <div className="px-4 py-5 border-b border-gray-200 sm:px-6">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-medium leading-6 text-gray-900">
+                Usuarios Recientes
+              </h3>
+              <Button 
+                size="small"
+                onClick={() => handleNavigate('users')}
+              >
+                Ver todos
+              </Button>
+            </div>
+          </div>
           <ul className="divide-y divide-gray-200">
-            {recentActivity.length > 0 ? (
-              recentActivity.map((activity) => (
-                <li key={activity.id}>
-                  <div className="px-4 py-4 sm:px-6">
-                    <div className="flex items-center justify-between">
-                      <p className="font-medium text-blue-600 truncate">
-                        {activity.action}
-                      </p>
-                      <div className="flex-shrink-0 ml-2">
-                        <span className="inline-flex px-2 text-xs font-semibold text-gray-800 bg-gray-100 rounded-full">
-                          {formatDate(activity.timestamp)}
+            {recentUsers.length > 0 ? (
+              recentUsers.map((user) => (
+                <li key={user.id} className="px-4 py-4 transition-colors duration-200 hover:bg-gray-50">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center">
+                      <div className="flex items-center justify-center w-10 h-10 bg-gray-200 rounded-full">
+                        <span className="text-sm font-medium text-gray-700">
+                          {user.name.substring(0, 2).toUpperCase()}
                         </span>
                       </div>
-                    </div>
-                    <div className="mt-2 sm:flex sm:justify-between">
-                      <div className="sm:flex">
-                        <p className="flex items-center text-sm text-gray-500">
-                          <svg xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0 mr-1.5 h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                          </svg>
-                          {activity.userName}
-                        </p>
-                        {activity.resourceId && (
-                          <p className="flex items-center mt-2 text-sm text-gray-500 sm:mt-0 sm:ml-6">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0 mr-1.5 h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                            </svg>
-                            {activity.resourceType || 'Recurso'}
-                          </p>
-                        )}
+                      <div className="ml-4">
+                        <h4 className="text-sm font-medium text-gray-900">{user.name}</h4>
+                        <p className="text-sm text-gray-500">{user.email}</p>
                       </div>
-                      {activity.details && (
-                        <div className="flex items-center mt-2 text-sm text-gray-500 sm:mt-0">
-                          <svg className="flex-shrink-0 mr-1.5 h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                          </svg>
-                          <span>
-                            {typeof activity.details === 'string' 
-                              ? activity.details 
-                              : 'Detalles disponibles'}
-                          </span>
-                        </div>
-                      )}
+                    </div>
+                    <div className="flex flex-col items-end">
+                      <p className="text-xs text-gray-500">
+                        {new Date(user.lastActivity).toLocaleDateString()}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        {user.documentsCount} documentos
+                      </p>
                     </div>
                   </div>
                 </li>
               ))
             ) : (
-              <li className="px-4 py-5 sm:px-6">
-                <p className="text-sm text-gray-500">No hay actividad reciente para mostrar.</p>
+              <li className="px-4 py-5 text-center text-gray-500">
+                No hay usuarios recientes
               </li>
             )}
           </ul>
         </div>
-      </div>
-      
-      {/* Enlaces rápidos */}
-      <div className="grid grid-cols-1 gap-6 mt-8 sm:grid-cols-2 lg:grid-cols-3">
-        <div className="overflow-hidden transition-shadow duration-200 bg-white rounded-lg shadow hover:shadow-md">
-          <div className="px-6 py-4">
-            <div className="flex items-center">
-              <svg xmlns="http://www.w3.org/2000/svg" className="w-8 h-8 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-              </svg>
-              <h3 className="ml-3 text-lg font-medium text-gray-900">Gestión de Usuarios</h3>
-            </div>
-            <p className="mt-2 text-sm text-gray-500">
-              Administrar usuarios, permisos y roles en el sistema.
-            </p>
-            <div className="mt-4">
-              <button
-                type="button"
-                onClick={() => navigate('/admin/users')}
-                className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-              >
-                Ir a Usuarios
-              </button>
-            </div>
-          </div>
-        </div>
         
-        <div className="overflow-hidden transition-shadow duration-200 bg-white rounded-lg shadow hover:shadow-md">
-          <div className="px-6 py-4">
-            <div className="flex items-center">
-              <svg xmlns="http://www.w3.org/2000/svg" className="w-8 h-8 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-              <h3 className="ml-3 text-lg font-medium text-gray-900">Configuración</h3>
-            </div>
-            <p className="mt-2 text-sm text-gray-500">
-              Ajustes globales, opciones de seguridad y parámetros del sistema.
-            </p>
-            <div className="mt-4">
-              <button
-                type="button"
-                onClick={() => navigate('/admin/configuration')}
-                className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+        {/* Eventos de seguridad */}
+        <div className="overflow-hidden bg-white rounded-lg shadow">
+          <div className="px-4 py-5 border-b border-gray-200 sm:px-6">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-medium leading-6 text-gray-900">
+                Eventos de Seguridad
+              </h3>
+              <Button 
+                size="small"
+                onClick={() => handleNavigate('security/logs')}
               >
-                Ir a Configuración
-              </button>
+                Ver todos
+              </Button>
             </div>
           </div>
-        </div>
-        
-        <div className="overflow-hidden transition-shadow duration-200 bg-white rounded-lg shadow hover:shadow-md">
-          <div className="px-6 py-4">
-            <div className="flex items-center">
-              <svg xmlns="http://www.w3.org/2000/svg" className="w-8 h-8 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-              <h3 className="ml-3 text-lg font-medium text-gray-900">Registros</h3>
-            </div>
-            <p className="mt-2 text-sm text-gray-500">
-              Ver registros de auditoría, eventos del sistema y actividad de usuarios.
-            </p>
-            <div className="mt-4">
-              <button
-                type="button"
-                onClick={() => navigate('/admin/logs')}
-                className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-              >
-                Ver Registros
-              </button>
-            </div>
-          </div>
+          <ul className="divide-y divide-gray-200">
+            {securityEvents.length > 0 ? (
+              securityEvents.map((event) => (
+                <li key={event.id} className="px-4 py-4 transition-colors duration-200 hover:bg-gray-50">
+                  <div className="flex items-center">
+                    <div className={`flex-shrink-0 w-2 h-2 rounded-full ${
+                      event.severity === 'high' ? 'bg-red-500' :
+                      event.severity === 'medium' ? 'bg-yellow-500' :
+                      'bg-blue-500'
+                    }`} />
+                    <div className="ml-3">
+                      <p className="text-sm font-medium text-gray-900">{event.type}</p>
+                      <p className="text-xs text-gray-500">{event.description}</p>
+                    </div>
+                    <div className="ml-auto">
+                      <p className="text-xs text-gray-500">
+                        {new Date(event.timestamp).toLocaleString()}
+                      </p>
+                    </div>
+                  </div>
+                </li>
+              ))
+            ) : (
+              <li className="px-4 py-5 text-center text-gray-500">
+                No hay eventos de seguridad recientes
+              </li>
+            )}
+          </ul>
         </div>
       </div>
     </div>

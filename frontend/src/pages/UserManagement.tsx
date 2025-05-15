@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { api } from '../api/client';
+import { User } from '../types/user';
+//import { api } from '../api/client';
 
 const UserManagement = () => {
   // Estados
@@ -34,7 +35,7 @@ const UserManagement = () => {
     } else {
       const query = searchQuery.toLowerCase();
       const filtered = users.filter(
-        (user) =>
+        (user: User) =>
           user.name.toLowerCase().includes(query) ||
           user.email.toLowerCase().includes(query),
       );
@@ -118,7 +119,7 @@ const UserManagement = () => {
     if (!selectedUser) return;
 
     // Actualizar el usuario en la lista
-    const updatedUsers = users.map((user) =>
+    const updatedUsers = users.map((user: User) =>
       user.id === selectedUser.id ? { ...user, ...formData } : user,
     );
 
@@ -166,7 +167,7 @@ const UserManagement = () => {
   };
 
   // Manejar cambios en el formulario
-  const handleFormChange = (e) => {
+  const handleFormChange = (e: any) => {
     const { name, value, type, checked } = e.target;
     setFormData((prev) => ({
       ...prev,
@@ -175,7 +176,7 @@ const UserManagement = () => {
   };
 
   // Manejar envío del formulario
-  const handleSubmit = (e) => {
+  const handleSubmit = (e: any) => {
     e.preventDefault();
     if (selectedUser) {
       updateUser();
@@ -322,7 +323,7 @@ const UserManagement = () => {
               </tr>
             </thead>
             <tbody className='bg-white divide-y divide-gray-200'>
-              {filteredUsers.map((user) => (
+              {filteredUsers.map((user: User) => (
                 <tr
                   key={user.id}
                   className='hover:bg-gray-50'>

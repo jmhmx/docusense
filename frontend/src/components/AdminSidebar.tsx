@@ -1,77 +1,155 @@
-import React from 'react';
+//import { useState } from 'react';
 
-const AdminSidebar = ({ activeSection = 'users' }) => {
-  // Lista de secciones del panel de administración
-  const sections = [
-    { id: 'users', name: 'Gestión de usuarios', icon: 'user-group' },
-    { id: 'config', name: 'Configuración del sistema', icon: 'cog' },
-    { id: 'analytics', name: 'Analíticas', icon: 'chart-bar' },
-    { id: 'logs', name: 'Logs de auditoría', icon: 'document-text' },
-    { id: 'security', name: 'Seguridad', icon: 'shield-check' },
+interface AdminSidebarProps {
+  activeSection: string;
+  onSectionChange: (section: string) => void;
+}
+
+interface NavItem {
+  id: string;
+  name: string;
+  icon: string;
+}
+
+const AdminSidebar = ({
+  activeSection,
+  onSectionChange,
+}: AdminSidebarProps) => {
+  // Lista de elementos de navegación
+  const navItems: NavItem[] = [
+    {
+      id: 'users',
+      name: 'Gestión de Usuarios',
+      icon: 'users',
+    },
+    {
+      id: 'config',
+      name: 'Configuración',
+      icon: 'config',
+    },
+    {
+      id: 'analytics',
+      name: 'Analíticas',
+      icon: 'analytics',
+    },
+    {
+      id: 'logs',
+      name: 'Logs de Auditoría',
+      icon: 'logs',
+    },
+    {
+      id: 'security',
+      name: 'Seguridad',
+      icon: 'security',
+    },
   ];
 
-  // Renderizar el icono correspondiente
-  const renderIcon = (iconName) => {
+  // Función para renderizar el icono adecuado
+  const renderIcon = (iconName: string) => {
     switch (iconName) {
-      case 'user-group':
+      case 'users':
         return (
           <svg
+            className={`mr-3 h-6 w-6 ${
+              activeSection === 'users'
+                ? 'text-blue-500'
+                : 'text-gray-400 group-hover:text-gray-500'
+            }`}
             xmlns='http://www.w3.org/2000/svg'
-            className='w-5 h-5'
-            viewBox='0 0 20 20'
-            fill='currentColor'>
-            <path d='M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z' />
-          </svg>
-        );
-      case 'cog':
-        return (
-          <svg
-            xmlns='http://www.w3.org/2000/svg'
-            className='w-5 h-5'
-            viewBox='0 0 20 20'
-            fill='currentColor'>
+            fill='none'
+            viewBox='0 0 24 24'
+            stroke='currentColor'>
             <path
-              fillRule='evenodd'
-              d='M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z'
-              clipRule='evenodd'
+              strokeLinecap='round'
+              strokeLinejoin='round'
+              strokeWidth={2}
+              d='M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z'
             />
           </svg>
         );
-      case 'chart-bar':
+      case 'config':
         return (
           <svg
+            className={`mr-3 h-6 w-6 ${
+              activeSection === 'config'
+                ? 'text-blue-500'
+                : 'text-gray-400 group-hover:text-gray-500'
+            }`}
             xmlns='http://www.w3.org/2000/svg'
-            className='w-5 h-5'
-            viewBox='0 0 20 20'
-            fill='currentColor'>
-            <path d='M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z' />
-          </svg>
-        );
-      case 'document-text':
-        return (
-          <svg
-            xmlns='http://www.w3.org/2000/svg'
-            className='w-5 h-5'
-            viewBox='0 0 20 20'
-            fill='currentColor'>
+            fill='none'
+            viewBox='0 0 24 24'
+            stroke='currentColor'>
             <path
-              fillRule='evenodd'
-              d='M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z'
-              clipRule='evenodd'
+              strokeLinecap='round'
+              strokeLinejoin='round'
+              strokeWidth={2}
+              d='M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z'
+            />
+            <path
+              strokeLinecap='round'
+              strokeLinejoin='round'
+              strokeWidth={2}
+              d='M15 12a3 3 0 11-6 0 3 3 0 016 0z'
             />
           </svg>
         );
-      case 'shield-check':
+      case 'analytics':
         return (
           <svg
+            className={`mr-3 h-6 w-6 ${
+              activeSection === 'analytics'
+                ? 'text-blue-500'
+                : 'text-gray-400 group-hover:text-gray-500'
+            }`}
             xmlns='http://www.w3.org/2000/svg'
-            className='w-5 h-5'
-            viewBox='0 0 20 20'
-            fill='currentColor'>
+            fill='none'
+            viewBox='0 0 24 24'
+            stroke='currentColor'>
             <path
-              fillRule='evenodd'
-              d='M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 1.32.166 2.001 0 5.225-3.34 9.67-8 11.317C5.34 16.67 2 12.225 2 7c0-.682.057-1.35.166-2.001zm11.541 3.708a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z'
-              clipRule='evenodd'
+              strokeLinecap='round'
+              strokeLinejoin='round'
+              strokeWidth={2}
+              d='M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z'
+            />
+          </svg>
+        );
+      case 'logs':
+        return (
+          <svg
+            className={`mr-3 h-6 w-6 ${
+              activeSection === 'logs'
+                ? 'text-blue-500'
+                : 'text-gray-400 group-hover:text-gray-500'
+            }`}
+            xmlns='http://www.w3.org/2000/svg'
+            fill='none'
+            viewBox='0 0 24 24'
+            stroke='currentColor'>
+            <path
+              strokeLinecap='round'
+              strokeLinejoin='round'
+              strokeWidth={2}
+              d='M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z'
+            />
+          </svg>
+        );
+      case 'security':
+        return (
+          <svg
+            className={`mr-3 h-6 w-6 ${
+              activeSection === 'security'
+                ? 'text-blue-500'
+                : 'text-gray-400 group-hover:text-gray-500'
+            }`}
+            xmlns='http://www.w3.org/2000/svg'
+            fill='none'
+            viewBox='0 0 24 24'
+            stroke='currentColor'>
+            <path
+              strokeLinecap='round'
+              strokeLinejoin='round'
+              strokeWidth={2}
+              d='M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z'
             />
           </svg>
         );
@@ -81,56 +159,51 @@ const AdminSidebar = ({ activeSection = 'users' }) => {
   };
 
   return (
-    <div className='fixed top-0 left-0 w-64 h-screen pt-16 bg-white border-r border-gray-200 shadow-md'>
-      <div className='px-4 py-6'>
-        <h2 className='mb-6 text-lg font-semibold text-gray-900'>
-          Panel de Administración
-        </h2>
-        <nav className='space-y-1'>
-          {sections.map((section) => (
+    <aside className='fixed bottom-0 left-0 z-10 w-64 overflow-y-auto bg-white shadow-md top-16'>
+      <div className='py-6'>
+        <div className='px-4 mb-6'>
+          <h2 className='text-lg font-semibold text-gray-900'>
+            Panel de Administración
+          </h2>
+        </div>
+        <nav className='px-2 space-y-1'>
+          {navItems.map((item) => (
             <a
-              key={section.id}
-              href={`#${section.id}`}
-              className={`group flex items-center px-3 py-3 text-sm font-medium rounded-md ${
-                activeSection === section.id
-                  ? 'bg-blue-50 text-blue-700'
-                  : 'text-gray-700 hover:bg-gray-50'
+              key={item.id}
+              href={`#${item.id}`}
+              onClick={() => onSectionChange(item.id)}
+              className={`group flex items-center px-2 py-2 text-base font-medium rounded-md ${
+                activeSection === item.id
+                  ? 'bg-blue-100 text-blue-700'
+                  : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
               }`}>
-              <span className='mr-3'>{renderIcon(section.icon)}</span>
-              {section.name}
+              {renderIcon(item.icon)}
+              {item.name}
             </a>
           ))}
         </nav>
       </div>
 
-      {/* Información del sistema */}
-      <div className='px-4 py-4 mt-6 border-t border-gray-200'>
+      {/* Información y Versión del Sistema */}
+      <div className='absolute bottom-0 left-0 right-0 p-4 border-t border-gray-200'>
         <div className='flex items-center'>
-          <div className='flex-shrink-0'>
-            <div className='flex items-center justify-center w-8 h-8 bg-blue-100 rounded-full'>
-              <svg
-                xmlns='http://www.w3.org/2000/svg'
-                className='w-5 h-5 text-blue-600'
-                viewBox='0 0 20 20'
-                fill='currentColor'>
-                <path
-                  fillRule='evenodd'
-                  d='M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z'
-                  clipRule='evenodd'
-                />
-              </svg>
-            </div>
+          <div className='flex items-center justify-center w-8 h-8 bg-blue-100 rounded-full'>
+            <svg
+              xmlns='http://www.w3.org/2000/svg'
+              className='w-5 h-5 text-blue-600'
+              viewBox='0 0 20 20'
+              fill='currentColor'>
+              <path
+                fillRule='evenodd'
+                d='M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z'
+                clipRule='evenodd'
+              />
+            </svg>
           </div>
           <div className='ml-3'>
             <p className='text-sm font-medium text-gray-700'>DocuSense</p>
             <p className='text-xs text-gray-500'>v1.2.0</p>
           </div>
-        </div>
-        <div className='mt-4 text-xs text-gray-500'>
-          <p>Último inicio de sesión:</p>
-          <p className='font-medium text-gray-700'>
-            15 de mayo de 2025, 10:30 AM
-          </p>
         </div>
         <button className='flex items-center justify-center w-full px-4 py-2 mt-4 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500'>
           <svg
@@ -149,7 +222,7 @@ const AdminSidebar = ({ activeSection = 'users' }) => {
           Cerrar sesión
         </button>
       </div>
-    </div>
+    </aside>
   );
 };
 

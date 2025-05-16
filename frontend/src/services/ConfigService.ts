@@ -1,4 +1,5 @@
 import { api } from '../api/client';
+import { SystemHealthData, SecurityEvent, RecentUser } from '../types/admin';
 
 // Definición de la interfaz del sistema de configuración
 export interface SystemConfig {
@@ -29,6 +30,37 @@ export interface SystemConfig {
     provider: string;
     apiKey?: string;
     networkId: string;
+  };
+}
+
+// Interfaz para el estado de salud del sistema
+export interface SystemHealthData {
+  status: 'healthy' | 'degraded' | 'unhealthy';
+  timestamp: string;
+  services: {
+    email: {
+      status: 'up' | 'down' | 'warning';
+      lastChecked: string;
+    };
+    blockchain: {
+      status: 'up' | 'down' | 'warning';
+      lastChecked: string;
+    };
+    database: {
+      status: 'up' | 'down' | 'warning';
+      lastChecked: string;
+    };
+  };
+  resources: {
+    storage: {
+      total: number;
+      used: number;
+      available: number;
+    };
+    users: {
+      total: number;
+      active: number;
+    };
   };
 }
 
@@ -130,6 +162,60 @@ export const configService = {
       return response.data;
     } catch (error) {
       console.error('Error al obtener estadísticas:', error);
+      throw error;
+    }
+  },
+
+  // Obtener estado de salud del sistema
+  async getSystemHealth(): Promise<SystemHealthData> {
+    try {
+      const response = await api.get('/api/admin/system-health');
+      return response.data;
+    } catch (error: any) {
+      console.error('Error al obtener estado de salud del sistema:', error);
+
+      // Si no podemos contactar con el servidor, devolvemos un estado de salud de "unhealthy"
+      if (error.code === 'ERR_NETWORK' || error.code === 'ECONNABORTED') {
+        return {
+          status: 'unhealthy',
+          timestamp: new Date().toISOString(),
+          services: {
+            email: { status: 'down', lastChecked: new Date().toISOString() },
+            blockchain: {
+              status: 'down',
+              lastChecked: new Date().toISOString(),
+            },
+            database: { status: 'down', lastChecked: new Date().toISOString() },
+          },
+          resources: {
+            storage: { total: 0, used: 0, available: 0 },
+            users: { total: 0, active: 0 },
+          },
+        };
+      }
+
+      throw error;
+    }
+  },
+
+  // Obtener la lista de usuarios recientes
+  async getRecentUsers(): Promise<RecentUser[]> {
+    try {
+      const response = await api.get('/api/admin/recent-users');
+      return response.data;
+    } catch (error) {
+      console.error('Error al obtener usuarios recientes:', error);
+      throw error;
+    }
+  },
+
+  // Obtener eventos de seguridad
+  async getSecurityEvents(): Promise<SecurityEvent[]> {
+    try {
+      const response = await api.get('/api/admin/security-events');
+      return response.data;
+    } catch (error) {
+      console.error('Error al obtener eventos de seguridad:', error);
       throw error;
     }
   },

@@ -4,6 +4,7 @@ import AnalyticsDashboard from './AnalyticsDashboard';
 import ConfigurationPanel from './ConfigurationPanel';
 import AdminSidebar from '../components/AdminSidebar';
 import SecurityDashboard from './SecurityDashboard';
+import SystemHealthDashboard from './SystemHealthDashboard';
 
 const AdminDashboard = () => {
   const [activeSection, setActiveSection] = useState<string>('users');
@@ -22,13 +23,8 @@ const AdminDashboard = () => {
         return <ConfigurationPanel />;
       case 'analytics':
         return <AnalyticsDashboard />;
-      case 'logs':
-        return (
-          <div className='p-8'>
-            <h1 className='mb-4 text-2xl font-bold'>Logs de Auditoría</h1>
-            <p>Esta sección está en desarrollo.</p>
-          </div>
-        );
+      case 'Estado del sistema':
+        return <SystemHealthDashboard />;
       case 'security':
         return <SecurityDashboard />;
       default:

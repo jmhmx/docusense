@@ -94,4 +94,189 @@ export class BlockchainController {
 
     return await this.blockchainService.getVerificationCertificate(documentId);
   }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('stats')
+  async getSystemStats(@Request() req) {
+    this.logger.log(
+      `Usuario ${req.user.id} solicitando estadísticas del sistema`,
+    );
+
+    // Verificar que el usuario tiene permisos de administrador
+    if (!req.user.isAdmin) {
+      this.logger.warn(
+        `Usuario ${req.user.id} sin permisos de administrador intentó acceder a estadísticas`,
+      );
+      throw new ForbiddenException(
+        'No tienes permisos para acceder a esta información',
+      );
+    }
+
+    try {
+      const stats = await this.adminService.getSystemStats();
+
+      // Registro en auditoría
+      await this.auditLogService.log(
+        AuditAction.PERMISSION_UPDATE,
+        req.user.id,
+        null,
+        {
+          action: 'view_system_stats',
+        },
+      );
+
+      return stats;
+    } catch (error) {
+      this.logger.error(
+        `Error obteniendo estadísticas: ${error.message}`,
+        error.stack,
+      );
+      throw new InternalServerErrorException(
+        'Error al obtener estadísticas del sistema',
+      );
+    }
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('health')
+  async getSystemHealth(@Request() req) {
+    this.logger.log(`Usuario ${req.user.id} verificando estado del sistema`);
+
+    // Verificar que el usuario tiene permisos de administrador
+    if (!req.user.isAdmin) {
+      this.logger.warn(
+        `Usuario ${req.user.id} sin permisos de administrador intentó verificar estado del sistema`,
+      );
+      throw new ForbiddenException(
+        'No tienes permisos para acceder a esta información',
+      );
+    }
+
+    // Verificar estado de servicios principales
+    try {
+      // Verificar servicios básicos (simulación)
+      const dbStatus = true;
+      const redisStatus = true;
+      const storageStatus = true;
+
+      // Verificar conexión con servicios externos
+      const emailStatus = await this.adminService.checkEmailServiceStatus();
+      const blockchainStatus =
+        await this.adminService.checkBlockchainServiceStatus();
+
+      // Calcular estado general
+      const systemStatus = dbStatus && storageStatus ? 'healthy' : 'degraded';
+
+      // Registro en auditoría
+      await this.auditLogService.log(
+        AuditAction.USER_UPDATE,
+        req.user.id,
+        null,
+        {
+          action: 'check_system_health',
+          status: systemStatus,
+        },
+      );
+
+      return {
+        status: systemStatus,
+        timestamp: new Date().toISOString(),
+        services: {
+          database: { status: dbStatus ? 'online' : 'offline' },
+          redis: { status: redisStatus ? 'online' : 'offline' },
+          storage: { status: storageStatus ? 'online' : 'offline' },
+          email: { status: emailStatus ? 'online' : 'offline' },
+          blockchain: { status: blockchainStatus ? 'online' : 'offline' },
+        },
+      };
+    } catch (error) {
+      this.logger.error(
+        `Error verificando salud del sistema: ${error.message}`,
+        error.stack,
+      );
+      throw new InternalServerErrorException(
+        'Error al verificar el estado del sistema',
+      );
+    }
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('recent-users')
+  async getRecentUsers(@Request() req) {
+    this.logger.log(`Usuario ${req.user.id} solicitando usuarios recientes`);
+
+    // Verificar que el usuario tiene permisos de administrador
+    if (!req.user.isAdmin) {
+      this.logger.warn(
+        `Usuario ${req.user.id} sin permisos de administrador intentó acceder a usuarios recientes`,
+      );
+      throw new ForbiddenException(
+        'No tienes permisos para acceder a esta información',
+      );
+    }
+
+    try {
+      const recentUsers = await this.adminService.getRecentUsers();
+
+      // Registro en auditoría
+      await this.auditLogService.log(
+        AuditAction.USER_UPDATE,
+        req.user.id,
+        null,
+        {
+          action: 'view_recent_users',
+        },
+      );
+
+      return recentUsers;
+    } catch (error) {
+      this.logger.error(
+        `Error obteniendo usuarios recientes: ${error.message}`,
+        error.stack,
+      );
+      throw new InternalServerErrorException(
+        'Error al obtener usuarios recientes',
+      );
+    }
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('security-events')
+  async getSecurityEvents(@Request() req) {
+    this.logger.log(`Usuario ${req.user.id} solicitando eventos de seguridad`);
+
+    // Verificar que el usuario tiene permisos de administrador
+    if (!req.user.isAdmin) {
+      this.logger.warn(
+        `Usuario ${req.user.id} sin permisos de administrador intentó acceder a eventos de seguridad`,
+      );
+      throw new ForbiddenException(
+        'No tienes permisos para acceder a esta información',
+      );
+    }
+
+    try {
+      const securityEvents = await this.adminService.getSecurityEvents();
+
+      // Registro en auditoría
+      await this.auditLogService.log(
+        AuditAction.USER_UPDATE,
+        req.user.id,
+        null,
+        {
+          action: 'view_security_events',
+        },
+      );
+
+      return securityEvents;
+    } catch (error) {
+      this.logger.error(
+        `Error obteniendo eventos de seguridad: ${error.message}`,
+        error.stack,
+      );
+      throw new InternalServerErrorException(
+        'Error al obtener eventos de seguridad',
+      );
+    }
+  }
 }

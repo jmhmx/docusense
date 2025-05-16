@@ -62,7 +62,10 @@ const ConfigurationPanel = () => {
       setConfig(response.data);
     } catch (err: any) {
       console.error('Error cargando configuración:', err);
-      setError('No se pudo cargar la configuración del sistema');
+      setError(
+        err.response?.data?.message ||
+          'No se pudo cargar la configuración del sistema. Por favor, inténtalo más tarde.',
+      );
     } finally {
       setIsLoading(false);
     }
@@ -122,6 +125,7 @@ const ConfigurationPanel = () => {
     }
 
     setIsLoading(true);
+    setError('');
 
     try {
       const response = await api.post(
@@ -163,9 +167,10 @@ const ConfigurationPanel = () => {
     setSuccessMessage('');
 
     try {
-      await api.post('/api/admin/configuration/test-email');
+      const response = await api.post('/api/admin/configuration/test-email');
       setSuccessMessage(
-        'Correo de prueba enviado correctamente. Verifica tu bandeja de entrada.',
+        response.data.message ||
+          'Correo de prueba enviado correctamente. Verifica tu bandeja de entrada.',
       );
 
       setTimeout(() => {
@@ -187,8 +192,13 @@ const ConfigurationPanel = () => {
     setSuccessMessage('');
 
     try {
-      await api.post('/api/admin/configuration/test-blockchain');
-      setSuccessMessage('Conexión con blockchain establecida correctamente');
+      const response = await api.post(
+        '/api/admin/configuration/test-blockchain',
+      );
+      setSuccessMessage(
+        response.data.message ||
+          'Conexión con blockchain establecida correctamente',
+      );
 
       setTimeout(() => {
         setSuccessMessage('');

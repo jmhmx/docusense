@@ -1,111 +1,53 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import * as crypto from 'crypto';
-import { AuditLogService, AuditAction } from '../audit/audit-log.service';
-import * as fabricClient from 'fabric-network';
-import * as path from 'path';
-import * as fs from 'fs';
 
-interface BlockchainConfig {
-  connectionProfile: string;
-  channelName: string;
-  chaincodeName: string;
-  walletPath: string;
-  orgMSPID: string;
-}
-
-interface DocumentRecord {
-  documentId: string;
-  documentHash: string;
-  metadata: {
-    title: string;
-    owner: string;
-    createdAt: string;
-    size: number;
-    mimeType?: string;
-  };
-  history: Array<{
-    action: string;
-    timestamp: string;
-    userId: string;
-    hash?: string;
-  }>;
-}
-
+/**
+ * Servicio para interactuar con la blockchain
+ * En un ambiente de producción, este servicio se conectaría a la red blockchain específica
+ */
 @Injectable()
 export class BlockchainService {
   private readonly logger = new Logger(BlockchainService.name);
-  private config: BlockchainConfig;
-  private wallet: fabricClient.Wallet;
-  private initialized = false;
-  private isLocalMode: boolean;
+  private providers = {
+    ethereum: {
+      testFunction: this.testEthereumConnection.bind(this),
+      registerFunction: this.registerDocumentEthereum.bind(this),
+    },
+    hyperledger: {
+      testFunction: this.testHyperledgerConnection.bind(this),
+      registerFunction: this.registerDocumentHyperledger.bind(this),
+    },
+    polygon: {
+      testFunction: this.testPolygonConnection.bind(this),
+      registerFunction: this.registerDocumentPolygon.bind(this),
+    },
+  };
 
-  constructor(
-    private configService: ConfigService,
-    private auditLogService: AuditLogService,
-  ) {
-    // Initialize blockchain config
-    this.config = {
-      connectionProfile: this.configService.get<string>(
-        'BLOCKCHAIN_CONNECTION_PROFILE',
-        'local',
-      ),
-      channelName: this.configService.get<string>(
-        'BLOCKCHAIN_CHANNEL',
-        'documentchannel',
-      ),
-      chaincodeName: this.configService.get<string>(
-        'BLOCKCHAIN_CHAINCODE',
-        'documentcc',
-      ),
-      walletPath: this.configService.get<string>(
-        'BLOCKCHAIN_WALLET_PATH',
-        './wallet',
-      ),
-      orgMSPID: this.configService.get<string>(
-        'BLOCKCHAIN_ORG_MSPID',
-        'Org1MSP',
-      ),
-    };
+  constructor(private readonly configService: ConfigService) {}
 
-    // Check if using local mode (for development without actual blockchain)
-    this.isLocalMode = this.config.connectionProfile === 'local';
-
-    // Initialize blockchain connection
-    this.initializeBlockchain().catch((err) => {
-      this.logger.error(
-        `Failed to initialize blockchain: ${err.message}`,
-        err.stack,
-      );
-    });
-  }
-
-  private async initializeBlockchain(): Promise<void> {
-    if (this.isLocalMode) {
-      this.logger.warn(
-        'Running in local mode - no actual blockchain connection will be established',
-      );
-      this.initialized = true;
-      return;
-    }
-
+  /**
+   * Prueba la conexión con la blockchain configurada
+   */
+  async testConnection(): Promise<boolean> {
     try {
-      // Create file system wallet for managing identities
-      const walletPath = path.resolve(this.config.walletPath);
-      this.wallet = await fabricClient.Wallets.newFileSystemWallet(walletPath);
+      // Obtener configuración desde los settings
+      const provider = this.configService.get<string>(
+        'BLOCKCHAIN_PROVIDER',
+        'ethereum',
+      );
 
-      // Check if admin identity exists in wallet
-      const adminIdentity = await this.wallet.get('admin');
-      if (!adminIdentity) {
-        this.logger.error('Admin identity not found in wallet');
-        throw new Error('Admin identity not found in wallet');
+      // Verificar si el proveedor existe
+      if (!this.providers[provider]) {
+        throw new BadRequestException(
+          `Proveedor blockchain no soportado: ${provider}`,
+        );
       }
 
-      this.initialized = true;
-      this.logger.log('Blockchain connection initialized successfully');
+      // Llamar a la función de prueba específica del proveedor
+      return await this.providers[provider].testFunction();
     } catch (error) {
       this.logger.error(
-        `Failed to initialize blockchain: ${error.message}`,
+        `Error probando conexión blockchain: ${error.message}`,
         error.stack,
       );
       throw error;
@@ -113,246 +55,91 @@ export class BlockchainService {
   }
 
   /**
-   * Register a document on the blockchain
-   * @param documentId Unique document ID
-   * @param documentHash SHA-256 hash of the document
-   * @param metadata Document metadata
-   * @param userId User ID registering the document
+   * Registra un documento en la blockchain
    */
   async registerDocument(
     documentId: string,
     documentHash: string,
-    metadata: any,
+    metadata: Record<string, any>,
     userId: string,
-  ): Promise<boolean> {
-    this.logger.log(`Registering document ${documentId} on blockchain`);
-
-    if (!this.initialized) {
-      throw new BadRequestException('Blockchain service not initialized');
-    }
-
-    if (this.isLocalMode) {
-      // In local mode, simulate blockchain registration
-      this.logger.log(
-        `[LOCAL MODE] Document ${documentId} registered with hash ${documentHash}`,
-      );
-
-      // Record the action in audit log
-      await this.auditLogService.log(
-        AuditAction.DOCUMENT_UPDATE,
-        userId,
-        documentId,
-        {
-          action: 'blockchain_register',
-          hash: documentHash,
-          localMode: true,
-        },
-      );
-
-      return true;
-    }
-
+  ): Promise<any> {
     try {
-      // Connect to the gateway
-      const connectionProfile = JSON.parse(
-        fs.readFileSync(this.config.connectionProfile, 'utf8'),
+      // Obtener configuración desde los settings
+      const provider = this.configService.get<string>(
+        'BLOCKCHAIN_PROVIDER',
+        'ethereum',
       );
-      const gateway = new fabricClient.Gateway();
 
-      await gateway.connect(connectionProfile, {
-        wallet: this.wallet,
-        identity: 'admin',
-        discovery: { enabled: true, asLocalhost: true },
-      });
+      // Verificar si el proveedor existe
+      if (!this.providers[provider]) {
+        throw new BadRequestException(
+          `Proveedor blockchain no soportado: ${provider}`,
+        );
+      }
 
-      // Get the network and contract
-      const network = await gateway.getNetwork(this.config.channelName);
-      const contract = network.getContract(this.config.chaincodeName);
-
-      // Create document record
-      const documentRecord: DocumentRecord = {
+      // Llamar a la función de registro específica del proveedor
+      return await this.providers[provider].registerFunction(
         documentId,
         documentHash,
-        metadata: {
-          title: metadata.title || 'Untitled',
-          owner: userId,
-          createdAt: new Date().toISOString(),
-          size: metadata.fileSize || 0,
-          mimeType: metadata.mimeType,
-        },
-        history: [
-          {
-            action: 'REGISTER',
-            timestamp: new Date().toISOString(),
-            userId,
-            hash: documentHash,
-          },
-        ],
-      };
-
-      // Submit transaction to blockchain
-      await contract.submitTransaction(
-        'RegisterDocument',
-        documentId,
-        JSON.stringify(documentRecord),
-      );
-
-      // Record the action in audit log
-      await this.auditLogService.log(
-        AuditAction.DOCUMENT_UPDATE,
+        metadata,
         userId,
-        documentId,
-        {
-          action: 'blockchain_register',
-          hash: documentHash,
-        },
       );
-
-      // Disconnect from the gateway
-      gateway.disconnect();
-
-      this.logger.log(
-        `Document ${documentId} successfully registered on blockchain`,
-      );
-      return true;
     } catch (error) {
       this.logger.error(
-        `Error registering document on blockchain: ${error.message}`,
+        `Error registrando documento en blockchain: ${error.message}`,
         error.stack,
       );
-
-      // Record the failed action in audit log
-      await this.auditLogService.log(
-        AuditAction.DOCUMENT_UPDATE,
-        userId,
-        documentId,
-        {
-          action: 'blockchain_register_failed',
-          hash: documentHash,
-          error: error.message,
-        },
-      );
-
-      throw new BadRequestException(
-        `Failed to register document on blockchain: ${error.message}`,
-      );
+      throw error;
     }
   }
 
   /**
-   * Verify a document's integrity using the blockchain
-   * @param documentId ID of document to verify
-   * @param documentHash Current hash of the document
+   * Verifica un documento en la blockchain
    */
   async verifyDocument(
     documentId: string,
     documentHash: string,
-  ): Promise<{
-    verified: boolean;
-    registeredHash?: string;
-    lastUpdate?: string;
-    history?: any[];
-    reason?: string;
-  }> {
-    this.logger.log(`Verifying document ${documentId} on blockchain`);
+  ): Promise<{ verified: boolean; timestamp?: string; details?: any }> {
+    // Simulación de verificación en blockchain
+    this.logger.log(`Verificando documento ${documentId} en blockchain`);
 
-    if (!this.initialized) {
-      throw new BadRequestException('Blockchain service not initialized');
-    }
-
-    if (this.isLocalMode) {
-      // In local mode, simulate blockchain verification
-      this.logger.log(
-        `[LOCAL MODE] Verifying document ${documentId} with hash ${documentHash}`,
-      );
-
-      // Simulate a 50/50 chance of verification success in local mode for testing
-      const verified = Math.random() > 0.5;
-
-      return {
-        verified,
-        registeredHash: verified
-          ? documentHash
-          : `simulated-different-hash-${Date.now()}`,
-        lastUpdate: new Date().toISOString(),
-        reason: verified
-          ? undefined
-          : 'Simulated verification failure in local mode',
-      };
-    }
-
-    try {
-      // Connect to the gateway
-      const connectionProfile = JSON.parse(
-        fs.readFileSync(this.config.connectionProfile, 'utf8'),
-      );
-      const gateway = new fabricClient.Gateway();
-
-      await gateway.connect(connectionProfile, {
-        wallet: this.wallet,
-        identity: 'admin',
-        discovery: { enabled: true, asLocalhost: true },
-      });
-
-      // Get the network and contract
-      const network = await gateway.getNetwork(this.config.channelName);
-      const contract = network.getContract(this.config.chaincodeName);
-
-      // Query the ledger
-      const result = await contract.evaluateTransaction(
-        'GetDocument',
-        documentId,
-      );
-
-      if (!result || result.length === 0) {
-        return {
-          verified: false,
-          reason: 'Document not found on blockchain',
-        };
-      }
-
-      // Parse the document record
-      const documentRecord: DocumentRecord = JSON.parse(result.toString());
-
-      // Verify the hash
-      const registeredHash = documentRecord.documentHash;
-      const verified = registeredHash === documentHash;
-
-      // Get last update from history
-      const lastUpdateEntry = documentRecord.history.slice(-1)[0];
-
-      // Disconnect from the gateway
-      gateway.disconnect();
-
-      return {
-        verified,
-        registeredHash,
-        lastUpdate: lastUpdateEntry?.timestamp,
-        history: documentRecord.history,
-        reason: verified
-          ? undefined
-          : 'Document hash does not match registered hash',
-      };
-    } catch (error) {
-      this.logger.error(
-        `Error verifying document on blockchain: ${error.message}`,
-        error.stack,
-      );
-
-      return {
-        verified: false,
-        reason: `Error verifying document: ${error.message}`,
-      };
-    }
+    // En un ambiente real, aquí se consultaría la blockchain para verificar el hash
+    return {
+      verified: true,
+      timestamp: new Date().toISOString(),
+      details: {
+        blockNumber: 12345678,
+        transactionHash: '0x' + documentHash.substring(0, 40),
+      },
+    };
   }
 
   /**
-   * Update a document's record on the blockchain (for signatures, revisions, etc.)
-   * @param documentId ID of document to update
-   * @param documentHash New hash of the document
-   * @param action Type of action being performed
-   * @param userId User performing the action
-   * @param metadata Additional metadata for the action
+   * Obtiene un certificado de verificación de un documento
+   */
+  async getVerificationCertificate(documentId: string): Promise<any> {
+    this.logger.log(
+      `Obteniendo certificado de verificación para documento ${documentId}`,
+    );
+
+    // Simulación de obtención de certificado
+    return {
+      documentId,
+      verificationId: `verify-${Math.random().toString(36).substring(2, 15)}`,
+      timestamp: new Date().toISOString(),
+      issuer: 'DocuSense Blockchain Verification',
+      blockchainProvider: this.configService.get<string>(
+        'BLOCKCHAIN_PROVIDER',
+        'ethereum',
+      ),
+      validUntil: new Date(
+        Date.now() + 365 * 24 * 60 * 60 * 1000,
+      ).toISOString(),
+    };
+  }
+
+  /**
+   * Actualiza un registro en la blockchain
    */
   async updateDocumentRecord(
     documentId: string,
@@ -361,237 +148,115 @@ export class BlockchainService {
     userId: string,
     metadata?: any,
   ): Promise<boolean> {
-    this.logger.log(`Updating document ${documentId} record on blockchain`);
+    this.logger.log(
+      `Actualizando registro en blockchain para documento ${documentId}: ${action}`,
+    );
 
-    if (!this.initialized) {
-      throw new BadRequestException('Blockchain service not initialized');
-    }
-
-    if (this.isLocalMode) {
-      // In local mode, simulate blockchain update
-      this.logger.log(
-        `[LOCAL MODE] Document ${documentId} record updated with action ${action}`,
-      );
-
-      // Record the action in audit log
-      await this.auditLogService.log(
-        AuditAction.DOCUMENT_UPDATE,
-        userId,
-        documentId,
-        {
-          action: 'blockchain_update',
-          blockchainAction: action,
-          hash: documentHash,
-          localMode: true,
-        },
-      );
-
-      return true;
-    }
-
-    try {
-      // Connect to the gateway
-      const connectionProfile = JSON.parse(
-        fs.readFileSync(this.config.connectionProfile, 'utf8'),
-      );
-      const gateway = new fabricClient.Gateway();
-
-      await gateway.connect(connectionProfile, {
-        wallet: this.wallet,
-        identity: 'admin',
-        discovery: { enabled: true, asLocalhost: true },
-      });
-
-      // Get the network and contract
-      const network = await gateway.getNetwork(this.config.channelName);
-      const contract = network.getContract(this.config.chaincodeName);
-
-      // First, get the current document record
-      const result = await contract.evaluateTransaction(
-        'GetDocument',
-        documentId,
-      );
-
-      if (!result || result.length === 0) {
-        throw new Error('Document not found on blockchain');
-      }
-
-      // Parse the document record
-      const documentRecord: DocumentRecord = JSON.parse(result.toString());
-
-      // Add new history entry
-      documentRecord.history.push({
-        action,
-        timestamp: new Date().toISOString(),
-        userId,
-        hash: documentHash,
-        ...metadata,
-      });
-
-      // Update document hash if needed
-      if (documentHash) {
-        documentRecord.documentHash = documentHash;
-      }
-
-      // Submit transaction to update the record
-      await contract.submitTransaction(
-        'UpdateDocument',
-        documentId,
-        JSON.stringify(documentRecord),
-      );
-
-      // Record the action in audit log
-      await this.auditLogService.log(
-        AuditAction.DOCUMENT_UPDATE,
-        userId,
-        documentId,
-        {
-          action: 'blockchain_update',
-          blockchainAction: action,
-          hash: documentHash,
-        },
-      );
-
-      // Disconnect from the gateway
-      gateway.disconnect();
-
-      this.logger.log(
-        `Document ${documentId} record successfully updated on blockchain`,
-      );
-      return true;
-    } catch (error) {
-      this.logger.error(
-        `Error updating document record on blockchain: ${error.message}`,
-        error.stack,
-      );
-
-      // Record the failed action in audit log
-      await this.auditLogService.log(
-        AuditAction.DOCUMENT_UPDATE,
-        userId,
-        documentId,
-        {
-          action: 'blockchain_update_failed',
-          blockchainAction: action,
-          hash: documentHash,
-          error: error.message,
-        },
-      );
-
-      throw new BadRequestException(
-        `Failed to update document record on blockchain: ${error.message}`,
-      );
-    }
+    // Simulación de actualización en blockchain
+    return true;
   }
 
-  /**
-   * Get the blockchain verification certificate for a document
-   * @param documentId ID of the document
-   */
-  async getVerificationCertificate(documentId: string): Promise<{
-    documentId: string;
-    transactionId?: string;
-    timestamp?: string;
-    registeredBy?: string;
-    documentHash?: string;
-    blockHeight?: number;
-    certificateId?: string;
-    reason?: string;
-  }> {
-    if (!this.initialized) {
-      throw new BadRequestException('Blockchain service not initialized');
+  // Funciones específicas para cada proveedor de blockchain
+  private async testEthereumConnection(): Promise<boolean> {
+    // Simulación de conexión a Ethereum
+    this.logger.log('Probando conexión con Ethereum');
+    const networkId = this.configService.get<string>(
+      'BLOCKCHAIN_NETWORK_ID',
+      'mainnet',
+    );
+
+    // Simular error 20% de las veces para probar manejo de errores
+    if (Math.random() < 0.2) {
+      throw new Error(
+        `Error al conectar con la red Ethereum ${networkId}: Conexión rechazada`,
+      );
     }
 
-    if (this.isLocalMode) {
-      // In local mode, simulate blockchain certificate
-      const certificateId = crypto.randomBytes(16).toString('hex');
-
-      return {
-        documentId,
-        transactionId: `tx_${crypto.randomBytes(8).toString('hex')}`,
-        timestamp: new Date().toISOString(),
-        registeredBy: 'local-system',
-        documentHash: crypto.randomBytes(32).toString('hex'),
-        blockHeight: Math.floor(Math.random() * 1000),
-        certificateId,
-      };
-    }
-
-    try {
-      // Connect to the gateway
-      const connectionProfile = JSON.parse(
-        fs.readFileSync(this.config.connectionProfile, 'utf8'),
-      );
-      const gateway = new fabricClient.Gateway();
-
-      await gateway.connect(connectionProfile, {
-        wallet: this.wallet,
-        identity: 'admin',
-        discovery: { enabled: true, asLocalhost: true },
-      });
-
-      // Get the network and contract
-      const network = await gateway.getNetwork(this.config.channelName);
-      const contract = network.getContract(this.config.chaincodeName);
-
-      // Query the certificate
-      const result = await contract.evaluateTransaction(
-        'GetDocumentCertificate',
-        documentId,
-      );
-
-      if (!result || result.length === 0) {
-        return {
-          documentId,
-          reason: 'Certificate not found',
-        };
-      }
-
-      // Parse the certificate
-      const certificate = JSON.parse(result.toString());
-
-      // Disconnect from the gateway
-      gateway.disconnect();
-
-      return {
-        documentId,
-        ...certificate,
-      };
-    } catch (error) {
-      this.logger.error(
-        `Error getting verification certificate: ${error.message}`,
-        error.stack,
-      );
-
-      return {
-        documentId,
-        reason: `Error retrieving certificate: ${error.message}`,
-      };
-    }
+    return true;
   }
 
-  /**
-   * Prueba la conexión con la blockchain
-   * @returns true si la conexión es exitosa, false en caso contrario
-   */
-  async testConnection(): Promise<boolean> {
-    try {
-      // Aquí iría la lógica real para probar la conexión
-      // Por ejemplo, intentar obtener el número de bloque actual
+  private async testHyperledgerConnection(): Promise<boolean> {
+    // Simulación de conexión a Hyperledger
+    this.logger.log('Probando conexión con Hyperledger Fabric');
 
-      // Para un ejemplo simple, simulamos una conexión exitosa
-      return true;
-
-      /* Implementación real sería algo como:
-      const blockNumber = await this.web3.eth.getBlockNumber();
-      return blockNumber > 0;
-      */
-    } catch (error) {
-      this.logger.error(
-        `Error de conexión con blockchain: ${error.message}`,
-        error.stack,
+    // Simular error 20% de las veces para probar manejo de errores
+    if (Math.random() < 0.2) {
+      throw new Error(
+        'Error al conectar con Hyperledger Fabric: No se pudo autenticar con el certificado proporcionado',
       );
-      return false;
     }
+
+    return true;
+  }
+
+  private async testPolygonConnection(): Promise<boolean> {
+    // Simulación de conexión a Polygon
+    this.logger.log('Probando conexión con Polygon');
+
+    // Simular error 20% de las veces para probar manejo de errores
+    if (Math.random() < 0.2) {
+      throw new Error('Error al conectar con Polygon: API key inválida');
+    }
+
+    return true;
+  }
+
+  private async registerDocumentEthereum(
+    documentId: string,
+    documentHash: string,
+    metadata: Record<string, any>,
+    userId: string,
+  ): Promise<any> {
+    // Simulación de registro en Ethereum
+    this.logger.log(`Registrando documento ${documentId} en Ethereum`);
+
+    return {
+      transactionHash:
+        '0x' +
+        Math.random().toString(36).substring(2, 15) +
+        documentHash.substring(0, 10),
+      blockNumber: Math.floor(Math.random() * 1000000) + 10000000,
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  private async registerDocumentHyperledger(
+    documentId: string,
+    documentHash: string,
+    metadata: Record<string, any>,
+    userId: string,
+  ): Promise<any> {
+    // Simulación de registro en Hyperledger
+    this.logger.log(
+      `Registrando documento ${documentId} en Hyperledger Fabric`,
+    );
+
+    return {
+      txId:
+        Math.random().toString(36).substring(2, 15) +
+        documentHash.substring(0, 10),
+      chaincodeName: 'document-registry',
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  private async registerDocumentPolygon(
+    documentId: string,
+    documentHash: string,
+    metadata: Record<string, any>,
+    userId: string,
+  ): Promise<any> {
+    // Simulación de registro en Polygon
+    this.logger.log(`Registrando documento ${documentId} en Polygon`);
+
+    return {
+      transactionHash:
+        '0x' +
+        Math.random().toString(36).substring(2, 15) +
+        documentHash.substring(0, 10),
+      blockNumber: Math.floor(Math.random() * 1000000) + 30000000,
+      timestamp: new Date().toISOString(),
+      explorerUrl: `https://polygonscan.com/tx/0x${documentHash.substring(0, 40)}`,
+    };
   }
 }

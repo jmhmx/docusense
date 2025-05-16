@@ -1,17 +1,19 @@
 import { useState, useEffect } from 'react';
 import { User, UserFormData } from '../types/user';
+import { api } from '../api/client';
 import Button from '../components/Button';
 import Input from '../components/Input';
 import UserFormModal from '../components/UserFormModal';
 import DeleteConfirmationModal from '../components/DeleteConfirmationModal';
 
-const UserManagement = () => {
+const AdminUserManagement = () => {
   // Estados
   const [users, setUsers] = useState<User[]>([]);
   const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
 
   // Estados para edición/creación
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
@@ -25,6 +27,7 @@ const UserManagement = () => {
 
   // Estados para eliminación
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Cargar usuarios al iniciar
   useEffect(() => {
@@ -46,100 +49,115 @@ const UserManagement = () => {
     }
   }, [users, searchQuery]);
 
-  // Función para cargar usuarios
+  // Función para cargar usuarios reales desde la API
   const fetchUsers = async () => {
     setIsLoading(true);
     setError('');
 
     try {
-      // En un entorno real, esta llamada API retornaría usuarios reales
-      // Por ahora usaremos datos de ejemplo
-      const mockData: User[] = [
-        {
-          id: '1',
-          name: 'María López',
-          email: 'maria@example.com',
-          isAdmin: false,
-          twoFactorEnabled: true,
-          biometricAuthEnabled: false,
-          createdAt: '2025-04-15T10:30:00Z',
-        },
-        {
-          id: '2',
-          name: 'Pedro García',
-          email: 'pedro@example.com',
-          isAdmin: true,
-          twoFactorEnabled: true,
-          biometricAuthEnabled: true,
-          createdAt: '2025-03-16T14:20:00Z',
-        },
-        {
-          id: '3',
-          name: 'Ana Rodríguez',
-          email: 'ana@example.com',
-          isAdmin: false,
-          twoFactorEnabled: false,
-          biometricAuthEnabled: false,
-          createdAt: '2025-05-01T09:15:00Z',
-        },
-        {
-          id: '4',
-          name: 'Carlos Martínez',
-          email: 'carlos@example.com',
-          isAdmin: false,
-          twoFactorEnabled: true,
-          biometricAuthEnabled: false,
-          createdAt: '2025-04-20T16:45:00Z',
-        },
-      ];
-
-      setUsers(mockData);
-      setFilteredUsers(mockData);
-    } catch (err) {
+      const response = await api.get('/api/users');
+      setUsers(response.data);
+      setFilteredUsers(response.data);
+    } catch (err: any) {
       console.error('Error cargando usuarios:', err);
-      setError('Error al cargar usuarios');
+      // Manejo mejorado de errores 500
+      if (err?.response?.status === 500) {
+        setError(
+          'Error interno del servidor. Por favor, inténtalo más tarde o contacta al administrador del sistema.',
+        );
+      } else {
+        setError(err?.response?.data?.message || 'Error al cargar usuarios');
+      }
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Función para crear usuario
+  // Función para crear usuario real
   const createUser = async () => {
-    // Simulación de creación
-    const newUser: User = {
-      id: `${users.length + 1}`,
-      ...formData,
-      createdAt: new Date().toISOString(),
-      twoFactorEnabled: false,
-      biometricAuthEnabled: false,
-    };
-
-    setUsers([...users, newUser]);
-    setShowUserForm(false);
-    resetForm();
+    setIsSaving(true);
+    try {
+      const response = await api.post('/api/users', formData);
+      setUsers([...users, response.data]);
+      setShowUserForm(false);
+      resetForm();
+    } catch (err: any) {
+      console.error('Error al crear usuario:', err);
+      if (err?.response?.status === 500) {
+        setError(
+          'Error interno del servidor. Por favor, inténtalo más tarde o contacta al administrador del sistema.',
+        );
+      } else {
+        setError(err?.response?.data?.message || 'Error al crear usuario');
+      }
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  // Función para actualizar usuario
+  // Función para actualizar usuario real
   const updateUser = async () => {
     if (!selectedUser) return;
 
-    // Actualizar el usuario en la lista
-    const updatedUsers = users.map((user) =>
-      user.id === selectedUser.id ? { ...user, ...formData } : user,
-    );
+    setIsSaving(true);
+    try {
+      // Si no se proporciona contraseña, enviar sin contraseña
+      const dataToSend = formData.password
+        ? formData
+        : { ...formData, password: undefined };
 
-    setUsers(updatedUsers);
-    setShowUserForm(false);
-    resetForm();
+      const response = await api.patch(
+        `/api/users/${selectedUser.id}`,
+        dataToSend,
+      );
+
+      // Actualizar la lista de usuarios
+      const updatedUsers = users.map((user) =>
+        user.id === selectedUser.id ? response.data : user,
+      );
+
+      setUsers(updatedUsers);
+      setShowUserForm(false);
+      resetForm();
+    } catch (err: any) {
+      console.error('Error al actualizar usuario:', err);
+      if (err?.response?.status === 500) {
+        setError(
+          'Error interno del servidor. Por favor, inténtalo más tarde o contacta al administrador del sistema.',
+        );
+      } else {
+        setError(err?.response?.data?.message || 'Error al actualizar usuario');
+      }
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  // Función para eliminar usuario
+  // Función para eliminar usuario real
   const deleteUser = async () => {
     if (!userToDelete) return;
 
-    // Eliminar el usuario de la lista
-    setUsers(users.filter((user) => user.id !== userToDelete.id));
-    setUserToDelete(null);
+    setIsDeleting(true);
+    try {
+      await api.delete(`/api/users/${userToDelete.id}`);
+
+      // Eliminar de la lista local
+      setUsers(users.filter((user) => user.id !== userToDelete.id));
+      setUserToDelete(null);
+    } catch (err: any) {
+      console.error('Error al eliminar usuario:', err);
+      if (err?.response?.status === 500) {
+        setError(
+          'Error interno del servidor. Por favor, inténtalo más tarde o contacta al administrador del sistema.',
+        );
+      } else {
+        setError(err?.response?.data?.message || 'Error al eliminar usuario');
+      }
+      // Cerrar el modal de confirmación en caso de error
+      setUserToDelete(null);
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   // Resetear formulario
@@ -151,6 +169,7 @@ const UserManagement = () => {
       isAdmin: false,
     });
     setSelectedUser(null);
+    setError('');
   };
 
   // Abrir formulario para editar
@@ -406,12 +425,17 @@ const UserManagement = () => {
       {showUserForm && (
         <UserFormModal
           isOpen={showUserForm}
-          onClose={() => setShowUserForm(false)}
+          onClose={() => {
+            setShowUserForm(false);
+            setError('');
+          }}
           title={selectedUser ? 'Editar Usuario' : 'Nuevo Usuario'}
           formData={formData}
           onChange={handleFormChange}
           onSubmit={handleSubmit}
           isEdit={!!selectedUser}
+          isLoading={isSaving}
+          error={error}
         />
       )}
 
@@ -422,10 +446,11 @@ const UserManagement = () => {
           isOpen={!!userToDelete}
           onConfirm={deleteUser}
           onCancel={() => setUserToDelete(null)}
+          isLoading={isDeleting}
         />
       )}
     </div>
   );
 };
 
-export default UserManagement;
+export default AdminUserManagement;

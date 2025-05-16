@@ -27,6 +27,7 @@ export interface DeleteConfirmationModalProps {
   isOpen: boolean;
   onConfirm: () => void;
   onCancel: () => void;
+  isLoading?: boolean;
 }
 
 export interface UserFormModalProps {
@@ -37,4 +38,6 @@ export interface UserFormModalProps {
   onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onSubmit: (e: React.FormEvent) => void;
   isEdit?: boolean;
+  isLoading?: boolean;
+  error?: string;
 }

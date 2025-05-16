@@ -1,5 +1,5 @@
 import { api } from '../api/client';
-import { SystemHealthData, SecurityEvent, RecentUser } from '../types/admin';
+import { SecurityEvent, RecentUser } from '../types/admin';
 
 // Definición de la interfaz del sistema de configuración
 export interface SystemConfig {

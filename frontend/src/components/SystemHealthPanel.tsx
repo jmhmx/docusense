@@ -1,33 +1,7 @@
 import { useState, useEffect } from 'react';
-import configService from '../../services/ConfigService';
-import Button from '../Button';
-import { ServiceStatus, SystemHealthData } from '../../types/admin';
-
-interface ServiceStatus {
-  status: 'up' | 'down' | 'warning';
-  lastChecked: string;
-}
-
-interface SystemHealthData {
-  status: 'healthy' | 'degraded' | 'unhealthy';
-  timestamp: string;
-  services: {
-    email: ServiceStatus;
-    blockchain: ServiceStatus;
-    database: ServiceStatus;
-  };
-  resources: {
-    storage: {
-      total: number;
-      used: number;
-      available: number;
-    };
-    users: {
-      total: number;
-      active: number;
-    };
-  };
-}
+import configService from '../services/ConfigService';
+import Button from './Button';
+import { SystemHealthData } from '../types/admin';
 
 const SystemHealthPanel = () => {
   const [healthData, setHealthData] = useState<SystemHealthData | null>(null);

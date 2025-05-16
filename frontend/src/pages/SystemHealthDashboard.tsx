@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import SystemHealthPanel from '../components/admin/SystemHealthPanel';
+import SystemHealthPanel from '../components/SystemHealthPanel';
 import configService from '../services/ConfigService';
 import { SecurityEvent, RecentUser } from '../types/admin';
 
@@ -8,6 +8,7 @@ const SystemHealthDashboard = () => {
   const [securityEvents, setSecurityEvents] = useState<SecurityEvent[]>([]);
   const [isLoadingUsers, setIsLoadingUsers] = useState(true);
   const [isLoadingEvents, setIsLoadingEvents] = useState(true);
+  //@ts-ignore
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -44,7 +45,7 @@ const SystemHealthDashboard = () => {
   }, []);
 
   // Formatear fecha relativa
-  const formatTimeAgo = (dateString) => {
+  const formatTimeAgo = (dateString: string) => {
     const date = new Date(dateString);
     const now = new Date();
     const diffMs = now.getTime() - date.getTime();
@@ -66,7 +67,7 @@ const SystemHealthDashboard = () => {
   };
 
   // Función para obtener color según severidad
-  const getSeverityColor = (severity) => {
+  const getSeverityColor = (severity: string) => {
     switch (severity) {
       case 'critical':
         return 'bg-red-100 text-red-800';

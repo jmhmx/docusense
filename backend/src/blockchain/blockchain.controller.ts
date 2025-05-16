@@ -15,6 +15,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { BlockchainService } from './blockchain.service';
 import { AuditLogService } from 'src/audit/audit-log.service';
 import { AdminService } from 'src/admin/admin.service';
+import { AuditAction } from '../audit/audit-log.service';
 
 @Controller('api/blockchain')
 export class BlockchainController {

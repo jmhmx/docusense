@@ -7,13 +7,23 @@ import {
   UseGuards,
   Request,
   BadRequestException,
+  Logger,
+  ForbiddenException,
+  InternalServerErrorException,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { BlockchainService } from './blockchain.service';
+import { AuditLogService } from 'src/audit/audit-log.service';
+import { AdminService } from 'src/admin/admin.service';
 
 @Controller('api/blockchain')
 export class BlockchainController {
-  constructor(private readonly blockchainService: BlockchainService) {}
+  private readonly logger = new Logger(BlockchainController.name);
+  constructor(
+    private readonly blockchainService: BlockchainService,
+    private readonly auditLogService: AuditLogService,
+    private readonly adminService: AdminService,
+  ) {}
 
   @UseGuards(JwtAuthGuard)
   @Post('register/:documentId')

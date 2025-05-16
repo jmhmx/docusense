@@ -4,9 +4,15 @@ import { BlockchainService } from './blockchain.service';
 import { BlockchainController } from './blockchain.controller';
 import { DocumentsModule } from '../documents/documents.module';
 import { AuditModule } from '../audit/audit.module';
+import { AdminModule } from '../admin/admin.module';
 
 @Module({
-  imports: [ConfigModule, forwardRef(() => DocumentsModule), AuditModule],
+  imports: [
+    ConfigModule,
+    forwardRef(() => DocumentsModule),
+    AuditModule,
+    forwardRef(() => AdminModule),
+  ],
   providers: [BlockchainService],
   controllers: [BlockchainController],
   exports: [BlockchainService],

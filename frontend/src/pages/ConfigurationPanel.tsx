@@ -1,49 +1,18 @@
 import { useState, useEffect } from 'react';
-import { api } from '../api/client';
 import Button from '../components/Button';
 import Input from '../components/Input';
-
-// Tipos
-interface SystemConfiguration {
-  email: {
-    fromEmail: string;
-    smtpServer: string;
-    smtpPort: number;
-    useSSL: boolean;
-    username: string;
-    password?: string;
-  };
-  security: {
-    jwtExpirationHours: number;
-    maxLoginAttempts: number;
-    passwordMinLength: number;
-    requireStrongPasswords: boolean;
-    twoFactorAuthEnabled: boolean;
-    keyRotationDays: number;
-  };
-  storage: {
-    maxFileSizeMB: number;
-    totalStorageGB: number;
-    allowedFileTypes: string[];
-    documentExpirationDays: number;
-  };
-  blockchain: {
-    enabled: boolean;
-    provider: string;
-    apiKey?: string;
-    networkId: string;
-  };
-}
+import configService, { SystemConfig } from '../services/ConfigService';
 
 // Componente principal
 const ConfigurationPanel = () => {
   // Estados
-  const [config, setConfig] = useState<SystemConfiguration | null>(null);
+  const [config, setConfig] = useState<SystemConfig | null>(null);
   const [activeTab, setActiveTab] = useState<
     'email' | 'security' | 'storage' | 'blockchain'
   >('email');
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isTesting, setIsTesting] = useState(false);
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
 
@@ -58,8 +27,8 @@ const ConfigurationPanel = () => {
     setError('');
 
     try {
-      const response = await api.get('/api/admin/configuration');
-      setConfig(response.data);
+      const configData = await configService.getConfiguration();
+      setConfig(configData);
     } catch (err: any) {
       console.error('Error cargando configuración:', err);
       setError(
@@ -80,7 +49,7 @@ const ConfigurationPanel = () => {
     setSuccessMessage('');
 
     try {
-      await api.put('/api/admin/configuration', config);
+      await configService.updateConfiguration(config);
       setSuccessMessage('Configuración guardada correctamente');
 
       // Ocultar mensaje de éxito después de 3 segundos
@@ -99,7 +68,7 @@ const ConfigurationPanel = () => {
 
   // Función para actualizar valores de configuración
   const updateConfig = (
-    section: keyof SystemConfiguration,
+    section: keyof SystemConfig,
     field: string,
     value: any,
   ) => {
@@ -115,7 +84,7 @@ const ConfigurationPanel = () => {
   };
 
   // Función para resetear a valores predeterminados
-  const resetToDefaults = async (section: keyof SystemConfiguration) => {
+  const resetToDefaults = async (section: keyof SystemConfig) => {
     if (
       !window.confirm(
         `¿Estás seguro de que deseas restablecer la sección ${section} a los valores predeterminados?`,
@@ -128,19 +97,10 @@ const ConfigurationPanel = () => {
     setError('');
 
     try {
-      const response = await api.post(
-        `/api/admin/configuration/reset/${section}`,
-      );
+      const updatedConfig = await configService.resetToDefaults(section);
 
-      // Actualizar solo la sección específica
-      setConfig((prev) =>
-        prev
-          ? {
-              ...prev,
-              [section]: response.data[section],
-            }
-          : null,
-      );
+      // Actualizar estado local con los datos actualizados
+      setConfig(updatedConfig);
 
       setSuccessMessage(
         `Configuración de ${section} restablecida correctamente`,
@@ -162,19 +122,24 @@ const ConfigurationPanel = () => {
 
   // Funciones para probar la configuración
   const testEmailConfiguration = async () => {
-    setIsSaving(true);
+    setIsTesting(true);
     setError('');
     setSuccessMessage('');
 
     try {
-      const response = await api.post('/api/admin/configuration/test-email');
-      setSuccessMessage(
-        response.data.message ||
-          'Correo de prueba enviado correctamente. Verifica tu bandeja de entrada.',
-      );
+      const result = await configService.testEmailConfiguration();
+      if (result.success) {
+        setSuccessMessage(
+          result.message ||
+            'Correo de prueba enviado correctamente. Verifica tu bandeja de entrada.',
+        );
+      } else {
+        setError(result.message || 'Error al enviar correo de prueba');
+      }
 
       setTimeout(() => {
         setSuccessMessage('');
+        setError('');
       }, 5000);
     } catch (err: any) {
       console.error('Error enviando correo de prueba:', err);
@@ -182,26 +147,28 @@ const ConfigurationPanel = () => {
         err.response?.data?.message || 'Error al enviar correo de prueba',
       );
     } finally {
-      setIsSaving(false);
+      setIsTesting(false);
     }
   };
 
   const testBlockchainConnection = async () => {
-    setIsSaving(true);
+    setIsTesting(true);
     setError('');
     setSuccessMessage('');
 
     try {
-      const response = await api.post(
-        '/api/admin/configuration/test-blockchain',
-      );
-      setSuccessMessage(
-        response.data.message ||
-          'Conexión con blockchain establecida correctamente',
-      );
+      const result = await configService.testBlockchainConnection();
+      if (result.success) {
+        setSuccessMessage(
+          result.message || 'Conexión con blockchain establecida correctamente',
+        );
+      } else {
+        setError(result.message || 'Error al conectar con blockchain');
+      }
 
       setTimeout(() => {
         setSuccessMessage('');
+        setError('');
       }, 3000);
     } catch (err: any) {
       console.error('Error probando conexión blockchain:', err);
@@ -209,7 +176,7 @@ const ConfigurationPanel = () => {
         err.response?.data?.message || 'Error al conectar con blockchain',
       );
     } finally {
-      setIsSaving(false);
+      setIsTesting(false);
     }
   };
 
@@ -447,14 +414,14 @@ const ConfigurationPanel = () => {
                 <Button
                   onClick={testEmailConfiguration}
                   variant='secondary'
-                  disabled={isSaving || isLoading}>
-                  Probar configuración
+                  disabled={isSaving || isLoading || isTesting}>
+                  {isTesting ? 'Probando...' : 'Probar configuración'}
                 </Button>
                 <Button
                   onClick={() => resetToDefaults('email')}
                   variant='danger'
-                  disabled={isSaving || isLoading}>
-                  Restaurar valores por defecto
+                  disabled={isSaving || isLoading || isTesting}>
+                  Restaurar valores predeterminados
                 </Button>
               </div>
             </div>
@@ -573,7 +540,7 @@ const ConfigurationPanel = () => {
                       fill='currentColor'>
                       <path
                         fillRule='evenodd'
-                        d='M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z'
+                        d='M8.257 3.099c.765-1.36 2.924-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z'
                         clipRule='evenodd'
                       />
                     </svg>
@@ -597,7 +564,7 @@ const ConfigurationPanel = () => {
                   onClick={() => resetToDefaults('security')}
                   variant='danger'
                   disabled={isSaving || isLoading}>
-                  Restaurar valores por defecto
+                  Restaurar valores predeterminados
                 </Button>
               </div>
             </div>
@@ -726,7 +693,7 @@ const ConfigurationPanel = () => {
                   onClick={() => resetToDefaults('storage')}
                   variant='danger'
                   disabled={isSaving || isLoading}>
-                  Restaurar valores por defecto
+                  Restaurar valores predeterminados
                 </Button>
               </div>
             </div>
@@ -830,15 +797,15 @@ const ConfigurationPanel = () => {
                   <Button
                     onClick={testBlockchainConnection}
                     variant='secondary'
-                    disabled={isSaving || isLoading}>
-                    Probar conexión
+                    disabled={isSaving || isLoading || isTesting}>
+                    {isTesting ? 'Probando...' : 'Probar conexión'}
                   </Button>
                 )}
                 <Button
                   onClick={() => resetToDefaults('blockchain')}
                   variant='danger'
                   disabled={isSaving || isLoading}>
-                  Restaurar valores por defecto
+                  Restaurar valores predeterminados
                 </Button>
               </div>
             </div>

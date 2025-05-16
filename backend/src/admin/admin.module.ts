@@ -8,7 +8,6 @@ import { User } from '../users/entities/user.entity';
 import { UsersModule } from '../users/users.module';
 import { EmailModule } from '../email/email.module';
 import { AuditModule } from '../audit/audit.module';
-import { BlockchainModule } from '../blockchain/blockchain.module';
 import { AuthModule } from '../auth/auth.module';
 
 @Module({
@@ -17,9 +16,7 @@ import { AuthModule } from '../auth/auth.module';
     UsersModule,
     EmailModule,
     AuditModule,
-    BlockchainModule,
     AuthModule,
-    forwardRef(() => BlockchainModule),
   ],
   controllers: [AdminController],
   providers: [AdminService],

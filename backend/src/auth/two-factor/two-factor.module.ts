@@ -5,9 +5,15 @@ import { TwoFactorController } from './two-factor.controller';
 import { UsersModule } from '../../users/users.module';
 import { User } from '../../users/entities/user.entity';
 import { AuditModule } from '../../audit/audit.module';
+import { EmailModule } from '../../email/email.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([User]), UsersModule, AuditModule],
+  imports: [
+    TypeOrmModule.forFeature([User]),
+    UsersModule,
+    AuditModule,
+    EmailModule,
+  ],
   controllers: [TwoFactorController],
   providers: [TwoFactorService],
   exports: [TwoFactorService],

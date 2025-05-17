@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { api } from '../api/client';
 import Button from './Button';
-import BiometricSignatureWorkflow from './BiometricSignatureWorkflow';
+import FirmaAutografa from './FirmaAutografa';
 import SignatureUI from './SignatureUI';
 import TwoFactorVerification from './TwoFactorVerification';
 
@@ -54,23 +54,22 @@ const DocumentSignature = ({
     name: string;
   } | null>(null);
 
-  // Estado relacionado con verificación
+  // Estado para visualización
   // @ts-ignore
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
 
   // Estado para flujos de firma específicos
   const [showTwoFactorModal, setShowTwoFactorModal] = useState(false);
-  const [showBiometricWorkflow, setShowBiometricWorkflow] = useState(false);
-  // @ts-ignore
-  const [showEfirmaWorkflow, setShowEfirmaWorkflow] = useState(false);
+  const [showFirmaAutografaModal, setShowFirmaAutografaModal] = useState(false);
 
-  // Estado para datos pendientes de firma durante verificación
+  // Estado para datos pendientes de firma
   const [pendingSignatureData, setPendingSignatureData] = useState<{
     type: string;
     reason: string;
     position?: SignaturePosition;
     sealData?: any;
+    firmaAutografaSvg?: string;
   } | null>(null);
 
   // Cargar información del usuario actual
@@ -152,7 +151,7 @@ const DocumentSignature = ({
     fetchDocumentInfo();
   }, [documentId]);
 
-  // MEJORA: Manejar solicitud de firma con diferentes métodos de manera más estructurada
+  // Manejar solicitud de firma con diferentes métodos
   const handleSignRequest = async (
     signatureType: string,
     reason: string,
@@ -176,7 +175,7 @@ const DocumentSignature = ({
         sealData,
       };
 
-      // MEJORA: Manejar según el tipo de firma de manera más robusta
+      // Manejar según el tipo de firma
       switch (signatureType) {
         case 'standard':
           // Para firma estándar, mostrar modal 2FA
@@ -185,18 +184,11 @@ const DocumentSignature = ({
           setShowSignModal(false); // Cerrar el modal de firma
           break;
 
-        case 'biometric':
-          // Guardar datos y mostrar flujo biométrico
+        case 'autografa':
+          // Guardar datos y mostrar flujo de firma autógrafa
           setPendingSignatureData(signatureData);
-          setShowBiometricWorkflow(true);
+          setShowFirmaAutografaModal(true);
           setShowSignModal(false); // Cerrar el modal de firma
-          break;
-
-        case 'efirma':
-          // Para e.firma, guardar datos y mostrar flujo correspondiente
-          setPendingSignatureData(signatureData);
-          handleEfirmaSignature(signatureData); // Nueva función para manejar e.firma
-          setShowSignModal(false);
           break;
 
         default:
@@ -209,147 +201,79 @@ const DocumentSignature = ({
     }
   };
 
-  // NUEVA FUNCIÓN: Manejar procesamiento específico de firma con e.firma
-  const handleEfirmaSignature = async (signatureData: any) => {
-    // Crear contenedor para el flujo de e.firma
-    try {
-      const efirmaModalContainer = document.createElement('div');
-      efirmaModalContainer.id = 'efirma-workflow-container';
-      efirmaModalContainer.className =
-        'fixed inset-0 z-50 flex items-center justify-center bg-gray-600 bg-opacity-50';
-      document.body.appendChild(efirmaModalContainer);
-
-      // Importar createRoot
-      const { createRoot } = await import('react-dom/client');
-      const root = createRoot(efirmaModalContainer);
-
-      // Importar EfirmaSignatureWorkflow dinámicamente
-      const EfirmaSignatureWorkflow = await import(
-        './EfirmaSignatureWorkflow'
-      ).then((m) => m.default);
-
-      // Renderizar el componente de flujo de e.firma
-      root.render(
-        <EfirmaSignatureWorkflow
-          documentId={documentId}
-          documentTitle={documentTitle}
-          position={signatureData.position}
-          reason={signatureData.reason}
-          onSuccess={(tokenId) => {
-            // Desmontar componente y eliminar contenedor
-            root.unmount();
-            document.body.removeChild(efirmaModalContainer);
-
-            // Realizar la firma específica de e.firma
-            completeEfirmaSignature(tokenId, signatureData);
-          }}
-          onCancel={() => {
-            // Desmontar componente y eliminar contenedor
-            root.unmount();
-            document.body.removeChild(efirmaModalContainer);
-            setIsLoading(false);
-            setPendingSignatureData(null);
-          }}
-        />,
-      );
-    } catch (err: any) {
-      console.error('Error iniciando proceso de firma con e.firma:', err);
-      setError(
-        err?.response?.data?.message || 'Error al iniciar firma con e.firma',
-      );
-      setIsLoading(false);
-      setPendingSignatureData(null);
-    }
-  };
-
-  // NUEVA FUNCIÓN: Completar firma con e.firma después de obtener el token
-  const completeEfirmaSignature = async (
-    tokenId: string,
-    signatureData: any,
-  ) => {
-    try {
-      // Realizar petición específica para firma con e.firma
-      await api.post(`/api/signatures/${documentId}/efirma`, {
-        tokenId,
-        position: signatureData.position,
-        reason: signatureData.reason,
-      });
-
-      handleSignatureSuccess();
-    } catch (err: any) {
-      console.error('Error al firmar documento con e.firma:', err);
-      setError(
-        err?.response?.data?.message || 'Error al firmar documento con e.firma',
-      );
-      setIsLoading(false);
-    }
-  };
-
-  // MEJORA: Manejar éxito de verificación 2FA de manera más robusta
+  // Manejar éxito de verificación 2FA
   const handleTwoFactorSuccess = async () => {
     if (!pendingSignatureData) {
       setError('No hay datos de firma pendientes');
       return;
     }
 
-    setIsLoading(true);
-
-    try {
-      // Realizar la firma con los datos almacenados
-      await api.post(`/api/signatures/${documentId}`, {
-        position: pendingSignatureData.position,
-        reason: pendingSignatureData.reason,
-        sealData: pendingSignatureData.sealData,
-      });
-
-      handleSignatureSuccess();
-    } catch (err: any) {
-      console.error(
-        'Error al firmar documento después de verificación 2FA:',
-        err,
-      );
-      setError(err?.response?.data?.message || 'Error al firmar documento');
-    } finally {
-      setIsLoading(false);
+    // Si tenemos firma autógrafa, procedemos a enviar la firma
+    // Si no, significa que todavía necesitamos mostrar el componente de firma autógrafa
+    if (pendingSignatureData.firmaAutografaSvg) {
+      await completeFirmaAutografaConAutenticacion();
+    } else {
+      // Mostrar el componente de firma autógrafa después de la autenticación 2FA
       setShowTwoFactorModal(false);
-      setPendingSignatureData(null);
+      setShowFirmaAutografaModal(true);
     }
   };
 
-  // MEJORA: Manejar éxito de verificación biométrica
-  const handleBiometricSuccess = async (result: any) => {
+  // Manejar guardado de firma autógrafa
+  const handleFirmaAutografaSave = async (firmaAutografaSvg: string) => {
     if (!pendingSignatureData) {
       setError('No hay datos de firma pendientes');
+      return;
+    }
+
+    // Actualizar los datos pendientes con la firma autógrafa
+    setPendingSignatureData({
+      ...pendingSignatureData,
+      firmaAutografaSvg,
+    });
+
+    // Si aún no se ha verificado con 2FA, mostrar el flujo 2FA
+    if (pendingSignatureData.type === 'autografa') {
+      setShowFirmaAutografaModal(false);
+      setShowTwoFactorModal(true);
+    } else {
+      // Si ya pasó por 2FA (estándar), completar el proceso
+      await completeFirmaAutografaConAutenticacion();
+    }
+  };
+
+  // Completar proceso de firma autógrafa con autenticación
+  const completeFirmaAutografaConAutenticacion = async () => {
+    if (!pendingSignatureData || !pendingSignatureData.firmaAutografaSvg) {
+      setError('Faltan datos de firma autógrafa');
       return;
     }
 
     setIsLoading(true);
 
     try {
-      // Firma con verificación biométrica
-      await api.post(`/api/signatures/${documentId}/biometric`, {
+      // Enviar la firma con los datos recopilados
+      await api.post(`/api/signatures/${documentId}/autografa`, {
         position: pendingSignatureData.position,
         reason: pendingSignatureData.reason,
-        biometricVerification: {
-          timestamp: Date.now(),
-          challenge: result?.challenge || 'blink',
-          score: result?.score || 0.9,
-          method: 'facial-recognition',
-        },
+        firmaAutografaSvg: pendingSignatureData.firmaAutografaSvg,
       });
 
       handleSignatureSuccess();
     } catch (err: any) {
-      console.error('Error al firmar documento con biometría:', err);
-      setError(err?.response?.data?.message || 'Error al firmar documento');
+      console.error('Error al procesar firma autógrafa:', err);
+      setError(
+        err?.response?.data?.message || 'Error al procesar firma autógrafa',
+      );
     } finally {
       setIsLoading(false);
-      setShowBiometricWorkflow(false);
+      setShowTwoFactorModal(false);
+      setShowFirmaAutografaModal(false);
       setPendingSignatureData(null);
     }
   };
 
-  // MEJORA: Manejar éxito de firma de manera centralizada
+  // Manejar éxito de firma
   const handleSignatureSuccess = async () => {
     // Actualizar lista de firmas
     const signaturesResponse = await api.get(
@@ -357,21 +281,18 @@ const DocumentSignature = ({
     );
     setSignatures(signaturesResponse.data);
 
-    // Obtener el tipo de firma que se utilizó
+    // Determinar tipo de firma usado para el mensaje
     const signatureType = pendingSignatureData?.type || 'estándar';
 
-    // Mostrar mensaje de éxito con detalles
-    const signatureTypeLabels = {
-      standard: 'autenticación 2FA',
-      biometric: 'verificación biométrica',
-      efirma: 'e.firma',
-    };
+    let tipoFirma = 'digital';
+    if (signatureType === 'autografa') {
+      tipoFirma = 'autógrafa con autenticación 2FA';
+    } else if (signatureType === 'standard') {
+      tipoFirma = 'digital con autenticación 2FA';
+    }
 
-    const typeLabel =
-      signatureTypeLabels[signatureType as keyof typeof signatureTypeLabels] ||
-      'firma digital';
-
-    setSuccessMessage(`Documento firmado exitosamente con ${typeLabel}`);
+    // Mostrar mensaje de éxito
+    setSuccessMessage(`Documento firmado exitosamente con firma ${tipoFirma}`);
 
     // Resetear estados
     setIsLoading(false);
@@ -383,7 +304,7 @@ const DocumentSignature = ({
     }
   };
 
-  // MEJORA: función para manejar errores de verificación
+  // Función para manejar errores de verificación
   const handleVerificationError = (errorMsg: string) => {
     setError(errorMsg);
     setIsLoading(false);
@@ -398,7 +319,6 @@ const DocumentSignature = ({
             Firmas del Documento
           </h3>
 
-          {/* Botón para iniciar el proceso de firma mejorado */}
           <Button
             onClick={() => setShowSignModal(true)}
             variant='primary'
@@ -484,6 +404,11 @@ const DocumentSignature = ({
                         }`}>
                         {signature.valid ? 'Válida' : 'Inválida'}
                       </span>
+                      {signature.metadata?.signatureType === 'autografa' && (
+                        <span className='inline-flex px-2 py-1 mt-1 text-xs font-semibold leading-5 text-blue-800 bg-blue-100 rounded-full'>
+                          Firma Autógrafa
+                        </span>
+                      )}
                     </div>
                   </div>
                 </li>
@@ -586,6 +511,21 @@ const DocumentSignature = ({
         </div>
       )}
 
+      {/* Modal de firma autógrafa */}
+      {showFirmaAutografaModal && (
+        <div className='fixed inset-0 z-50 flex items-center justify-center bg-gray-600 bg-opacity-50'>
+          <FirmaAutografa
+            onSave={handleFirmaAutografaSave}
+            onCancel={() => {
+              setShowFirmaAutografaModal(false);
+              setPendingSignatureData(null);
+              setIsLoading(false);
+            }}
+            userName={currentUser?.name || 'Usuario'}
+          />
+        </div>
+      )}
+
       {/* Modal de verificación de dos factores */}
       {showTwoFactorModal && (
         <div className='fixed inset-0 z-50 flex items-center justify-center bg-gray-600 bg-opacity-50'>
@@ -597,28 +537,7 @@ const DocumentSignature = ({
               setPendingSignatureData(null);
               setIsLoading(false);
             }}
-            actionType='firma' // Especificar tipo de acción para el tracking
-          />
-        </div>
-      )}
-
-      {/* Modal de BiometricSignatureWorkflow */}
-      {showBiometricWorkflow && (
-        <div className='fixed inset-0 z-50 flex items-center justify-center bg-gray-600 bg-opacity-50'>
-          <BiometricSignatureWorkflow
-            documentId={documentId}
-            documentTitle={documentTitle}
-            onSuccess={(result) => {
-              handleBiometricSuccess(result);
-            }}
-            onCancel={() => {
-              setShowBiometricWorkflow(false);
-              setPendingSignatureData(null);
-              setIsLoading(false);
-            }}
-            navigateToRegistration={() => {
-              window.location.href = '/biometric-registration';
-            }}
+            actionType='firma'
           />
         </div>
       )}

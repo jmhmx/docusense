@@ -72,6 +72,31 @@ export const downloadFile = async (url: string, filename: string) => {
 
 // Funciones para gestión de firmas múltiples
 export const signatures = {
+  // Nuevo método para firma autógrafa
+  signDocumentWithAutografa: (
+    documentId: string,
+    firmaAutografaSvg: string,
+    position?: {
+      page: number;
+      x: number;
+      y: number;
+      width?: number;
+      height?: number;
+    },
+    reason?: string,
+  ) => {
+    return api.post(`/api/signatures/${documentId}/autografa`, {
+      firmaAutografaSvg,
+      position,
+      reason,
+    });
+  },
+
+  // Método para verificar firma autógrafa
+  verifyAutografaSignature: (signatureId: string) => {
+    return api.get(`/api/signatures/${signatureId}/verify-autografa`);
+  },
+
   // Iniciar proceso de firmas múltiples
   startMultiSignatureProcess: (
     documentId: string,
@@ -97,5 +122,21 @@ export const signatures = {
   // Obtener estado de firmas
   getDocumentSignatureStatus: (documentId: string) => {
     return api.get(`/api/documents/${documentId}/signature-status`);
+  },
+};
+
+// Nuevo módulo para verificación 2FA
+export const twoFactor = {
+  // Generar código de verificación
+  generateVerificationCode: (action: string = 'firma') => {
+    return api.post('/api/auth/2fa/generate', { action });
+  },
+
+  // Verificar código
+  verifyCode: (code: string, action: string = 'firma') => {
+    return api.post('/api/auth/2fa/verify', {
+      code,
+      action,
+    });
   },
 };

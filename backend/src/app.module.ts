@@ -20,6 +20,7 @@ import { AnalyticsModule } from './analytics/analytics.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { CommentsModule } from './comments/comments.module';
 import { AdminModule } from './admin/admin.module';
+import { AutografaSignatureModule } from './signatures/autografa-signature.module';
 
 @Module({
   controllers: [HealthController],
@@ -64,6 +65,7 @@ import { AdminModule } from './admin/admin.module';
     NotificationsModule,
     CommentsModule,
     AdminModule,
+    AutografaSignatureModule,
   ],
 })
 export class AppModule {}

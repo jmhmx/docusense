@@ -18,6 +18,19 @@ import { CreateSignatureDto } from './dto/create-signature.dto';
 import { CreateSignatureWithBiometricDto } from './dto/create-signature-with-biometric.dto';
 import { AuditLogService, AuditAction } from '../audit/audit-log.service';
 
+// Nueva clase DTO para firma autógrafa
+class AutografaSignatureDto {
+  position?: {
+    page: number;
+    x: number;
+    y: number;
+    width?: number;
+    height?: number;
+  };
+  reason?: string;
+  firmaAutografaSvg: string;
+}
+
 @Controller('api/signatures')
 export class SignaturesController {
   constructor(
@@ -348,6 +361,50 @@ export class SignaturesController {
       }
       throw new BadRequestException(
         `No se pudo firmar el documento con e.firma: ${error.message}`,
+      );
+    }
+  }
+
+  /**
+   * Nuevo endpoint para manejar firma autógrafa con 2FA
+   */
+  @UseGuards(JwtAuthGuard)
+  @Post(':documentId/autografa')
+  async signDocumentWithAutografa(
+    @Param('documentId') documentId: string,
+    @Body() autografaDto: AutografaSignatureDto,
+    @Request() req,
+    @Headers() headers,
+    @Ip() ip: string,
+  ) {
+    try {
+      if (!autografaDto.firmaAutografaSvg) {
+        throw new BadRequestException(
+          'La imagen de la firma autógrafa es requerida',
+        );
+      }
+
+      // Usar el servicio de firmas existente, que ha sido ampliado para manejar firmas autógrafas
+      const signature = await this.signaturesService.signDocumentWithAutografa(
+        documentId,
+        req.user.id,
+        autografaDto.firmaAutografaSvg,
+        autografaDto.position,
+        autografaDto.reason,
+        ip,
+        headers['user-agent'] || 'Unknown',
+      );
+
+      return {
+        message: 'Documento firmado correctamente con firma autógrafa',
+        signatureId: signature.id,
+        documentId: signature.documentId,
+        timestamp: signature.signedAt,
+        signatureType: 'autografa',
+      };
+    } catch (error) {
+      throw new BadRequestException(
+        `No se pudo firmar el documento: ${error.message}`,
       );
     }
   }

@@ -1715,4 +1715,211 @@ export class SignaturesService {
       signatures: verificationResults,
     };
   }
+
+  /**
+   * Método para firmar un documento con firma autógrafa después de verificación 2FA
+   */
+  async signDocumentWithAutografa(
+    documentId: string,
+    userId: string,
+    firmaAutografaSvg: string,
+    position?: { page: number; x: number; y: number },
+    reason?: string,
+    ipAddress?: string,
+    userAgent?: string,
+  ): Promise<Signature> {
+    if (!documentId || !userId || !firmaAutografaSvg) {
+      throw new BadRequestException(
+        'Faltan datos necesarios para la firma autógrafa',
+      );
+    }
+
+    try {
+      // Verificar documento
+      const document = await this.documentsRepository.findOne({
+        where: { id: documentId },
+      });
+
+      if (!document) {
+        throw new NotFoundException(
+          `Documento con ID ${documentId} no encontrado`,
+        );
+      }
+
+      // Verificar usuario
+      const user = await this.usersService.findOne(userId);
+      if (!user) {
+        throw new NotFoundException(`Usuario con ID ${userId} no encontrado`);
+      }
+
+      // Verificar estado del documento
+      if (document.status !== 'completed' && document.status !== 'pending') {
+        throw new BadRequestException(
+          `El documento no está listo para firma. Estado actual: ${document.status}`,
+        );
+      }
+
+      // Verificar permisos
+      if (document.userId !== userId) {
+        // Verificar si el usuario puede firmar este documento
+        const canSignResult = await this.canUserSignDocument(
+          documentId,
+          userId,
+        );
+        if (!canSignResult.canSign) {
+          throw new UnauthorizedException(
+            canSignResult.reason ||
+              'No tienes permiso para firmar este documento',
+          );
+        }
+      }
+
+      // Generar hash del documento para integridad
+      const documentHash = this.cryptoService.generateHash(document.filePath);
+
+      // Preparar datos para la firma
+      const timestamp = new Date();
+      const signatureEntity = this.signaturesRepository.create({
+        id: uuidv4(),
+        documentId: document.id,
+        userId,
+        signatureData: firmaAutografaSvg, // Guardar el SVG como datos de firma
+        documentHash,
+        signedAt: timestamp,
+        reason: reason || 'Firma autógrafa con verificación 2FA',
+        position: position ? JSON.stringify(position) : null,
+        valid: true,
+        metadata: {
+          signatureType: 'autografa',
+          authMethod: '2FA',
+          verifiedAt: timestamp.toISOString(),
+          userAgent,
+          ipAddress,
+          documentMetadata: {
+            title: document.title,
+            fileSize: document.fileSize,
+            mimeType: document.mimeType,
+          },
+        },
+      });
+
+      // Guardar firma
+      const savedSignature =
+        await this.signaturesRepository.save(signatureEntity);
+
+      // Actualizar metadata del documento
+      document.metadata = {
+        ...document.metadata,
+        isSigned: true,
+        lastSignedAt: new Date().toISOString(),
+        signaturesCount: (document.metadata?.signaturesCount || 0) + 1,
+        hasAutografaSignatures: true,
+      };
+
+      await this.documentsService.update(documentId, document);
+
+      // Registrar en auditoría
+      await this.auditLogService.log(
+        AuditAction.DOCUMENT_SIGN,
+        userId,
+        documentId,
+        {
+          title: document.title,
+          signatureId: savedSignature.id,
+          signatureType: 'autografa',
+          authMethod: '2FA',
+        },
+        ipAddress,
+        userAgent,
+      );
+
+      // Registrar en blockchain
+      try {
+        await this.blockchainService.updateDocumentRecord(
+          documentId,
+          documentHash,
+          'SIGNATURE_AUTOGRAFA',
+          userId,
+          {
+            signatureId: savedSignature.id,
+            timestamp: savedSignature.signedAt.toISOString(),
+          },
+        );
+      } catch (blockchainError) {
+        this.logger.error(
+          `Error al registrar firma en blockchain: ${blockchainError.message}`,
+          blockchainError.stack,
+        );
+        // Continuamos con el proceso aunque falle el registro en blockchain
+      }
+
+      // Verificar si es parte de un proceso de firmas múltiples y actualizar estado
+      await this.updateMultiSignatureStatus(document, userId);
+
+      this.logger.log(
+        `Documento ${documentId} firmado con firma autógrafa por usuario ${userId}`,
+      );
+      return savedSignature;
+    } catch (error) {
+      this.logger.error(
+        `Error en firma autógrafa: ${error.message}`,
+        error.stack,
+      );
+      throw error;
+    }
+  }
+
+  // Método auxiliar para actualizar estado de firmas múltiples
+  private async updateMultiSignatureStatus(
+    document: Document,
+    userId: string,
+  ): Promise<void> {
+    if (!document.metadata?.multiSignatureProcess) {
+      return; // No es un proceso de firmas múltiples
+    }
+
+    // Obtener lista actual de firmantes completados
+    const completedSigners = document.metadata.completedSigners || [];
+
+    // Añadir este usuario si no está ya en la lista
+    if (!completedSigners.includes(userId)) {
+      completedSigners.push(userId);
+
+      // Actualizar metadatos del documento
+      document.metadata = {
+        ...document.metadata,
+        completedSigners,
+      };
+
+      // Verificar si se ha alcanzado el quórum
+      const requiredSigners = document.metadata.requiredSigners || 0;
+      if (completedSigners.length >= requiredSigners) {
+        document.metadata.processCompleted = true;
+        document.metadata.completedAt = new Date().toISOString();
+      }
+
+      await this.documentsService.update(document.id, document);
+
+      // Si se completó el proceso, registrar en blockchain
+      if (document.metadata.processCompleted) {
+        try {
+          await this.blockchainService.updateDocumentRecord(
+            document.id,
+            this.cryptoService.generateHash(document.filePath),
+            'MULTI_SIGNATURE_COMPLETED',
+            'system',
+            {
+              completedSigners,
+              timestamp: new Date().toISOString(),
+            },
+          );
+        } catch (error) {
+          this.logger.error(
+            `Error al registrar completitud en blockchain: ${error.message}`,
+            error.stack,
+          );
+        }
+      }
+    }
+  }
 }

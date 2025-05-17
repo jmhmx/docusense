@@ -17,6 +17,8 @@ import { UsersService } from '../users/users.service';
 import { BlockchainService } from '../blockchain/blockchain.service';
 import { User } from '../users/entities/user.entity';
 import { GeoLocationService } from '../shared/geo-location.service';
+import { SharingService } from '../sharing/sharing.service';
+import { SignaturesService } from './signatures.service';
 
 @Injectable()
 export class SignatureService2FAExtension {
@@ -35,6 +37,8 @@ export class SignatureService2FAExtension {
     private readonly auditLogService: AuditLogService,
     private readonly blockchainService: BlockchainService,
     private readonly geoLocationService: GeoLocationService,
+    private readonly sharingService: SharingService,
+    private readonly signaturesService: SignaturesService,
   ) {}
 
   /**
@@ -96,13 +100,16 @@ export class SignatureService2FAExtension {
 
       // Verificar permisos (sólo el propietario o usuarios con permiso pueden firmar)
       if (document.userId !== userId) {
-        const canSign = await this.documentsService.canUserAccessDocument(
-          userId,
+        // Verificar si el usuario puede firmar el documento
+        const canSignResult = await this.signaturesService.canUserSignDocument(
           documentId,
+          userId,
         );
-        if (!canSign) {
+
+        if (!canSignResult.canSign) {
           throw new UnauthorizedException(
-            'No tienes permiso para firmar este documento',
+            canSignResult.reason ||
+              'No tienes permiso para firmar este documento',
           );
         }
       }

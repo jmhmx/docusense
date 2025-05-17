@@ -16,6 +16,7 @@ const TwoFactorVerification = ({
   actionType = 'firma',
 }: TwoFactorVerificationProps) => {
   const [verificationCode, setVerificationCode] = useState('');
+  // @ts-ignore
   const [generatedCode, setGeneratedCode] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -120,15 +121,6 @@ const TwoFactorVerification = ({
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
-
-  // Formatear código para mejor visualización
-  const formatVerificationCode = (code: string) => {
-    // Insertar un espacio después de 3 caracteres para mejor legibilidad
-    if (code.length > 3) {
-      return `${code.substring(0, 3)} ${code.substring(3)}`;
-    }
-    return code;
   };
 
   return (

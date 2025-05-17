@@ -24,6 +24,11 @@ interface Signature {
     name: string;
     email: string;
   };
+  metadata?: {
+    // Añadir esta propiedad
+    signatureType?: string;
+    [key: string]: any; // Permite cualquier otra propiedad en metadata
+  };
 }
 
 interface DocumentSignatureProps {
@@ -184,7 +189,7 @@ const DocumentSignature = ({
           setShowSignModal(false); // Cerrar el modal de firma
           break;
 
-        case 'autografa':
+        case 'autograph':
           // Guardar datos y mostrar flujo de firma autógrafa
           setPendingSignatureData(signatureData);
           setShowFirmaAutografaModal(true);
@@ -208,14 +213,17 @@ const DocumentSignature = ({
       return;
     }
 
+    console.log(pendingSignatureData?.type);
+
     // Si tenemos firma autógrafa, procedemos a enviar la firma
     // Si no, significa que todavía necesitamos mostrar el componente de firma autógrafa
-    if (pendingSignatureData.firmaAutografaSvg) {
+    if (pendingSignatureData?.type === 'autograph') {
       await completeFirmaAutografaConAutenticacion();
     } else {
       // Mostrar el componente de firma autógrafa después de la autenticación 2FA
       setShowTwoFactorModal(false);
-      setShowFirmaAutografaModal(true);
+      setShowFirmaAutografaModal(false);
+      handleSignatureSuccess();
     }
   };
 
@@ -233,7 +241,7 @@ const DocumentSignature = ({
     });
 
     // Si aún no se ha verificado con 2FA, mostrar el flujo 2FA
-    if (pendingSignatureData.type === 'autografa') {
+    if (pendingSignatureData.type === 'autograph') {
       setShowFirmaAutografaModal(false);
       setShowTwoFactorModal(true);
     } else {
@@ -285,7 +293,7 @@ const DocumentSignature = ({
     const signatureType = pendingSignatureData?.type || 'estándar';
 
     let tipoFirma = 'digital';
-    if (signatureType === 'autografa') {
+    if (signatureType === 'autograph') {
       tipoFirma = 'autógrafa con autenticación 2FA';
     } else if (signatureType === 'standard') {
       tipoFirma = 'digital con autenticación 2FA';
@@ -404,7 +412,7 @@ const DocumentSignature = ({
                         }`}>
                         {signature.valid ? 'Válida' : 'Inválida'}
                       </span>
-                      {signature.metadata?.signatureType === 'autografa' && (
+                      {signature.metadata?.signatureType === 'autograph' && (
                         <span className='inline-flex px-2 py-1 mt-1 text-xs font-semibold leading-5 text-blue-800 bg-blue-100 rounded-full'>
                           Firma Autógrafa
                         </span>

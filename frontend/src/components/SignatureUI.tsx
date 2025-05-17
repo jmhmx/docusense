@@ -45,9 +45,9 @@ const SignatureUI = ({
   const [step, setStep] = useState<
     'type' | 'position' | 'customize' | 'processing' | 'complete'
   >('type');
-  const [signatureType, setSignatureType] = useState<'standard' | 'autografa'>(
-    'standard',
-  );
+  const [signatureType, setSignatureType] = useState<
+    'standard' | 'biometric' | 'autograph'
+  >('standard');
   const [reason, setReason] = useState('');
   const [position, setPosition] = useState<SignaturePosition | null>({
     page: 1,
@@ -68,15 +68,21 @@ const SignatureUI = ({
   const signatureOptions = {
     standard: {
       icon: '🔑',
-      title: 'Firma Digital',
+      title: 'Firma Estándar',
       description: 'Firma con verificación 2FA vía correo',
       color: 'bg-blue-100 text-blue-800 border-blue-300',
     },
-    autografa: {
-      icon: '✍️',
-      title: 'Firma Autógrafa',
-      description: 'Firma dibujada a mano con 2FA',
+    biometric: {
+      icon: '👤',
+      title: 'Firma Biométrica',
+      description: 'Firma con reconocimiento facial',
       color: 'bg-green-100 text-green-800 border-green-300',
+    },
+    efirma: {
+      icon: '✍️',
+      title: 'Firma autografa',
+      description: 'Firma dibujada a mano con 2FA vía correo',
+      color: 'bg-purple-100 text-purple-800 border-purple-300',
     },
   };
 
@@ -121,7 +127,7 @@ const SignatureUI = ({
   };
 
   // Manejar selección de tipo de firma
-  const handleSelectType = (type: 'standard' | 'autografa') => {
+  const handleSelectType = (type: 'standard' | 'biometric' | 'autograph') => {
     setSignatureType(type);
   };
 
@@ -129,8 +135,8 @@ const SignatureUI = ({
   const handlePositionSelected = (pos: SignaturePosition) => {
     setPosition(pos);
 
-    // Si es firma autógrafa, finalizar directamente
-    if (signatureType === 'autografa') {
+    // Si es firma biométrica o e.firma, finalizar directamente
+    if (signatureType === 'biometric' || signatureType === 'autograph') {
       handleFinalizeSignature();
     } else {
       goToNextStep();
@@ -192,7 +198,7 @@ const SignatureUI = ({
             <h3 className='mb-4 text-lg font-medium text-gray-700'>
               Seleccione método de firma
             </h3>
-            <div className='grid grid-cols-1 gap-4 mb-6 sm:grid-cols-2'>
+            <div className='grid grid-cols-1 gap-4 mb-6 sm:grid-cols-3'>
               {Object.entries(signatureOptions).map(([type, details]) => (
                 <motion.div
                   key={type}
@@ -202,7 +208,9 @@ const SignatureUI = ({
                       : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
                   }`}
                   onClick={() =>
-                    handleSelectType(type as 'standard' | 'autografa')
+                    handleSelectType(
+                      type as 'standard' | 'biometric' | 'autograph',
+                    )
                   }
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}>

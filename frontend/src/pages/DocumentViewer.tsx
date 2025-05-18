@@ -12,7 +12,6 @@ import MultiSignatureManager from '../components/MultiSignatureManager';
 import MultiSignatureVerification from '../components/MultiSignatureVerification';
 import PDFSearch from '../components/PDFSearch';
 import PDFThumbnails from '../components/PDFThumbnails';
-import PDFAnnotationManager from '../components/PDFAnnotationManager';
 import { pdfjs } from 'react-pdf';
 
 // Set the worker source
@@ -49,11 +48,20 @@ interface Signature {
 const DocumentViewer = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  
+
   const [document, setDocument] = useState<DocumentType | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'preview' | 'metadata' | 'content' | 'analysis' | 'signatures' | 'sharing' | 'comments' | 'blockchain'>('preview');
+  const [activeTab, setActiveTab] = useState<
+    | 'preview'
+    | 'metadata'
+    | 'content'
+    | 'analysis'
+    | 'signatures'
+    | 'sharing'
+    | 'comments'
+    | 'blockchain'
+  >('preview');
   const [processingDocument, setProcessingDocument] = useState<boolean>(false);
   const [unreadComments, setUnreadComments] = useState(0);
   //@ts-ignore
@@ -75,38 +83,39 @@ const DocumentViewer = () => {
     visible: false,
     x: 0,
     y: 0,
-    comments: []
+    comments: [],
   });
   const [comments, setComments] = useState<any[]>([]);
 
-
-  const showContextualComments = (position: { x: number; y: number }, pageNumber: number) => {
+  const showContextualComments = (
+    position: { x: number; y: number },
+    pageNumber: number,
+  ) => {
     // Filtrar comentarios para esta posición específica
-    const commentsForPosition = comments.filter(comment => {
+    const commentsForPosition = comments.filter((comment) => {
       if (!comment.position) return false;
-      
+
       // Verificar si es el mismo número de página
       if (comment.position.page !== pageNumber) return false;
-      
+
       // Calcular distancia a la posición
       const commentX = comment.position.x || 0;
       const commentY = comment.position.y || 0;
-      
+
       // Si la posición está dentro del área del comentario o muy cerca (30px)
       const distance = Math.sqrt(
-        Math.pow(position.x - commentX, 2) + 
-        Math.pow(position.y - commentY, 2)
+        Math.pow(position.x - commentX, 2) + Math.pow(position.y - commentY, 2),
       );
-      
+
       return distance < 30;
     });
-    
+
     if (commentsForPosition.length > 0) {
       setContextualComments({
         visible: true,
         x: position.x,
         y: position.y,
-        comments: commentsForPosition
+        comments: commentsForPosition,
       });
     }
   };
@@ -114,15 +123,15 @@ const DocumentViewer = () => {
   const handleDocumentClick = (e: React.MouseEvent) => {
     // Si hay comentarios contextuales visibles, ocultarlos
     if (contextualComments.visible) {
-      setContextualComments(prev => ({ ...prev, visible: false }));
+      setContextualComments((prev) => ({ ...prev, visible: false }));
       return;
     }
-    
+
     // Obtener posición relativa al contenedor del documento
     const container = e.currentTarget.getBoundingClientRect();
     const x = e.clientX - container.left;
     const y = e.clientY - container.top;
-    
+
     // Mostrar comentarios para esta posición
     showContextualComments({ x, y }, currentPage);
   };
@@ -130,9 +139,11 @@ const DocumentViewer = () => {
   // Añadir esta función
   const fetchUnreadComments = async () => {
     if (!id) return;
-    
+
     try {
-      const response = await api.get(`/api/comments/document/${id}/unread-count`);
+      const response = await api.get(
+        `/api/comments/document/${id}/unread-count`,
+      );
       setUnreadComments(response.data);
     } catch (err) {
       console.error('Error al obtener comentarios no leídos:', err);
@@ -148,7 +159,7 @@ const DocumentViewer = () => {
     }
 
     if (id && currentPage) {
-      loadDocumentImage();    
+      loadDocumentImage();
       // Limpieza al desmontar
       return () => {
         if (documentImageUrl) {
@@ -167,7 +178,6 @@ const DocumentViewer = () => {
   const handleCommentAdded = () => {
     fetchComments();
   };
-  
 
   const fetchDocument = async () => {
     setLoading(true);
@@ -177,7 +187,10 @@ const DocumentViewer = () => {
       setError('');
     } catch (err: any) {
       console.error('Error loading document:', err);
-      setError(err?.response?.data?.message || 'Error loading the document. Please try again later.');
+      setError(
+        err?.response?.data?.message ||
+          'Error loading the document. Please try again later.',
+      );
     } finally {
       setLoading(false);
     }
@@ -185,7 +198,7 @@ const DocumentViewer = () => {
 
   const fetchComments = async () => {
     if (!id) return;
-    
+
     try {
       const response = await api.get(`/api/comments/document/${id}`);
       setComments(response.data);
@@ -196,7 +209,7 @@ const DocumentViewer = () => {
 
   const fetchSignatures = async () => {
     if (!id) return;
-    
+
     setIsLoadingSignatures(true);
     try {
       const response = await api.get(`/api/signatures/document/${id}`);
@@ -211,9 +224,12 @@ const DocumentViewer = () => {
   // Crear un objeto URL con datos binarios
   const loadDocumentImage = async () => {
     try {
-      const response = await api.get(`/api/documents/${id}/view?page=${currentPage}`, {
-        responseType: 'blob'
-      });
+      const response = await api.get(
+        `/api/documents/${id}/view?page=${currentPage}`,
+        {
+          responseType: 'blob',
+        },
+      );
       const imageUrl = URL.createObjectURL(response.data);
       setDocumentImageUrl(imageUrl);
     } catch (err) {
@@ -224,7 +240,7 @@ const DocumentViewer = () => {
 
   const handleProcessDocument = async () => {
     if (!id) return;
-    
+
     setProcessingDocument(true);
     try {
       await api.post(`/api/documents/${id}/process`);
@@ -277,9 +293,9 @@ const DocumentViewer = () => {
 
   const renderDocumentPreview = () => {
     if (!document) return null;
-    
+
     // Convertir firmas para el componente DocumentPreview
-    const formattedSignatures = signatures.map(sig => {
+    const formattedSignatures = signatures.map((sig) => {
       // Intentar parsear el objeto position
       let position = { page: 1, x: 0, y: 0, width: 200, height: 100 };
       try {
@@ -297,29 +313,29 @@ const DocumentViewer = () => {
           x: position.x || 0,
           y: position.y || 0,
           width: position.width || 200,
-          height: position.height || 100
+          height: position.height || 100,
         },
         user: {
           name: sig.user?.name || 'Usuario',
-          email: sig.user?.email
+          email: sig.user?.email,
         },
         signedAt: sig.signedAt,
         valid: sig.valid,
-        reason: sig.reason
+        reason: sig.reason,
       };
     });
 
     if (document.mimeType?.includes('pdf')) {
       // Para PDFs, vamos a usar nuestro sistema mejorado
       return (
-        <div className="flex flex-col space-y-4">
+        <div className='flex flex-col space-y-4'>
           {/* Búsqueda en PDF */}
-          <PDFSearch 
-            documentId={id || ''} 
+          <PDFSearch
+            documentId={id || ''}
             numPages={totalPages}
             onResultClick={(page) => setCurrentPage(page)}
           />
-          
+
           {/* Miniaturas de páginas */}
           <PDFThumbnails
             documentId={id || ''}
@@ -327,44 +343,82 @@ const DocumentViewer = () => {
             currentPage={currentPage}
             onPageSelect={(page) => setCurrentPage(page)}
           />
-          
-          <PDFAnnotationManager documentId={id || ''}>
-            {documentImageUrl ? (
-              <PDFViewer 
-                documentId={id || ''} 
-                onPageChange={(page) => setCurrentPage(page)}
-                annotations={formattedSignatures}
-              />
-            ) : (
-              <div className="flex items-center justify-center h-96">
-                <div className="w-16 h-16 border-4 border-blue-500 rounded-full border-t-transparent animate-spin"></div>
-              </div>
-            )}
-          </PDFAnnotationManager>
+
+          {/* Añadir botón de descarga con firmas */}
+          {signatures.length > 0 && (
+            <div className='flex justify-end mb-2'>
+              <button
+                onClick={() =>
+                  (window.location.href = `/api/documents/${id}/download-signed`)
+                }
+                className='inline-flex items-center px-3 py-1 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500'>
+                <svg
+                  xmlns='http://www.w3.org/2000/svg'
+                  className='w-4 h-4 mr-2'
+                  fill='none'
+                  viewBox='0 0 24 24'
+                  stroke='currentColor'>
+                  <path
+                    strokeLinecap='round'
+                    strokeLinejoin='round'
+                    strokeWidth={2}
+                    d='M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4'
+                  />
+                </svg>
+                Descargar PDF con firmas
+              </button>
+            </div>
+          )}
+
+          {documentImageUrl ? (
+            <PDFViewer
+              documentId={id || ''}
+              onPageChange={(page) => setCurrentPage(page)}
+              annotations={formattedSignatures}
+              showAnnotationTools={false}
+            />
+          ) : (
+            <div className='flex items-center justify-center h-96'>
+              <div className='w-16 h-16 border-4 border-blue-500 rounded-full border-t-transparent animate-spin'></div>
+            </div>
+          )}
         </div>
       );
     } else if (document.mimeType?.includes('image')) {
       return (
-        <div className="flex items-center justify-center p-4 bg-gray-100 rounded-lg">
-          <img 
-            src={`/api/documents/${id}/view`} 
+        <div className='flex items-center justify-center p-4 bg-gray-100 rounded-lg'>
+          <img
+            src={`/api/documents/${id}/view`}
             alt={document.title}
-            className="object-contain max-w-full max-h-96"
+            className='object-contain max-w-full max-h-96'
           />
         </div>
       );
     } else {
       // Para otros tipos de documento mostrar un mensaje
       return (
-        <div className="flex flex-col items-center justify-center p-4 bg-gray-100 rounded-lg h-96">
-          <svg xmlns="http://www.w3.org/2000/svg" className="w-20 h-20 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        <div className='flex flex-col items-center justify-center p-4 bg-gray-100 rounded-lg h-96'>
+          <svg
+            xmlns='http://www.w3.org/2000/svg'
+            className='w-20 h-20 text-gray-400'
+            fill='none'
+            viewBox='0 0 24 24'
+            stroke='currentColor'>
+            <path
+              strokeLinecap='round'
+              strokeLinejoin='round'
+              strokeWidth={2}
+              d='M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z'
+            />
           </svg>
-          <p className="mt-4 text-gray-600">Previsualización no disponible para este tipo de archivo.</p>
-          <button 
-            onClick={() => window.location.href = `/api/documents/${id}/download`}
-            className="inline-flex items-center px-4 py-2 mt-4 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-          >
+          <p className='mt-4 text-gray-600'>
+            Previsualización no disponible para este tipo de archivo.
+          </p>
+          <button
+            onClick={() =>
+              (window.location.href = `/api/documents/${id}/download`)
+            }
+            className='inline-flex items-center px-4 py-2 mt-4 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500'>
             Descargar para ver
           </button>
         </div>
@@ -376,56 +430,85 @@ const DocumentViewer = () => {
     if (!document) return null;
 
     return (
-      <div className="mt-4 overflow-hidden bg-white shadow sm:rounded-lg">
-        <div className="px-4 py-5 sm:px-6">
-          <h3 className="text-lg font-medium leading-6 text-gray-900">Metadatos del documento</h3>
-          <p className="max-w-2xl mt-1 text-sm text-gray-500">Información detallada sobre el documento.</p>
+      <div className='mt-4 overflow-hidden bg-white shadow sm:rounded-lg'>
+        <div className='px-4 py-5 sm:px-6'>
+          <h3 className='text-lg font-medium leading-6 text-gray-900'>
+            Metadatos del documento
+          </h3>
+          <p className='max-w-2xl mt-1 text-sm text-gray-500'>
+            Información detallada sobre el documento.
+          </p>
         </div>
-        <div className="border-t border-gray-200">
+        <div className='border-t border-gray-200'>
           <dl>
-            <div className="px-4 py-5 bg-gray-50 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-              <dt className="text-sm font-medium text-gray-500">Título</dt>
-              <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">{document.title}</dd>
+            <div className='px-4 py-5 bg-gray-50 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6'>
+              <dt className='text-sm font-medium text-gray-500'>Título</dt>
+              <dd className='mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2'>
+                {document.title}
+              </dd>
             </div>
-            <div className="px-4 py-5 bg-white sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-              <dt className="text-sm font-medium text-gray-500">Archivo</dt>
-              <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">{document.filename}</dd>
+            <div className='px-4 py-5 bg-white sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6'>
+              <dt className='text-sm font-medium text-gray-500'>Archivo</dt>
+              <dd className='mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2'>
+                {document.filename}
+              </dd>
             </div>
-            <div className="px-4 py-5 bg-gray-50 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-              <dt className="text-sm font-medium text-gray-500">Tamaño</dt>
-              <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">{formatFileSize(document.fileSize)}</dd>
+            <div className='px-4 py-5 bg-gray-50 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6'>
+              <dt className='text-sm font-medium text-gray-500'>Tamaño</dt>
+              <dd className='mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2'>
+                {formatFileSize(document.fileSize)}
+              </dd>
             </div>
-            <div className="px-4 py-5 bg-white sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-              <dt className="text-sm font-medium text-gray-500">Tipo</dt>
-              <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">{document.mimeType || 'Unknown'}</dd>
+            <div className='px-4 py-5 bg-white sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6'>
+              <dt className='text-sm font-medium text-gray-500'>Tipo</dt>
+              <dd className='mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2'>
+                {document.mimeType || 'Unknown'}
+              </dd>
             </div>
-            <div className="px-4 py-5 bg-gray-50 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-              <dt className="text-sm font-medium text-gray-500">Estatus</dt>
-              <dd className="mt-1 sm:mt-0 sm:col-span-2">
-                <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusBadgeClass(document.status)}`}>
+            <div className='px-4 py-5 bg-gray-50 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6'>
+              <dt className='text-sm font-medium text-gray-500'>Estatus</dt>
+              <dd className='mt-1 sm:mt-0 sm:col-span-2'>
+                <span
+                  className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusBadgeClass(
+                    document.status,
+                  )}`}>
                   {document.status}
                 </span>
               </dd>
             </div>
-            <div className="px-4 py-5 bg-white sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-              <dt className="text-sm font-medium text-gray-500">Fecha creación</dt>
-              <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">{formatDate(document.createdAt)}</dd>
+            <div className='px-4 py-5 bg-white sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6'>
+              <dt className='text-sm font-medium text-gray-500'>
+                Fecha creación
+              </dt>
+              <dd className='mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2'>
+                {formatDate(document.createdAt)}
+              </dd>
             </div>
-            <div className="px-4 py-5 bg-gray-50 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-              <dt className="text-sm font-medium text-gray-500">Última modificación</dt>
-              <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">{formatDate(document.updatedAt)}</dd>
+            <div className='px-4 py-5 bg-gray-50 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6'>
+              <dt className='text-sm font-medium text-gray-500'>
+                Última modificación
+              </dt>
+              <dd className='mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2'>
+                {formatDate(document.updatedAt)}
+              </dd>
             </div>
             {document.description && (
-              <div className="px-4 py-5 bg-white sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-                <dt className="text-sm font-medium text-gray-500">Descripción</dt>
-                <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">{document.description}</dd>
+              <div className='px-4 py-5 bg-white sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6'>
+                <dt className='text-sm font-medium text-gray-500'>
+                  Descripción
+                </dt>
+                <dd className='mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2'>
+                  {document.description}
+                </dd>
               </div>
             )}
             {document.metadata && Object.keys(document.metadata).length > 0 && (
-              <div className="px-4 py-5 bg-gray-50 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-                <dt className="text-sm font-medium text-gray-500">Metadatos adicionales</dt>
-                <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
-                  <pre className="p-2 overflow-auto bg-gray-100 rounded max-h-40">
+              <div className='px-4 py-5 bg-gray-50 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6'>
+                <dt className='text-sm font-medium text-gray-500'>
+                  Metadatos adicionales
+                </dt>
+                <dd className='mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2'>
+                  <pre className='p-2 overflow-auto bg-gray-100 rounded max-h-40'>
                     {JSON.stringify(document.metadata, null, 2)}
                   </pre>
                 </dd>
@@ -440,23 +523,38 @@ const DocumentViewer = () => {
   const renderContentTab = () => {
     if (!document) return null;
 
-    if (!document.extractedContent || Object.keys(document.extractedContent).length === 0) {
+    if (
+      !document.extractedContent ||
+      Object.keys(document.extractedContent).length === 0
+    ) {
       return (
-        <div className="p-6 mt-4 overflow-hidden text-center bg-white shadow sm:rounded-lg">
-          <svg xmlns="http://www.w3.org/2000/svg" className="w-12 h-12 mx-auto text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        <div className='p-6 mt-4 overflow-hidden text-center bg-white shadow sm:rounded-lg'>
+          <svg
+            xmlns='http://www.w3.org/2000/svg'
+            className='w-12 h-12 mx-auto text-gray-400'
+            fill='none'
+            viewBox='0 0 24 24'
+            stroke='currentColor'>
+            <path
+              strokeLinecap='round'
+              strokeLinejoin='round'
+              strokeWidth={2}
+              d='M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z'
+            />
           </svg>
-          <h3 className="mt-2 text-sm font-medium text-gray-900">No hay contenido extraído</h3>
-          <p className="mt-1 text-sm text-gray-500">
-            Este documento aún no ha sido procesado o no se pudo extraer contenido.
+          <h3 className='mt-2 text-sm font-medium text-gray-900'>
+            No hay contenido extraído
+          </h3>
+          <p className='mt-1 text-sm text-gray-500'>
+            Este documento aún no ha sido procesado o no se pudo extraer
+            contenido.
           </p>
-          <div className="mt-6">
+          <div className='mt-6'>
             <button
-              type="button"
+              type='button'
               onClick={handleProcessDocument}
               disabled={processingDocument || document.status === 'processing'}
-              className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
+              className='inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed'>
               {processingDocument ? 'Procesando...' : 'Procesar documento'}
             </button>
           </div>
@@ -465,70 +563,92 @@ const DocumentViewer = () => {
     }
 
     return (
-      <div className="mt-4 overflow-hidden bg-white shadow sm:rounded-lg">
-        <div className="px-4 py-5 sm:px-6">
-          <h3 className="text-lg font-medium leading-6 text-gray-900">Extracción de contenido</h3>
-          <p className="max-w-2xl mt-1 text-sm text-gray-500">Texto e información extraídos del documento.</p>
+      <div className='mt-4 overflow-hidden bg-white shadow sm:rounded-lg'>
+        <div className='px-4 py-5 sm:px-6'>
+          <h3 className='text-lg font-medium leading-6 text-gray-900'>
+            Extracción de contenido
+          </h3>
+          <p className='max-w-2xl mt-1 text-sm text-gray-500'>
+            Texto e información extraídos del documento.
+          </p>
         </div>
-        <div className="px-4 py-5 border-t border-gray-200 sm:px-6">
+        <div className='px-4 py-5 border-t border-gray-200 sm:px-6'>
           {/* Verificar múltiples posibles ubicaciones del texto extraído */}
-          {(document.extractedContent.text || 
-            document.extractedContent.content || 
-            (document.extractedContent.extractedText)) && (
-            <div className="mt-2">
-              <h4 className="mb-2 text-sm font-medium text-gray-500">Texto extraído:</h4>
-              <div className="p-4 overflow-auto rounded-md bg-gray-50 max-h-96">
-                <p className="text-sm text-gray-900 whitespace-pre-wrap">
-                  {document.extractedContent.text || 
-                  document.extractedContent.content || 
-                  document.extractedContent.extractedText}
+          {(document.extractedContent.text ||
+            document.extractedContent.content ||
+            document.extractedContent.extractedText) && (
+            <div className='mt-2'>
+              <h4 className='mb-2 text-sm font-medium text-gray-500'>
+                Texto extraído:
+              </h4>
+              <div className='p-4 overflow-auto rounded-md bg-gray-50 max-h-96'>
+                <p className='text-sm text-gray-900 whitespace-pre-wrap'>
+                  {document.extractedContent.text ||
+                    document.extractedContent.content ||
+                    document.extractedContent.extractedText}
                 </p>
               </div>
             </div>
           )}
 
           {/* Verificar datos estructurados */}
-          {(document.extractedContent.data || 
+          {(document.extractedContent.data ||
             document.extractedContent.structuredData ||
             document.extractedContent.sheets) && (
-            <div className="mt-6">
-              <h4 className="mb-2 text-sm font-medium text-gray-500">Estructura:</h4>
-              <pre className="p-4 overflow-auto text-sm rounded-md bg-gray-50 max-h-96">
+            <div className='mt-6'>
+              <h4 className='mb-2 text-sm font-medium text-gray-500'>
+                Estructura:
+              </h4>
+              <pre className='p-4 overflow-auto text-sm rounded-md bg-gray-50 max-h-96'>
                 {JSON.stringify(
-                  document.extractedContent.data || 
-                  document.extractedContent.structuredData || 
-                  document.extractedContent.sheets, 
-                  null, 2
+                  document.extractedContent.data ||
+                    document.extractedContent.structuredData ||
+                    document.extractedContent.sheets,
+                  null,
+                  2,
                 )}
               </pre>
             </div>
           )}
 
           {/* Mostrar mensaje si hay contenido extraído pero no en los formatos esperados */}
-          {(!document.extractedContent.text && 
-            !document.extractedContent.content && 
+          {!document.extractedContent.text &&
+            !document.extractedContent.content &&
             !document.extractedContent.extractedText &&
-            !document.extractedContent.data && 
+            !document.extractedContent.data &&
             !document.extractedContent.structuredData &&
-            !document.extractedContent.sheets) && (
-            <div className="mt-2">
-              <h4 className="mb-2 text-sm font-medium text-gray-500">Contenido extraído:</h4>
-              <pre className="p-4 overflow-auto text-sm rounded-md bg-gray-50 max-h-96">
-                {JSON.stringify(document.extractedContent, null, 2)}
-              </pre>
-            </div>
-          )}
+            !document.extractedContent.sheets && (
+              <div className='mt-2'>
+                <h4 className='mb-2 text-sm font-medium text-gray-500'>
+                  Contenido extraído:
+                </h4>
+                <pre className='p-4 overflow-auto text-sm rounded-md bg-gray-50 max-h-96'>
+                  {JSON.stringify(document.extractedContent, null, 2)}
+                </pre>
+              </div>
+            )}
 
-          {document.extractedContent.success === false && document.extractedContent.error ? (
-            <div className="p-4 mt-4 border-l-4 border-red-400 bg-red-50">
-              <div className="flex">
-                <div className="flex-shrink-0">
-                  <svg className="w-5 h-5 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+          {document.extractedContent.success === false &&
+          document.extractedContent.error ? (
+            <div className='p-4 mt-4 border-l-4 border-red-400 bg-red-50'>
+              <div className='flex'>
+                <div className='flex-shrink-0'>
+                  <svg
+                    className='w-5 h-5 text-red-400'
+                    xmlns='http://www.w3.org/2000/svg'
+                    viewBox='0 0 20 20'
+                    fill='currentColor'>
+                    <path
+                      fillRule='evenodd'
+                      d='M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z'
+                      clipRule='evenodd'
+                    />
                   </svg>
                 </div>
-                <div className="ml-3">
-                  <p className="text-sm text-red-700">Error de extracción: {document.extractedContent.error}</p>
+                <div className='ml-3'>
+                  <p className='text-sm text-red-700'>
+                    Error de extracción: {document.extractedContent.error}
+                  </p>
                 </div>
               </div>
             </div>
@@ -542,10 +662,10 @@ const DocumentViewer = () => {
     if (!document || !id) return null;
 
     return (
-      <div className="mt-4">
+      <div className='mt-4'>
         {/* Componente de gestión de firmas múltiples */}
         {multiSignatureEnabled !== false && (
-          <MultiSignatureManager 
+          <MultiSignatureManager
             documentId={id}
             documentTitle={document.title}
             onUpdate={() => {
@@ -554,7 +674,9 @@ const DocumentViewer = () => {
               // O cargar solamente las firmas
               const fetchSignatures = async () => {
                 try {
-                  const response = await api.get(`/api/signatures/document/${id}`);
+                  const response = await api.get(
+                    `/api/signatures/document/${id}`,
+                  );
                   setSignatures(response.data);
                 } catch (err) {
                   console.error('Error loading signatures:', err);
@@ -567,14 +689,16 @@ const DocumentViewer = () => {
 
         {/* Verificación de firmas múltiples */}
         {multiSignatureEnabled !== false && signatures.length > 1 && (
-          <MultiSignatureVerification 
+          <MultiSignatureVerification
             documentId={id}
             documentTitle={document.title}
             signatures={signatures}
             onUpdate={() => {
               const fetchSignatures = async () => {
                 try {
-                  const response = await api.get(`/api/signatures/document/${id}`);
+                  const response = await api.get(
+                    `/api/signatures/document/${id}`,
+                  );
                   setSignatures(response.data);
                 } catch (err) {
                   console.error('Error loading signatures:', err);
@@ -585,7 +709,7 @@ const DocumentViewer = () => {
           />
         )}
 
-        <DocumentSignature 
+        <DocumentSignature
           documentId={id}
           documentTitle={document.title}
           documentStatus={document.status}
@@ -605,13 +729,28 @@ const DocumentViewer = () => {
 
   if (loading) {
     return (
-      <div className="px-4 py-8 mx-auto max-w-7xl sm:px-6 lg:px-8">
-        <div className="py-12 text-center">
-          <svg className="w-12 h-12 mx-auto text-gray-400 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+      <div className='px-4 py-8 mx-auto max-w-7xl sm:px-6 lg:px-8'>
+        <div className='py-12 text-center'>
+          <svg
+            className='w-12 h-12 mx-auto text-gray-400 animate-spin'
+            xmlns='http://www.w3.org/2000/svg'
+            fill='none'
+            viewBox='0 0 24 24'>
+            <circle
+              className='opacity-25'
+              cx='12'
+              cy='12'
+              r='10'
+              stroke='currentColor'
+              strokeWidth='4'></circle>
+            <path
+              className='opacity-75'
+              fill='currentColor'
+              d='M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z'></path>
           </svg>
-          <p className="mt-2 text-sm font-medium text-gray-500">Cargando documento...</p>
+          <p className='mt-2 text-sm font-medium text-gray-500'>
+            Cargando documento...
+          </p>
         </div>
       </div>
     );
@@ -619,30 +758,39 @@ const DocumentViewer = () => {
 
   if (error) {
     return (
-      <div className="px-4 py-8 mx-auto max-w-7xl sm:px-6 lg:px-8">
-        <div className="overflow-hidden bg-white shadow sm:rounded-lg">
-          <div className="px-4 py-5 sm:px-6">
-            <h3 className="text-lg font-medium leading-6 text-gray-900">Error</h3>
+      <div className='px-4 py-8 mx-auto max-w-7xl sm:px-6 lg:px-8'>
+        <div className='overflow-hidden bg-white shadow sm:rounded-lg'>
+          <div className='px-4 py-5 sm:px-6'>
+            <h3 className='text-lg font-medium leading-6 text-gray-900'>
+              Error
+            </h3>
           </div>
-          <div className="px-4 py-5 border-t border-gray-200 sm:px-6">
-            <div className="p-4 rounded-md bg-red-50">
-              <div className="flex">
-                <div className="flex-shrink-0">
-                  <svg className="w-5 h-5 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+          <div className='px-4 py-5 border-t border-gray-200 sm:px-6'>
+            <div className='p-4 rounded-md bg-red-50'>
+              <div className='flex'>
+                <div className='flex-shrink-0'>
+                  <svg
+                    className='w-5 h-5 text-red-400'
+                    xmlns='http://www.w3.org/2000/svg'
+                    viewBox='0 0 20 20'
+                    fill='currentColor'>
+                    <path
+                      fillRule='evenodd'
+                      d='M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z'
+                      clipRule='evenodd'
+                    />
                   </svg>
                 </div>
-                <div className="ml-3">
-                  <p className="text-sm font-medium text-red-800">{error}</p>
+                <div className='ml-3'>
+                  <p className='text-sm font-medium text-red-800'>{error}</p>
                 </div>
               </div>
             </div>
-            <div className="mt-4">
+            <div className='mt-4'>
               <button
-                type="button"
+                type='button'
                 onClick={() => navigate('/dashboard')}
-                className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-              >
+                className='inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500'>
                 Volver al dashboard
               </button>
             </div>
@@ -655,36 +803,56 @@ const DocumentViewer = () => {
   if (!document) {
     return null;
   }
-  
+
   return (
-    <div className="px-4 py-8 mx-auto max-w-7xl sm:px-6 lg:px-8">
+    <div className='px-4 py-8 mx-auto max-w-7xl sm:px-6 lg:px-8'>
       {/* Header */}
-      <div className="mb-6 overflow-hidden bg-white shadow sm:rounded-lg">
-        <div className="px-4 py-5 sm:px-6">
-          <div className="flex items-start justify-between">
+      <div className='mb-6 overflow-hidden bg-white shadow sm:rounded-lg'>
+        <div className='px-4 py-5 sm:px-6'>
+          <div className='flex items-start justify-between'>
             <div>
-              <h2 className="text-2xl font-bold text-gray-900">{document.title}</h2>
+              <h2 className='text-2xl font-bold text-gray-900'>
+                {document.title}
+              </h2>
               {document.description && (
-                <p className="mt-1 text-sm text-gray-500">{document.description}</p>
+                <p className='mt-1 text-sm text-gray-500'>
+                  {document.description}
+                </p>
               )}
-              <div className="flex items-center mt-2">
-                <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusBadgeClass(document.status)}`}>
+              <div className='flex items-center mt-2'>
+                <span
+                  className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusBadgeClass(
+                    document.status,
+                  )}`}>
                   {document.status}
                 </span>
-                <span className="mx-2 text-gray-500">•</span>
-                <span className="text-sm text-gray-500">{formatFileSize(document.fileSize)}</span>
-                <span className="mx-2 text-gray-500">•</span>
-                <span className="text-sm text-gray-500">Subido el {formatDate(document.createdAt)}</span>
+                <span className='mx-2 text-gray-500'>•</span>
+                <span className='text-sm text-gray-500'>
+                  {formatFileSize(document.fileSize)}
+                </span>
+                <span className='mx-2 text-gray-500'>•</span>
+                <span className='text-sm text-gray-500'>
+                  Subido el {formatDate(document.createdAt)}
+                </span>
               </div>
             </div>
-            <div className="flex space-x-2">
+            <div className='flex space-x-2'>
               <button
-                type="button"
+                type='button'
                 onClick={() => navigate('/dashboard')}
-                className="inline-flex items-center px-3 py-1.5 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="-ml-0.5 mr-1 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                className='inline-flex items-center px-3 py-1.5 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500'>
+                <svg
+                  xmlns='http://www.w3.org/2000/svg'
+                  className='-ml-0.5 mr-1 h-4 w-4'
+                  fill='none'
+                  viewBox='0 0 24 24'
+                  stroke='currentColor'>
+                  <path
+                    strokeLinecap='round'
+                    strokeLinejoin='round'
+                    strokeWidth={2}
+                    d='M10 19l-7-7m0 0l7-7m-7 7h18'
+                  />
                 </svg>
                 Atrás
               </button>
@@ -694,16 +862,17 @@ const DocumentViewer = () => {
       </div>
 
       {/* Tabs */}
-      <div className="mb-6 border-b border-gray-200">
-        <nav className="flex -mb-px space-x-8" aria-label="Tabs">
+      <div className='mb-6 border-b border-gray-200'>
+        <nav
+          className='flex -mb-px space-x-8'
+          aria-label='Tabs'>
           <button
             onClick={() => setActiveTab('preview')}
             className={`${
               activeTab === 'preview'
                 ? 'border-blue-500 text-blue-600'
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
-          >
+            } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}>
             Visualizador
           </button>
           <button
@@ -712,8 +881,7 @@ const DocumentViewer = () => {
               activeTab === 'metadata'
                 ? 'border-blue-500 text-blue-600'
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
-          >
+            } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}>
             Metadatos
           </button>
           <button
@@ -722,8 +890,7 @@ const DocumentViewer = () => {
               activeTab === 'content'
                 ? 'border-blue-500 text-blue-600'
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
-          >
+            } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}>
             Extraer contenido
           </button>
           <button
@@ -732,8 +899,7 @@ const DocumentViewer = () => {
               activeTab === 'analysis'
                 ? 'border-blue-500 text-blue-600'
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
-          >
+            } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}>
             Análisis
           </button>
           <button
@@ -742,11 +908,10 @@ const DocumentViewer = () => {
               activeTab === 'comments'
                 ? 'border-blue-500 text-blue-600'
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm relative`}
-          >
+            } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm relative`}>
             Comentarios
             {unreadComments > 0 && (
-              <span className="absolute inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-white transform translate-x-1/2 -translate-y-1/2 bg-red-500 rounded-full top-2 -right-1">
+              <span className='absolute inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-white transform translate-x-1/2 -translate-y-1/2 bg-red-500 rounded-full top-2 -right-1'>
                 {unreadComments}
               </span>
             )}
@@ -757,8 +922,7 @@ const DocumentViewer = () => {
               activeTab === 'sharing'
                 ? 'border-blue-500 text-blue-600'
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
-          >
+            } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}>
             Compartir
           </button>
           <button
@@ -767,8 +931,7 @@ const DocumentViewer = () => {
               activeTab === 'signatures'
                 ? 'border-blue-500 text-blue-600'
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
-          >
+            } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}>
             Firmado
           </button>
           <button
@@ -777,8 +940,7 @@ const DocumentViewer = () => {
               activeTab === 'blockchain'
                 ? 'border-blue-500 text-blue-600'
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
-          >
+            } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}>
             Blockchain
           </button>
         </nav>
@@ -786,40 +948,48 @@ const DocumentViewer = () => {
 
       {/* Tab content */}
       {activeTab === 'preview' && (
-        <div onClick={handleDocumentClick} className="relative">
+        <div
+          onClick={handleDocumentClick}
+          className='relative'>
           {renderDocumentPreview()}
-          
+
           {/* Popup de comentarios contextuales */}
-          {contextualComments.visible && contextualComments.comments.length > 0 && (
-            <div 
-              className="absolute z-20 p-2 bg-white border border-gray-200 rounded-md shadow-lg"
-              style={{ 
-                left: `${contextualComments.x}px`, 
-                top: `${contextualComments.y}px`,
-                maxWidth: '300px'
-              }}
-            >
-              <div className="mb-2 text-xs font-medium text-gray-700">
-                {contextualComments.comments.length} comentario(s) en esta área
+          {contextualComments.visible &&
+            contextualComments.comments.length > 0 && (
+              <div
+                className='absolute z-20 p-2 bg-white border border-gray-200 rounded-md shadow-lg'
+                style={{
+                  left: `${contextualComments.x}px`,
+                  top: `${contextualComments.y}px`,
+                  maxWidth: '300px',
+                }}>
+                <div className='mb-2 text-xs font-medium text-gray-700'>
+                  {contextualComments.comments.length} comentario(s) en esta
+                  área
+                </div>
+                <div className='space-y-2 overflow-y-auto max-h-60'>
+                  {contextualComments.comments.map((comment) => (
+                    <div
+                      key={comment.id}
+                      className='p-2 text-xs border-b border-gray-100'>
+                      <div className='font-medium'>
+                        {comment.user?.name || 'Usuario'}
+                      </div>
+                      <div className='mt-1 text-gray-600'>
+                        {comment.content}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className='flex justify-end mt-2'>
+                  <button
+                    onClick={() => setActiveTab('comments')}
+                    className='px-2 py-1 text-xs text-white bg-blue-600 rounded hover:bg-blue-700'>
+                    Ver todos
+                  </button>
+                </div>
               </div>
-              <div className="space-y-2 overflow-y-auto max-h-60">
-                {contextualComments.comments.map(comment => (
-                  <div key={comment.id} className="p-2 text-xs border-b border-gray-100">
-                    <div className="font-medium">{comment.user?.name || 'Usuario'}</div>
-                    <div className="mt-1 text-gray-600">{comment.content}</div>
-                  </div>
-                ))}
-              </div>
-              <div className="flex justify-end mt-2">
-                <button
-                  onClick={() => setActiveTab('comments')}
-                  className="px-2 py-1 text-xs text-white bg-blue-600 rounded hover:bg-blue-700"
-                >
-                  Ver todos
-                </button>
-              </div>
-            </div>
-          )}
+            )}
         </div>
       )}
       {activeTab === 'metadata' && renderMetadataTab()}
@@ -827,14 +997,14 @@ const DocumentViewer = () => {
       {activeTab === 'analysis' && id && <DocumentAnalysis documentId={id} />}
       {activeTab === 'signatures' && renderSignaturesTab()}
       {activeTab === 'sharing' && id && (
-        <DocumentSharing 
-          documentId={id} 
+        <DocumentSharing
+          documentId={id}
           documentTitle={document?.title || ''}
           onPermissionsUpdated={() => fetchDocument()}
         />
       )}
       {activeTab === 'comments' && id && (
-        <DocumentComments 
+        <DocumentComments
           documentId={id}
           currentPage={currentPage}
           onCommentAdded={handleCommentAdded}
@@ -845,7 +1015,7 @@ const DocumentViewer = () => {
         />
       )}
       {activeTab === 'blockchain' && id && (
-        <DocumentBlockchainVerification 
+        <DocumentBlockchainVerification
           documentId={id}
           documentTitle={document?.title || 'Document'}
         />

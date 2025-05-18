@@ -463,6 +463,9 @@ export class DocumentsService {
             ? JSON.parse(signature.position)
             : signature.position;
 
+        // Si no hay información de posición, continuar con la siguiente firma
+        if (!position) continue;
+
         // Obtener la página donde va la firma
         const page = pdfDoc.getPages()[position.page - 1];
         if (!page) continue;
@@ -479,32 +482,53 @@ export class DocumentsService {
           opacity: 0.8,
         });
 
-        // Añadir texto de la firma
-        const fontSize = 8;
-        page.drawText(`Firmado por: ${signature.user?.name || 'Usuario'}`, {
-          x: position.x + 5,
-          y: page.getHeight() - position.y - 15,
-          size: fontSize,
-          color: rgb(0, 0, 0.7),
-        });
-
-        page.drawText(
-          `Fecha: ${new Date(signature.signedAt).toLocaleDateString()}`,
-          {
+        // Si es una firma autógrafa, dibujar el SVG
+        if (
+          signature.metadata?.signatureType === 'autografa' &&
+          signature.signatureData
+        ) {
+          try {
+            // Aquí podrías convertir el SVG a una imagen para insertarla
+            // Por ahora, usamos un texto como placeholder
+            page.drawText(`Firma de: ${signature.user?.name || 'Usuario'}`, {
+              x: position.x + 5,
+              y: page.getHeight() - position.y - 15,
+              size: 12,
+              color: rgb(0, 0, 0.7),
+            });
+          } catch (svgError) {
+            this.logger.error(
+              `Error renderizando SVG de firma: ${svgError.message}`,
+            );
+          }
+        } else {
+          // Añadir texto de la firma
+          const fontSize = 9;
+          page.drawText(`Firmado por: ${signature.user?.name || 'Usuario'}`, {
             x: position.x + 5,
-            y: page.getHeight() - position.y - 26,
-            size: fontSize,
-            color: rgb(0, 0, 0.7),
-          },
-        );
-
-        if (signature.reason) {
-          page.drawText(`Motivo: ${signature.reason}`, {
-            x: position.x + 5,
-            y: page.getHeight() - position.y - 37,
+            y: page.getHeight() - position.y - 15,
             size: fontSize,
             color: rgb(0, 0, 0.7),
           });
+
+          page.drawText(
+            `Fecha: ${new Date(signature.signedAt).toLocaleDateString()}`,
+            {
+              x: position.x + 5,
+              y: page.getHeight() - position.y - 26,
+              size: fontSize,
+              color: rgb(0, 0, 0.7),
+            },
+          );
+
+          if (signature.reason) {
+            page.drawText(`Motivo: ${signature.reason}`, {
+              x: position.x + 5,
+              y: page.getHeight() - position.y - 37,
+              size: fontSize,
+              color: rgb(0, 0, 0.7),
+            });
+          }
         }
       } catch (error) {
         this.logger.error(`Error añadiendo firma al PDF: ${error.message}`);

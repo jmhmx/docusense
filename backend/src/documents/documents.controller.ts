@@ -18,6 +18,7 @@ import {
   Headers,
   Ip,
   NotFoundException,
+  Logger,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { DocumentsService } from './documents.service';
@@ -66,6 +67,7 @@ const storage = diskStorage({
 
 @Controller('api/documents')
 export class DocumentsController {
+  private readonly logger = new Logger(DocumentsController.name);
   constructor(
     private readonly documentsService: DocumentsService,
     private readonly documentProcessorService: DocumentProcessorService,
@@ -148,7 +150,30 @@ export class DocumentsController {
   ) {
     const document = await this.documentsService.findOne(id, req.user.id);
 
-    // Verificar si el documento está cifrado
+    // Obtener firmas del documento
+    const signatures = await this.signaturesService.getDocumentSignatures(id);
+
+    // Si hay firmas, generar y mostrar PDF con firmas integradas
+    if (signatures && signatures.length > 0) {
+      try {
+        const pdfWithSignatures = await this.documentsService.generateSignedPdf(
+          document,
+          signatures,
+        );
+
+        res.set({
+          'Content-Type': document.mimeType || 'application/pdf',
+          'Content-Disposition': `inline; filename="${document.filename}"`,
+        });
+
+        return res.send(pdfWithSignatures);
+      } catch (error) {
+        this.logger.error(`Error generando PDF con firmas: ${error.message}`);
+        // Si falla, mostrar el PDF original
+      }
+    }
+
+    // Si no hay firmas o falló la generación, mostrar documento original
     if (document.metadata?.isEncrypted) {
       try {
         const fileData = await this.documentsService.getDocumentContent(

@@ -91,7 +91,7 @@ export class AnalyticsService {
     range: 'week' | 'month' | 'year',
   ): Promise<DashboardMetrics> {
     this.logger.log('getDashboardMetrics iniciado');
-    try{
+    try {
       const now = new Date();
       let startDate = new Date();
       switch (range) {
@@ -138,7 +138,10 @@ export class AnalyticsService {
       const previousSharedDocuments = 0;
       const sharedChange = sharedDocuments - previousSharedDocuments;
 
-      const documentStatusData = await this.getDocumentStatusData(startDate, now);
+      const documentStatusData = await this.getDocumentStatusData(
+        startDate,
+        now,
+      );
       const signatureProgressData = await this.getSignatureProgressData(
         startDate,
         now,
@@ -162,7 +165,7 @@ export class AnalyticsService {
       };
       this.logger.log('getDashboardMetrics finalizado con exito');
       return this.metrics;
-    }catch(error){
+    } catch (error) {
       this.logger.error(`Error en getDashboardMetrics: ${error.message}`);
       throw error;
     }
@@ -173,7 +176,7 @@ export class AnalyticsService {
     endDate: Date,
   ): Promise<DocumentStatusData[]> {
     this.logger.log('getDocumentStatusData iniciado');
-    try{
+    try {
       const documents = await this.documentRepository.find({
         where: { createdAt: Between(startDate, endDate) },
       });
@@ -186,11 +189,10 @@ export class AnalyticsService {
         status,
         count: statusCounts[status],
       }));
-    }catch(error){
+    } catch (error) {
       this.logger.error(`Error en getDocumentStatusData: ${error.message}`);
-      throw error;      
+      throw error;
     }
-    
   }
 
   private async getSignatureProgressData(
@@ -209,7 +211,7 @@ export class AnalyticsService {
       dateGroups[formattedDate] = { completed: 0, pending: 0 };
     });
 
-    try{
+    try {
       const documents = await this.documentRepository.find({
         where: { createdAt: Between(startDate, endDate) },
       });
@@ -230,27 +232,27 @@ export class AnalyticsService {
         completed: dateGroups[date].completed,
         pending: dateGroups[date].pending,
       }));
-    } catch(error){
+    } catch (error) {
       this.logger.error(`Error en getSignatureProgressData: ${error.message}`);
-      throw error;      
-    } 
+      throw error;
+    }
   }
 
   private generateDateRange(startDate: Date, endDate: Date): Date[] {
     this.logger.log('generateDateRange iniciado');
-    try{
+    try {
       const dates = [];
       let currentDate = new Date(startDate);
-  
+
       while (currentDate <= endDate) {
         dates.push(new Date(currentDate));
         currentDate.setDate(currentDate.getDate() + 1);
       }
-      this.logger.log('generateDateRange finalizado con exito'); 
+      this.logger.log('generateDateRange finalizado con exito');
       return dates;
-    }catch(error){
+    } catch (error) {
       this.logger.error(`Error en generateDateRange: ${error.message}`);
-      throw error;      
+      throw error;
     }
   }
 
@@ -258,16 +260,15 @@ export class AnalyticsService {
     startDate: Date,
     endDate: Date,
   ): Promise<RecentActivity[]> {
-
     this.logger.log('getRecentActivity iniciado');
 
-    try{
+    try {
       const logs = await this.auditLogRepository.find({
         where: { timestamp: Between(startDate, endDate) },
         order: { timestamp: 'DESC' },
         take: 10,
       });
-  
+
       return logs.map((log) => ({
         id: log.id,
         action: log.action,
@@ -281,10 +282,9 @@ export class AnalyticsService {
         timestamp: log.timestamp.toISOString(),
         details: log.details,
       }));
-
-    }catch(error){
+    } catch (error) {
       this.logger.error(`Error en getRecentActivity: ${error.message}`);
-      throw error;     
+      throw error;
     }
   }
 
@@ -295,53 +295,52 @@ export class AnalyticsService {
     this.logger.log('getTopDocuments iniciado');
     try {
       // Como no tenemos viewCount, usaremos los registros de auditoría para contar vistas
-    const viewLogs = await this.auditLogRepository.find({
-      where: {
-        action: AuditAction.DOCUMENT_VIEW,
-        timestamp: Between(startDate, endDate),
-      },
-    });
+      const viewLogs = await this.auditLogRepository.find({
+        where: {
+          action: AuditAction.DOCUMENT_VIEW,
+          timestamp: Between(startDate, endDate),
+        },
+      });
 
-    // Contar vistas por documento
-    const docViews: Record<string, number> = {};
-    const docLastViewed: Record<string, Date> = {};
+      // Contar vistas por documento
+      const docViews: Record<string, number> = {};
+      const docLastViewed: Record<string, Date> = {};
 
-    viewLogs.forEach((log) => {
-      if (log.resourceId) {
-        docViews[log.resourceId] = (docViews[log.resourceId] || 0) + 1;
+      viewLogs.forEach((log) => {
+        if (log.resourceId) {
+          docViews[log.resourceId] = (docViews[log.resourceId] || 0) + 1;
 
-        // Actualizar última vista
-        if (
-          !docLastViewed[log.resourceId] ||
-          log.timestamp > docLastViewed[log.resourceId]
-        ) {
-          docLastViewed[log.resourceId] = log.timestamp;
+          // Actualizar última vista
+          if (
+            !docLastViewed[log.resourceId] ||
+            log.timestamp > docLastViewed[log.resourceId]
+          ) {
+            docLastViewed[log.resourceId] = log.timestamp;
+          }
         }
+      });
+
+      // Obtener IDs de documentos ordenados por vistas
+      const sortedDocIds = Object.keys(docViews)
+        .sort((a, b) => docViews[b] - docViews[a])
+        .slice(0, 5);
+
+      if (sortedDocIds.length === 0) {
+        return [];
       }
-    });
 
-    // Obtener IDs de documentos ordenados por vistas
-    const sortedDocIds = Object.keys(docViews)
-      .sort((a, b) => docViews[b] - docViews[a])
-      .slice(0, 5);
+      // Obtener los documentos
+      const documents = await this.documentRepository.findByIds(sortedDocIds);
 
-    if (sortedDocIds.length === 0) {
-      return [];
-    }
-
-    // Obtener los documentos
-    const documents = await this.documentRepository.findByIds(sortedDocIds);
-
-    this.logger.log('getTopDocuments finalizado con exito');
-    // Mapear los documentos con sus vistas
-    return documents.map((doc) => ({
-      id: doc.id,
-      title: doc.title,
-      views: docViews[doc.id] || 0,
-      lastViewed:
-        docLastViewed[doc.id]?.toISOString() || doc.updatedAt.toISOString(),
-    }));
-      
+      this.logger.log('getTopDocuments finalizado con exito');
+      // Mapear los documentos con sus vistas
+      return documents.map((doc) => ({
+        id: doc.id,
+        title: doc.title,
+        views: docViews[doc.id] || 0,
+        lastViewed:
+          docLastViewed[doc.id]?.toISOString() || doc.updatedAt.toISOString(),
+      }));
     } catch (error) {
       this.logger.error(`Error en getTopDocuments: ${error.message}`);
       throw error;
@@ -391,7 +390,6 @@ export class AnalyticsService {
         });
         doc.on('error', (err) => reject(err));
       });
-      
     } catch (error) {
       this.logger.error(`Error en generateReport: ${error.message}`);
       throw error;

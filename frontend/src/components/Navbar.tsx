@@ -57,7 +57,7 @@ const Navbar = () => {
                     <button
                       onClick={() => setShowDropdown(!showDropdown)}
                       type='button'
-                      className='flex items-center max-w-xs text-sm bg-gray-100 rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500'
+                      className='flex items-center max-w-xs text-sm bg-gray-100 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500'
                       id='user-menu-button'
                       aria-expanded='false'
                       aria-haspopup='true'>

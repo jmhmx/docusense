@@ -4,6 +4,7 @@ import Button from './Button';
 import FirmaAutografa from './FirmaAutografa';
 import SignatureUI from './SignatureUI';
 import TwoFactorVerification from './TwoFactorVerification';
+import BiometricSignatureWorkflow from './BiometricSignatureWorkflow';
 
 interface SignaturePosition {
   page: number;
@@ -65,6 +66,7 @@ const DocumentSignature = ({
 
   // Estado para flujos de firma específicos
   const [showTwoFactorModal, setShowTwoFactorModal] = useState(false);
+  const [showBiometricWorkflow, setShowBiometricWorkflow] = useState(false);
   const [showFirmaAutografaModal, setShowFirmaAutografaModal] = useState(false);
 
   // Estado para datos pendientes de firma
@@ -188,6 +190,13 @@ const DocumentSignature = ({
           setShowSignModal(false); // Cerrar el modal de firma
           break;
 
+        case 'biometric':
+          // Guardar datos y mostrar flujo biométrico
+          setPendingSignatureData(signatureData);
+          setShowBiometricWorkflow(true);
+          setShowSignModal(false); // Cerrar el modal de firma
+          break;
+
         case 'autograph':
           // Para firma autógrafa, mostrar modal de firma autógrafa primero
           setPendingSignatureData(signatureData);
@@ -298,6 +307,39 @@ const DocumentSignature = ({
     } finally {
       setIsLoading(false);
       setShowTwoFactorModal(false);
+      setPendingSignatureData(null);
+    }
+  };
+
+  const handleBiometricSuccess = async (result: any) => {
+    console.log('es esta 3');
+    if (!pendingSignatureData) {
+      setError('No hay datos de firma pendientes');
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      // Firma con verificación biométrica
+      await api.post(`/api/signatures/${documentId}/biometric`, {
+        position: pendingSignatureData.position,
+        reason: pendingSignatureData.reason,
+        biometricVerification: {
+          timestamp: Date.now(),
+          challenge: result?.challenge || 'blink',
+          score: result?.score || 0.9,
+          method: 'facial-recognition',
+        },
+      });
+
+      handleSignatureSuccess();
+    } catch (err: any) {
+      console.error('Error al firmar documento con biometría:', err);
+      setError(err?.response?.data?.message || 'Error al firmar documento');
+    } finally {
+      setIsLoading(false);
+      setShowBiometricWorkflow(false);
       setPendingSignatureData(null);
     }
   };
@@ -567,6 +609,28 @@ const DocumentSignature = ({
               setIsLoading(false);
             }}
             actionType='firma'
+          />
+        </div>
+      )}
+
+      {/* Modal de BiometricSignatureWorkflow */}
+      {showBiometricWorkflow && (
+        <div className='fixed inset-0 z-50 flex items-center justify-center bg-gray-600 bg-opacity-50'>
+          <BiometricSignatureWorkflow
+            documentId={documentId}
+            documentTitle={documentTitle}
+            onSuccess={(result) => {
+              handleBiometricSuccess(result);
+              setShowBiometricWorkflow(false);
+            }}
+            onCancel={() => {
+              setShowBiometricWorkflow(false);
+              setPendingSignatureData(null);
+              setIsLoading(false);
+            }}
+            navigateToRegistration={() => {
+              window.location.href = '/biometric-registration';
+            }}
           />
         </div>
       )}

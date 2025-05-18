@@ -78,7 +78,7 @@ const SignatureUI = ({
       description: 'Firma con reconocimiento facial',
       color: 'bg-green-100 text-green-800 border-green-300',
     },
-    efirma: {
+    autograph: {
       icon: '✍️',
       title: 'Firma autografa',
       description: 'Firma dibujada a mano con 2FA vía correo',

@@ -25,9 +25,8 @@ interface Signature {
     email: string;
   };
   metadata?: {
-    // Añadir esta propiedad
     signatureType?: string;
-    [key: string]: any; // Permite cualquier otra propiedad en metadata
+    [key: string]: any;
   };
 }
 
@@ -183,14 +182,14 @@ const DocumentSignature = ({
       // Manejar según el tipo de firma
       switch (signatureType) {
         case 'standard':
-          // Para firma estándar, mostrar modal 2FA
+          // Para firma estándar, mostrar modal 2FA primero
           setPendingSignatureData(signatureData);
           setShowTwoFactorModal(true);
           setShowSignModal(false); // Cerrar el modal de firma
           break;
 
         case 'autograph':
-          // Guardar datos y mostrar flujo de firma autógrafa
+          // Para firma autógrafa, mostrar modal de firma autógrafa primero
           setPendingSignatureData(signatureData);
           setShowFirmaAutografaModal(true);
           setShowSignModal(false); // Cerrar el modal de firma
@@ -213,17 +212,45 @@ const DocumentSignature = ({
       return;
     }
 
-    console.log(pendingSignatureData?.type);
-
-    // Si tenemos firma autógrafa, procedemos a enviar la firma
-    // Si no, significa que todavía necesitamos mostrar el componente de firma autógrafa
-    if (pendingSignatureData?.type === 'autograph') {
+    // Para firma estándar, completar después de la verificación 2FA
+    if (pendingSignatureData.type === 'standard') {
+      await completeStandardSignature();
+    }
+    // Para firma autógrafa que ya tiene SVG, completar después de 2FA
+    else if (
+      pendingSignatureData.type === 'autograph' &&
+      pendingSignatureData.firmaAutografaSvg
+    ) {
       await completeFirmaAutografaConAutenticacion();
     } else {
-      // Mostrar el componente de firma autógrafa después de la autenticación 2FA
-      setShowTwoFactorModal(false);
-      setShowFirmaAutografaModal(false);
+      setError('Falta información para completar la firma');
+    }
+  };
+
+  // Firmar documento con método estándar
+  const completeStandardSignature = async () => {
+    if (!pendingSignatureData) {
+      setError('No hay datos de firma pendientes');
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      // Realizar petición de firma real
+      await api.post(`/api/signatures/${documentId}`, {
+        position: pendingSignatureData.position,
+        reason: pendingSignatureData.reason,
+      });
+
       handleSignatureSuccess();
+    } catch (err: any) {
+      console.error('Error al firmar documento:', err);
+      setError(err?.response?.data?.message || 'Error al firmar documento');
+    } finally {
+      setIsLoading(false);
+      setShowTwoFactorModal(false);
+      setPendingSignatureData(null);
     }
   };
 
@@ -240,14 +267,9 @@ const DocumentSignature = ({
       firmaAutografaSvg,
     });
 
-    // Si aún no se ha verificado con 2FA, mostrar el flujo 2FA
-    if (pendingSignatureData.type === 'autograph') {
-      setShowFirmaAutografaModal(false);
-      setShowTwoFactorModal(true);
-    } else {
-      // Si ya pasó por 2FA (estándar), completar el proceso
-      await completeFirmaAutografaConAutenticacion();
-    }
+    // Después de guardar la firma autógrafa, mostrar verificación 2FA
+    setShowFirmaAutografaModal(false);
+    setShowTwoFactorModal(true);
   };
 
   // Completar proceso de firma autógrafa con autenticación
@@ -260,7 +282,7 @@ const DocumentSignature = ({
     setIsLoading(true);
 
     try {
-      // Enviar la firma con los datos recopilados
+      // Enviar la firma autógrafa al servidor
       await api.post(`/api/signatures/${documentId}/autografa`, {
         position: pendingSignatureData.position,
         reason: pendingSignatureData.reason,
@@ -276,7 +298,6 @@ const DocumentSignature = ({
     } finally {
       setIsLoading(false);
       setShowTwoFactorModal(false);
-      setShowFirmaAutografaModal(false);
       setPendingSignatureData(null);
     }
   };
@@ -412,7 +433,7 @@ const DocumentSignature = ({
                         }`}>
                         {signature.valid ? 'Válida' : 'Inválida'}
                       </span>
-                      {signature.metadata?.signatureType === 'autograph' && (
+                      {signature.metadata?.signatureType === 'autografa' && (
                         <span className='inline-flex px-2 py-1 mt-1 text-xs font-semibold leading-5 text-blue-800 bg-blue-100 rounded-full'>
                           Firma Autógrafa
                         </span>

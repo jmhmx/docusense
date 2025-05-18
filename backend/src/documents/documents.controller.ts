@@ -154,7 +154,11 @@ export class DocumentsController {
     const signatures = await this.signaturesService.getDocumentSignatures(id);
 
     // Si hay firmas, generar y mostrar PDF con firmas integradas
-    if (signatures && signatures.length > 0) {
+    if (
+      signatures &&
+      signatures.length > 0 &&
+      document.mimeType?.includes('pdf')
+    ) {
       try {
         const pdfWithSignatures = await this.documentsService.generateSignedPdf(
           document,
@@ -162,14 +166,14 @@ export class DocumentsController {
         );
 
         res.set({
-          'Content-Type': document.mimeType || 'application/pdf',
+          'Content-Type': 'application/pdf',
           'Content-Disposition': `inline; filename="${document.filename}"`,
         });
 
         return res.send(pdfWithSignatures);
       } catch (error) {
         this.logger.error(`Error generando PDF con firmas: ${error.message}`);
-        // Si falla, mostrar el PDF original
+        // Si falla, continúa para mostrar el PDF original
       }
     }
 

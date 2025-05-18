@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { api } from '../api/client';
+import { api, downloadFile } from '../api/client';
 import DocumentAnalysis from '../components/DocumentAnalysis';
 import DocumentSignature from '../components/DocumentSignature';
 import DocumentEncrypt from '../components/DocumentEncrypt';
@@ -348,9 +348,12 @@ const DocumentViewer = () => {
           {signatures.length > 0 && (
             <div className='flex justify-end mb-2'>
               <button
-                onClick={() =>
-                  (window.location.href = `/api/documents/${id}/download-signed`)
-                }
+                onClick={() => {
+                  downloadFile(
+                    `/api/documents/${id}/download-signed`,
+                    `signed_${document.filename || 'documento'}.pdf`,
+                  );
+                }}
                 className='inline-flex items-center px-3 py-1 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500'>
                 <svg
                   xmlns='http://www.w3.org/2000/svg'

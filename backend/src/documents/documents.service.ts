@@ -451,94 +451,133 @@ export class DocumentsService {
     // Obtener contenido del documento original
     const fileData = await this.getDocumentContent(document, document.userId);
 
-    // Usar pdf-lib para modificar el PDF e incluir las firmas visualmente
+    // Cargar el PDF con pdf-lib
     const pdfDoc = await PDFDocument.load(fileData);
 
-    // Para cada firma, añadir su representación visual
+    // Para cada firma, añadir su representación visual de manera más notoria
     for (const signature of signatures) {
       try {
         // Obtener posición
-        const position =
-          typeof signature.position === 'string'
-            ? JSON.parse(signature.position)
-            : signature.position;
+        let position;
+        try {
+          position =
+            typeof signature.position === 'string'
+              ? JSON.parse(signature.position)
+              : signature.position;
+        } catch (e) {
+          this.logger.error(`Error al parsear posición de firma: ${e.message}`);
+          continue; // Saltar esta firma si no se puede parsear la posición
+        }
 
-        // Si no hay información de posición, continuar con la siguiente firma
-        if (!position) continue;
+        // Si no hay información de posición válida, continuar con la siguiente firma
+        if (!position || !position.page) {
+          this.logger.warn(
+            `Firma ${signature.id} sin información de posición válida`,
+          );
+          continue;
+        }
 
-        // Obtener la página donde va la firma
-        const page = pdfDoc.getPages()[position.page - 1];
-        if (!page) continue;
+        // Verificar que la página exista
+        const pageIndex = position.page - 1;
+        if (pageIndex < 0 || pageIndex >= pdfDoc.getPageCount()) {
+          this.logger.warn(
+            `Página ${position.page} no válida para firma ${signature.id}`,
+          );
+          continue;
+        }
 
-        // Crear capa de firma (rectángulo azul claro)
+        const page = pdfDoc.getPages()[pageIndex];
+
+        // Valores por defecto si no están especificados
+        const width = position.width || 200;
+        const height = position.height || 100;
+
+        // Ajustar las coordenadas y para el sistema de coordenadas de pdf-lib (origen en esquina inferior izquierda)
+        const x = position.x;
+        const y = page.getHeight() - position.y - height; // Convertir coordenada y
+
+        // Mejorar la visibilidad del área de firma
         page.drawRectangle({
-          x: position.x,
-          y: page.getHeight() - position.y - position.height,
-          width: position.width,
-          height: position.height,
-          color: rgb(0.9, 0.95, 1),
-          borderColor: rgb(0, 0.4, 0.8),
-          borderWidth: 1,
-          opacity: 0.8,
+          x,
+          y,
+          width,
+          height,
+          color: rgb(0.95, 0.95, 1), // Color de fondo más claro
+          borderColor: rgb(0.2, 0.4, 0.8), // Borde más oscuro para mejor visibilidad
+          borderWidth: 1.5, // Borde más grueso
+          opacity: 0.9, // Mayor opacidad
         });
 
-        // Si es una firma autógrafa, dibujar el SVG
+        // Usar un estilo más visible para el texto de la firma
+        const fontSize = 10; // Tamaño de fuente más grande
+
+        // Añadir la información de la firma con mejor formato
+        // Nombre del firmante con mejor contraste
+        page.drawText(`Firmado por: ${signature.user?.name || 'Usuario'}`, {
+          x: x + 10,
+          y: y + height - 20,
+          size: fontSize + 1, // Nombre ligeramente más grande
+          color: rgb(0, 0, 0.7),
+          font: await pdfDoc.embedFont('Helvetica-Bold'),
+        });
+
+        // Fecha
+        page.drawText(
+          `Fecha: ${new Date(signature.signedAt).toLocaleDateString()}`,
+          {
+            x: x + 10,
+            y: y + height - 35,
+            size: fontSize,
+            color: rgb(0.1, 0.1, 0.7),
+          },
+        );
+
+        // Razón de firma si existe
+        if (signature.reason) {
+          page.drawText(`Motivo: ${signature.reason}`, {
+            x: x + 10,
+            y: y + height - 50,
+            size: fontSize,
+            color: rgb(0.1, 0.1, 0.7),
+          });
+        }
+
+        // Si es firma autógrafa, intentar visualizar el SVG
         if (
           signature.metadata?.signatureType === 'autografa' &&
           signature.signatureData
         ) {
-          try {
-            // Aquí podrías convertir el SVG a una imagen para insertarla
-            // Por ahora, usamos un texto como placeholder
-            page.drawText(`Firma de: ${signature.user?.name || 'Usuario'}`, {
-              x: position.x + 5,
-              y: page.getHeight() - position.y - 15,
-              size: 12,
-              color: rgb(0, 0, 0.7),
-            });
-          } catch (svgError) {
-            this.logger.error(
-              `Error renderizando SVG de firma: ${svgError.message}`,
-            );
-          }
-        } else {
-          // Añadir texto de la firma
-          const fontSize = 9;
-          page.drawText(`Firmado por: ${signature.user?.name || 'Usuario'}`, {
-            x: position.x + 5,
-            y: page.getHeight() - position.y - 15,
-            size: fontSize,
-            color: rgb(0, 0, 0.7),
+          // Añadir texto indicando que es una firma autógrafa
+          page.drawText('Firma Autógrafa', {
+            x: x + 10,
+            y: y + 15, // En la parte inferior
+            size: fontSize - 2,
+            color: rgb(0.5, 0, 0.5), // Color distintivo
           });
 
-          page.drawText(
-            `Fecha: ${new Date(signature.signedAt).toLocaleDateString()}`,
-            {
-              x: position.x + 5,
-              y: page.getHeight() - position.y - 26,
-              size: fontSize,
-              color: rgb(0, 0, 0.7),
-            },
-          );
-
-          if (signature.reason) {
-            page.drawText(`Motivo: ${signature.reason}`, {
-              x: position.x + 5,
-              y: page.getHeight() - position.y - 37,
-              size: fontSize,
-              color: rgb(0, 0, 0.7),
-            });
-          }
+          // Aquí se podría añadir lógica para convertir el SVG a una imagen
+          // pero esto requeriría bibliotecas adicionales
         }
+
+        // Añadir un sello de validación
+        page.drawText('DOCUMENTO FIRMADO ELECTRÓNICAMENTE', {
+          x: x + width / 2 - 80, // Centrado aproximado
+          y: y + 5, // Parte inferior
+          size: 8,
+          color: rgb(0.8, 0, 0),
+          opacity: 0.7,
+        });
       } catch (error) {
-        this.logger.error(`Error añadiendo firma al PDF: ${error.message}`);
+        this.logger.error(
+          `Error añadiendo firma al PDF: ${error.message}`,
+          error.stack,
+        );
         // Continuar con las siguientes firmas
       }
     }
 
     // Serializar el PDF modificado
     const pdfBytes = await pdfDoc.save();
-
     return Buffer.from(pdfBytes);
   }
 }

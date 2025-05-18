@@ -12,11 +12,6 @@ import MultiSignatureManager from '../components/MultiSignatureManager';
 import MultiSignatureVerification from '../components/MultiSignatureVerification';
 import PDFSearch from '../components/PDFSearch';
 import PDFThumbnails from '../components/PDFThumbnails';
-import { pdfjs } from 'react-pdf';
-
-// Set the worker source
-pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.js`;
-
 interface DocumentType {
   id: string;
   title: string;

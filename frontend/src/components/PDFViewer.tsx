@@ -1,7 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
-import { Document, Page } from 'react-pdf';
+import { Document, Page, pdfjs } from 'react-pdf';
 import 'react-pdf/dist/esm/Page/AnnotationLayer.css';
 import 'react-pdf/dist/esm/Page/TextLayer.css';
+
+// Set the worker source
+pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.js`;
 
 interface Annotation {
   id: string;
@@ -19,7 +22,7 @@ interface Annotation {
   signedAt: string;
   valid: boolean;
   reason?: string;
-  signature?: string; // base64 de la firma
+  signature?: string;
 }
 
 interface PDFViewerProps {
@@ -37,29 +40,71 @@ const PDFViewer = ({
 }: PDFViewerProps) => {
   const [numPages, setNumPages] = useState<number | null>(null);
   const [pageNumber, setPageNumber] = useState<number>(1);
-  //@ts-ignore
   const [scale, setScale] = useState<number>(1.2);
-  const [pdfUrl, setPdfUrl] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [pdfBlob, setPdfBlob] = useState<Blob | null>(null);
+  const [retryCount, setRetryCount] = useState<number>(0);
   const pageContainerRef = useRef<HTMLDivElement>(null);
   const token = localStorage.getItem('token');
 
+  // Cargar el PDF como blob para asegurar que no hay problemas de caché o CORS
   useEffect(() => {
-    setPdfUrl(`/api/documents/${documentId}/view`);
-    setLoading(true);
-  }, [documentId]);
+    const fetchPdf = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const url = `/api/documents/${documentId}/view?t=${Date.now()}`;
+        const headers = {
+          Authorization: `Bearer ${token}`,
+        };
+
+        const response = await fetch(url, { headers });
+        if (!response.ok) {
+          throw new Error(`Error ${response.status}: ${response.statusText}`);
+        }
+
+        const blob = await response.blob();
+        setPdfBlob(blob);
+      } catch (err) {
+        console.error('Error fetching PDF:', err);
+        if (retryCount < 3) {
+          setRetryCount((prev) => prev + 1);
+          setTimeout(() => fetchPdf(), 1500);
+          setError(
+            `Error al cargar el PDF. Reintentando (${retryCount + 1}/3)...`,
+          );
+        } else {
+          setError(
+            'No se pudo cargar el PDF. Por favor, prueba a descargarlo en su lugar.',
+          );
+          setLoading(false);
+        }
+      }
+    };
+
+    fetchPdf();
+  }, [documentId, retryCount, token]);
 
   const onDocumentLoadSuccess = ({ numPages }: { numPages: number }) => {
     setNumPages(numPages);
     setLoading(false);
     setError(null);
+    setRetryCount(0);
   };
 
-  const onDocumentLoadError = (error: Error) => {
-    console.error('Error loading PDF:', error);
+  const onDocumentLoadError = (errorObj: Error) => {
+    console.error('Error loading PDF:', errorObj);
     setLoading(false);
-    setError('Failed to load the PDF. Please try downloading it instead.');
+
+    if (retryCount < 3) {
+      setRetryCount((prev) => prev + 1);
+      setError(`Error al cargar el PDF. Reintentando (${retryCount + 1}/3)...`);
+    } else {
+      setError(
+        'No se pudo cargar el PDF. Por favor, prueba a descargarlo en su lugar.',
+      );
+    }
   };
 
   const handlePreviousPage = () => {
@@ -76,6 +121,14 @@ const PDFViewer = ({
       setPageNumber(newPage);
       if (onPageChange) onPageChange(newPage);
     }
+  };
+
+  const handleZoomIn = () => {
+    setScale((prev) => Math.min(prev + 0.2, 2.5));
+  };
+
+  const handleZoomOut = () => {
+    setScale((prev) => Math.max(prev - 0.2, 0.5));
   };
 
   const renderAnnotations = () => {
@@ -99,8 +152,12 @@ const PDFViewer = ({
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        background: 'transparent',
-        border: 'none',
+        background: 'rgba(255, 255, 255, 0.7)',
+        border: annotation.valid
+          ? '2px solid rgba(0, 128, 0, 0.5)'
+          : '2px solid rgba(255, 0, 0, 0.5)',
+        borderRadius: '4px',
+        boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
       };
 
       return (
@@ -108,7 +165,7 @@ const PDFViewer = ({
           key={annotation.id}
           style={style}
           onClick={() => handleAnnotationClick(annotation)}
-          title={annotation.reason || 'Signature'}>
+          title={annotation.reason || 'Firma'}>
           {annotation.signature ? (
             <img
               src={`data:image/png;base64,${annotation.signature}`}
@@ -120,9 +177,14 @@ const PDFViewer = ({
               }}
             />
           ) : (
-            <div className='flex items-center justify-center flex-shrink-0 w-6 h-6 bg-blue-100 rounded-full'>
-              <span className='text-xs font-bold text-blue-800'>
-                {annotation.user.name.substring(0, 2).toUpperCase()}
+            <div className='flex flex-col items-center justify-center w-full h-full'>
+              <div className='flex items-center justify-center flex-shrink-0 w-8 h-8 mb-1 bg-blue-100 rounded-full'>
+                <span className='text-xs font-bold text-blue-800'>
+                  {annotation.user.name.substring(0, 2).toUpperCase()}
+                </span>
+              </div>
+              <span className='text-xs font-medium text-gray-700'>
+                {annotation.user.name}
               </span>
             </div>
           )}
@@ -144,7 +206,7 @@ const PDFViewer = ({
             onClick={handlePreviousPage}
             disabled={pageNumber <= 1}
             className='p-1 text-gray-500 bg-gray-100 rounded hover:bg-gray-200 disabled:opacity-50'
-            title='Previous page'>
+            title='Página anterior'>
             <svg
               xmlns='http://www.w3.org/2000/svg'
               className='w-5 h-5'
@@ -158,13 +220,13 @@ const PDFViewer = ({
             </svg>
           </button>
           <span className='text-sm'>
-            Page {pageNumber} of {numPages || '-'}
+            Página {pageNumber} de {numPages || '-'}
           </span>
           <button
             onClick={handleNextPage}
             disabled={!numPages || pageNumber >= numPages}
             className='p-1 text-gray-500 bg-gray-100 rounded hover:bg-gray-200 disabled:opacity-50'
-            title='Next page'>
+            title='Página siguiente'>
             <svg
               xmlns='http://www.w3.org/2000/svg'
               className='w-5 h-5'
@@ -173,6 +235,44 @@ const PDFViewer = ({
               <path
                 fillRule='evenodd'
                 d='M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z'
+                clipRule='evenodd'
+              />
+            </svg>
+          </button>
+        </div>
+
+        <div className='flex items-center space-x-2'>
+          <button
+            onClick={handleZoomOut}
+            className='p-1 text-gray-500 bg-gray-100 rounded hover:bg-gray-200'
+            title='Alejar'>
+            <svg
+              xmlns='http://www.w3.org/2000/svg'
+              className='w-5 h-5'
+              viewBox='0 0 20 20'
+              fill='currentColor'>
+              <path
+                fillRule='evenodd'
+                d='M5 10a1 1 0 011-1h8a1 1 0 110 2H6a1 1 0 01-1-1z'
+                clipRule='evenodd'
+              />
+            </svg>
+          </button>
+          <span className='text-sm font-medium'>
+            {Math.round(scale * 100)}%
+          </span>
+          <button
+            onClick={handleZoomIn}
+            className='p-1 text-gray-500 bg-gray-100 rounded hover:bg-gray-200'
+            title='Acercar'>
+            <svg
+              xmlns='http://www.w3.org/2000/svg'
+              className='w-5 h-5'
+              viewBox='0 0 20 20'
+              fill='currentColor'>
+              <path
+                fillRule='evenodd'
+                d='M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z'
                 clipRule='evenodd'
               />
             </svg>
@@ -222,33 +322,53 @@ const PDFViewer = ({
                 d='M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z'
               />
             </svg>
-            <p className='mt-2 text-red-600'>{error}</p>
+            <p className='mt-2 text-center text-red-600'>{error}</p>
+            <button
+              onClick={() => {
+                window.open(`/api/documents/${documentId}/download`, '_blank');
+              }}
+              className='px-4 py-2 mt-4 font-medium text-white bg-blue-600 rounded hover:bg-blue-700'>
+              Descargar PDF
+            </button>
           </div>
         )}
 
-        <div className='relative flex justify-center'>
-          <Document
-            file={{
-              url: pdfUrl,
-              httpHeaders: {
-                Authorization: `Bearer ${token}`,
-              },
-            }}
-            onLoadSuccess={onDocumentLoadSuccess}
-            onLoadError={onDocumentLoadError}
-            className='relative'>
-            <Page
-              pageNumber={pageNumber}
-              scale={scale}
-              renderTextLayer={true}
-              renderAnnotationLayer={true}
-              className='shadow-lg'
-            />
+        {pdfBlob && !error && (
+          <div className='relative flex justify-center'>
+            <Document
+              file={pdfBlob}
+              onLoadSuccess={onDocumentLoadSuccess}
+              onLoadError={onDocumentLoadError}
+              className='relative'
+              loading={
+                <div className='flex items-center justify-center w-full h-64'>
+                  <div className='w-16 h-16 border-4 border-blue-500 rounded-full border-t-transparent animate-spin'></div>
+                </div>
+              }
+              options={{
+                cMapUrl: `//unpkg.com/pdfjs-dist@${pdfjs.version}/cmaps/`,
+                cMapPacked: true,
+                standardFontDataUrl: `//unpkg.com/pdfjs-dist@${pdfjs.version}/standard_fonts`,
+              }}>
+              <Page
+                key={`page_${pageNumber}_scale_${scale}`}
+                pageNumber={pageNumber}
+                scale={scale}
+                renderTextLayer={true}
+                renderAnnotationLayer={true}
+                className='shadow-lg'
+                loading={
+                  <div className='flex items-center justify-center h-64'>
+                    <div className='w-12 h-12 border-4 border-blue-300 rounded-full border-t-transparent animate-spin'></div>
+                  </div>
+                }
+                error='Error al cargar la página. Por favor inténtelo más tarde.'
+              />
 
-            {/* Render annotations */}
-            {renderAnnotations()}
-          </Document>
-        </div>
+              {renderAnnotations()}
+            </Document>
+          </div>
+        )}
       </div>
     </div>
   );

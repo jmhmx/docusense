@@ -42,13 +42,13 @@ export class AuthService {
     const [salt, storedHash] = storedPassword.split(':');
     // Hashear la contraseña proporcionada con el mismo salt
     const hash = crypto
-      .pbkdf2Sync(suppliedPassword, salt, 1000, 64, 'sha512')
+      .pbkdf2Sync(suppliedPassword, salt, 10000, 64, 'sha512')
       .toString('hex');
     // Comparar los hashes
     return storedHash === hash;
   }
 
-  async register(registerDto: RegisterDto) {
+  async register(registerDto: RegisterDto, response: Response) {
     const { email, password } = registerDto;
 
     // Verificar si el usuario ya existe
@@ -68,6 +68,15 @@ export class AuthService {
 
     // Generar token
     const token = this.generateToken(user.id, user.isAdmin);
+
+    // Establecer cookie
+    response.cookie('auth_token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 4 * 60 * 60 * 1000,
+      path: '/',
+    });
 
     // Enviar correo de bienvenida
     const frontendUrl =
@@ -91,7 +100,7 @@ export class AuthService {
   async login(loginDto: LoginDto, response: Response) {
     const { email, password } = loginDto;
 
-    // Verificación de credenciales (código existente)
+    // Verificación de credenciales
     const user = await this.usersService.findByEmail(email);
     if (!user) {
       throw new UnauthorizedException('Credenciales inválidas');
@@ -107,13 +116,14 @@ export class AuthService {
 
     // Establecer como cookie HttpOnly
     response.cookie('auth_token', token, {
-      httpOnly: true, // No accesible desde JavaScript
-      secure: process.env.NODE_ENV === 'production', // Solo HTTPS en producción
-      sameSite: 'lax', // Cambiar de 'strict' a 'lax' para desarrollo
-      maxAge: 4 * 60 * 60 * 1000, // 4 horas (ajustar según configuración JWT)
-      path: '/', // Disponible en todo el sitio
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 4 * 60 * 60 * 1000,
+      path: '/',
     });
 
+    // También devolver el token para mantener compatibilidad con el cliente
     return {
       user: {
         id: user.id,
@@ -121,7 +131,7 @@ export class AuthService {
         name: user.name,
         isAdmin: user.isAdmin,
       },
-      // No enviamos el token en la respuesta
+      token, // Seguimos enviando el token para mantener compatibilidad
     };
   }
 

@@ -76,7 +76,11 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
     try {
       const response = await api.post('/api/auth/login', { email, password });
-      // Ya no necesitamos guardar el token pues se maneja como cookie
+
+      // Guardamos tanto el token como los datos del usuario para compatibilidad
+      if (response.data.token) {
+        localStorage.setItem('token', response.data.token);
+      }
       localStorage.setItem('user', JSON.stringify(response.data.user));
       setUser(response.data.user);
     } finally {
@@ -93,7 +97,11 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         email,
         password,
       });
-      // Ya no guardamos el token, solo los datos del usuario
+
+      // Guardar tanto el token como los datos del usuario
+      if (response.data.token) {
+        localStorage.setItem('token', response.data.token);
+      }
       localStorage.setItem('user', JSON.stringify(response.data.user));
       setUser(response.data.user);
     } finally {

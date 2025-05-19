@@ -20,9 +20,15 @@ async function bootstrap() {
 
   // Habilitar CORS
   app.enableCors({
-    origin: ['http://localhost:3001', 'http://localhost:5173'],
+    origin: [
+      'http://localhost:3001',
+      'http://localhost:5173',
+      // Añadir aquí otros orígenes que necesites
+    ],
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
-    credentials: true, // Esto es crucial para las cookies
+    credentials: true,
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    exposedHeaders: ['Content-Disposition'], // Si se necesitan encabezados expuestos
   });
 
   await app.listen(process.env.PORT ?? 3000);

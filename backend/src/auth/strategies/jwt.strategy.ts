@@ -11,16 +11,17 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     private usersService: UsersService,
   ) {
     super({
-      // Extraer JWT de la cookie en lugar del encabezado
       jwtFromRequest: (req) => {
-        console.log('Cookies en solicitud:', req.cookies);
-        if (!req.cookies) return null;
-        const token = req.cookies['auth_token'];
-        console.log(
-          'Token extraído de cookie:',
-          token ? 'presente' : 'ausente',
-        );
-        return token;
+        // Verificamos que req.cookies existe antes de intentar acceder
+        if (!req.cookies || !req.cookies['auth_token']) {
+          // También verificamos si hay token en headers (para compatibilidad)
+          const authHeader = req.headers.authorization;
+          if (authHeader && authHeader.startsWith('Bearer ')) {
+            return authHeader.substring(7);
+          }
+          return null;
+        }
+        return req.cookies['auth_token'];
       },
       ignoreExpiration: false,
       secretOrKey: configService.get<string>('JWT_SECRET'),
@@ -28,18 +29,10 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   async validate(payload: any) {
-    console.log('Payload JWT recibido:', payload);
-    try {
-      const user = await this.usersService.findOne(payload.sub);
-      console.log('Usuario encontrado:', user);
-      if (!user) {
-        console.log('Usuario no encontrado para el payload:', payload);
-        throw new UnauthorizedException();
-      }
-      return user;
-    } catch (error) {
-      console.log('Error en validación JWT:', error);
+    const user = await this.usersService.findOne(payload.sub);
+    if (!user) {
       throw new UnauthorizedException();
     }
+    return user;
   }
 }

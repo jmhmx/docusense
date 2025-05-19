@@ -13,7 +13,11 @@ export const api = axios.create({
 // Añade un interceptor para depuración
 api.interceptors.request.use(
   (config) => {
-    console.log('Haciendo petición con credentials:', config.withCredentials);
+    // Si hay un token en localStorage, enviarlo como header
+    const token = localStorage.getItem('token');
+    if (token && !config.headers.Authorization) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
     return config;
   },
   (error) => Promise.reject(error),

@@ -8,15 +8,17 @@ import {
   Request,
   Param,
   BadRequestException,
-  ForbiddenException,
   UnauthorizedException,
   Logger,
+  Res,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AdminGuard } from './guards/admin.guard';
 import { AdminService } from './admin.service';
 import { UpdateSystemConfigurationDto } from './dto/system-configuration.dto';
 import { ConfigService } from '@nestjs/config';
+import { Response } from 'express';
+import { JwtService } from '@nestjs/jwt';
 
 @Controller('api/admin')
 export class AdminController {
@@ -25,6 +27,7 @@ export class AdminController {
   constructor(
     private adminService: AdminService,
     private configService: ConfigService,
+    private jwtService: JwtService,
   ) {}
 
   @Post('setup/initial-admin')
@@ -36,10 +39,11 @@ export class AdminController {
       password: string;
       setupKey: string;
     },
+    @Res({ passthrough: true }) response: Response,
   ) {
     this.logger.log('Intento de creación de administrador inicial');
 
-    // Usar el servicio inyectado
+    // Verificar clave de configuración
     const setupKey = this.configService.get<string>('ADMIN_SETUP_KEY');
 
     if (!setupKey || setupDto.setupKey !== setupKey) {
@@ -47,12 +51,31 @@ export class AdminController {
       throw new UnauthorizedException('Clave de configuración inválida');
     }
 
-    this.logger.log('Creando administrador inicial');
-    return this.adminService.createInitialAdmin(
+    const user = await this.adminService.createInitialAdmin(
       setupDto.email,
       setupDto.name,
       setupDto.password,
     );
+
+    // Generar token para el administrador
+    const token = this.jwtService.sign({
+      sub: user.id,
+      isAdmin: true,
+    });
+
+    // Establecer cookie
+    response.cookie('auth_token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 4 * 60 * 60 * 1000,
+      path: '/',
+    });
+
+    return {
+      ...user,
+      token, // Devolvemos el token para mantener compatibilidad
+    };
   }
 
   @UseGuards(JwtAuthGuard, AdminGuard)

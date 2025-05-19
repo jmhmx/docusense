@@ -482,7 +482,7 @@ export class AdminService {
     const salt = crypto.randomBytes(16).toString('hex');
     // Hashear la contraseña con el salt
     const hash = crypto
-      .pbkdf2Sync(password, salt, 1000, 64, 'sha512')
+      .pbkdf2Sync(password, salt, 10000, 64, 'sha512')
       .toString('hex');
     // Devolver "salt:hash" para almacenar ambos
     return `${salt}:${hash}`;

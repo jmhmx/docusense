@@ -154,8 +154,6 @@ const SignatureUI = ({
     setStep('processing');
     setProcessing(true);
 
-    console.log(position);
-
     // Simular proceso de firma (esto sería reemplazado por la llamada real)
     setTimeout(() => {
       try {

@@ -4,45 +4,42 @@ import Button from './Button';
 import useAuth from '../hooks/UseAuth';
 
 interface BiometricAuthVerifyProps {
-  onSuccess: (result?: any) => void;  // Hacerlo opcional con ?
+  onSuccess: (result?: any) => void; // Hacerlo opcional con ?
   onCancel: () => void;
 }
 
-const BiometricAuthVerify = ({ onSuccess, onCancel }: BiometricAuthVerifyProps) => {
+const BiometricAuthVerify = ({
+  onSuccess,
+  onCancel,
+}: BiometricAuthVerifyProps) => {
   const { loginWithBiometrics, user } = useAuth();
   const [isVerifying, setIsVerifying] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
+
   // Modificar la función handleBiometricSuccess
   const handleBiometricSuccess = async (result: any) => {
-    console.log("es esta");
-    
     setIsVerifying(true);
     setError(null);
-    
+
     try {
       if (!user?.id) throw new Error('Usuario no identificado');
-      
+
       // Añadir más datos para análisis de seguridad
-      await loginWithBiometrics(
-        user.id, 
-        result.descriptorData,
-        {
-          challenge: result.challenge || 'blink',
-          timestamp: Date.now(),
-          motionData: result.motionData,
-          textureData: result.textureData,
-          confidenceScore: result.confidenceScore,
-          deviceInfo: {
-            screen: {
-              width: window.screen.width,
-              height: window.screen.height
-            },
-            userAgent: navigator.userAgent,
-            hardwareConcurrency: navigator.hardwareConcurrency || 'unknown'
-          }
-        }
-      );
+      await loginWithBiometrics(user.id, result.descriptorData, {
+        challenge: result.challenge || 'blink',
+        timestamp: Date.now(),
+        motionData: result.motionData,
+        textureData: result.textureData,
+        confidenceScore: result.confidenceScore,
+        deviceInfo: {
+          screen: {
+            width: window.screen.width,
+            height: window.screen.height,
+          },
+          userAgent: navigator.userAgent,
+          hardwareConcurrency: navigator.hardwareConcurrency || 'unknown',
+        },
+      });
       onSuccess();
     } catch (err: any) {
       setError(`Error de verificación: ${err.message}`);
@@ -50,27 +47,26 @@ const BiometricAuthVerify = ({ onSuccess, onCancel }: BiometricAuthVerifyProps) 
       setIsVerifying(false);
     }
   };
-  
+
   return (
-    <div className="p-6 bg-white rounded-lg shadow-lg">      
+    <div className='p-6 bg-white rounded-lg shadow-lg'>
       {error && (
-        <div className="p-4 mb-4 text-red-700 bg-red-100 rounded-md">
+        <div className='p-4 mb-4 text-red-700 bg-red-100 rounded-md'>
           {error}
         </div>
       )}
-      
-      <BiometricCapture 
-        mode="verify"
+
+      <BiometricCapture
+        mode='verify'
         onSuccess={handleBiometricSuccess}
-        challengeType="blink"
+        challengeType='blink'
       />
-      
-      <div className="flex justify-end mt-4 space-x-2">
+
+      <div className='flex justify-end mt-4 space-x-2'>
         <Button
           onClick={onCancel}
-          variant="secondary"
-          disabled={isVerifying}
-        >
+          variant='secondary'
+          disabled={isVerifying}>
           Cancelar
         </Button>
       </div>

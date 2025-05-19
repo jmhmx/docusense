@@ -997,7 +997,7 @@ export class SharingService {
   private async hashPassword(password: string): Promise<string> {
     const salt = crypto.randomBytes(8).toString('hex');
     const hash = crypto
-      .pbkdf2Sync(password, salt, 1000, 64, 'sha512')
+      .pbkdf2Sync(password, salt, 10000, 64, 'sha512')
       .toString('hex');
 
     return `${salt}:${hash}`;
@@ -1012,7 +1012,7 @@ export class SharingService {
   ): Promise<boolean> {
     const [salt, hash] = storedHash.split(':');
     const calculatedHash = crypto
-      .pbkdf2Sync(password, salt, 1000, 64, 'sha512')
+      .pbkdf2Sync(password, salt, 10000, 64, 'sha512')
       .toString('hex');
 
     return hash === calculatedHash;

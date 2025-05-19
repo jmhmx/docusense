@@ -312,7 +312,6 @@ const DocumentSignature = ({
   };
 
   const handleBiometricSuccess = async (result: any) => {
-    console.log('es esta 3');
     if (!pendingSignatureData) {
       setError('No hay datos de firma pendientes');
       return;

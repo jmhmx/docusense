@@ -15,8 +15,11 @@ import * as crypto from 'crypto';
 @Injectable()
 export class TwoFactorService {
   private readonly logger = new Logger(TwoFactorService.name);
-  private readonly CODE_EXPIRY_MINUTES = 15; // Tiempo de expiración del código en minutos
+  private readonly CODE_EXPIRY_MINUTES = 10; // Tiempo de expiración del código en minutos
   private readonly CODE_LENGTH = 6; // Longitud del código
+  private readonly MAX_VERIFICATION_ATTEMPTS = 5;
+  // Agregar un mapa para rastrear intentos fallidos
+  private failedAttempts: Map<string, number> = new Map();
 
   constructor(
     @InjectRepository(User)
@@ -108,6 +111,30 @@ export class TwoFactorService {
     ipAddress?: string,
     userAgent?: string,
   ): Promise<boolean> {
+    // Verificar si se ha excedido el límite de intentos
+    const attemptKey = `${userId}:${action}`;
+    const attempts = this.failedAttempts.get(attemptKey) || 0;
+
+    if (attempts >= this.MAX_VERIFICATION_ATTEMPTS) {
+      // Registrar intento de fuerza bruta
+      await this.auditLogService.log(
+        AuditAction.AUTH_2FA_VERIFY,
+        userId,
+        null,
+        {
+          success: false,
+          reason: 'max_attempts_exceeded',
+          action,
+        },
+        ipAddress,
+        userAgent,
+      );
+
+      throw new BadRequestException(
+        'Demasiados intentos fallidos. Genere un nuevo código.',
+      );
+    }
+
     // Validar entradas
     if (!userId || !code) {
       throw new BadRequestException('Usuario y código son requeridos');
@@ -176,7 +203,10 @@ export class TwoFactorService {
         ipAddress,
         userAgent,
       );
+      this.failedAttempts.delete(attemptKey);
     } else {
+      // Incrementar contador de intentos fallidos
+      this.failedAttempts.set(attemptKey, attempts + 1);
       // Registrar intento fallido
       await this.auditLogService.log(
         AuditAction.AUTH_2FA_VERIFY,
@@ -191,6 +221,17 @@ export class TwoFactorService {
         userAgent,
       );
 
+      // Programar eliminación del contador después de un tiempo
+      setTimeout(
+        () => {
+          const currentAttempts = this.failedAttempts.get(attemptKey);
+          if (currentAttempts && currentAttempts <= attempts + 1) {
+            this.failedAttempts.delete(attemptKey);
+          }
+        },
+        this.CODE_EXPIRY_MINUTES * 60 * 1000,
+      );
+
       throw new UnauthorizedException('Código de verificación inválido');
     }
 
@@ -198,17 +239,41 @@ export class TwoFactorService {
   }
 
   /**
-   * Genera un código alfanumérico aleatorio
+   * Genera un código de verificación aleatorio con distribución uniforme
+   * usando un método criptográficamente seguro
    */
   private generateVerificationCode(): string {
     // Caracteres permitidos (sin caracteres ambiguos como 0, O, 1, I, etc.)
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    const charsLength = chars.length;
     let code = '';
 
-    // Generar código aleatorio de la longitud especificada
+    // Número de bytes necesarios (más eficiente)
     const randomBytes = crypto.randomBytes(this.CODE_LENGTH);
+
+    // Fisher-Yates para selección uniforme
     for (let i = 0; i < this.CODE_LENGTH; i++) {
-      const randomIndex = randomBytes[i] % chars.length;
+      // Calcular un límite que sea múltiplo del número de caracteres
+      const maxByte = 256 - (256 % charsLength);
+
+      // Generar bytes hasta obtener uno dentro del rango válido
+      let randomByte;
+      let bytePos = i;
+
+      do {
+        // Si nos quedamos sin bytes, generamos más
+        if (bytePos >= randomBytes.length) {
+          const extraBytes = crypto.randomBytes(this.CODE_LENGTH);
+          bytePos = 0;
+          randomByte = extraBytes[bytePos];
+        } else {
+          randomByte = randomBytes[bytePos];
+          bytePos++;
+        }
+      } while (randomByte >= maxByte);
+
+      // Convertir a índice dentro del rango de caracteres (distribución uniforme)
+      const randomIndex = randomByte % charsLength;
       code += chars.charAt(randomIndex);
     }
 

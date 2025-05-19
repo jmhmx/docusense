@@ -78,11 +78,10 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
     try {
       const response = await api.post('/api/auth/login', { email, password });
-      const { token, user } = response.data;
-
-      localStorage.setItem('token', token);
-      localStorage.setItem('user', JSON.stringify(user));
-      setUser(user);
+      // El token ahora se maneja como cookie
+      // Solo almacenamos datos del usuario
+      localStorage.setItem('user', JSON.stringify(response.data.user));
+      setUser(response.data.user);
     } finally {
       setIsLoading(false);
     }
@@ -107,10 +106,15 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     }
   };
 
-  const logout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    setUser(null);
+  const logout = async () => {
+    try {
+      // Llamar al endpoint de logout para eliminar la cookie
+      await api.post('/api/auth/logout');
+    } finally {
+      // Limpiar datos locales
+      localStorage.removeItem('user');
+      setUser(null);
+    }
   };
 
   useEffect(() => {

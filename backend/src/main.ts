@@ -1,6 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { webcrypto } from 'crypto';
+import * as cookieParser from 'cookie-parser';
 
 // Solución alternativa para Node.js 20+
 if (!globalThis.crypto) {
@@ -20,6 +21,9 @@ async function bootstrap() {
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     credentials: true,
   });
+
+  // Middleware para parsear cookies
+  app.use(cookieParser());
 
   await app.listen(process.env.PORT ?? 3000);
 }

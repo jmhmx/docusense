@@ -6,15 +6,14 @@ export const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  // Importante: enviar cookies con las solicitudes
+  withCredentials: true,
 });
 
-// Interceptor para añadir token de autenticación
+// Añade un interceptor para depuración
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
+    console.log('Haciendo petición con credentials:', config.withCredentials);
     return config;
   },
   (error) => Promise.reject(error),
@@ -26,9 +25,6 @@ api.interceptors.response.use(
   (error) => {
     // Manejo de errores de autenticación (401)
     if (error.response && error.response.status === 401) {
-      // Opcionalmente, puedes limpiar el token si ya no es válido
-      localStorage.removeItem('token');
-
       // Redireccionar a login si no estamos ya en la página de login
       if (!window.location.pathname.includes('/login')) {
         window.location.href = '/login';

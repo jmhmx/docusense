@@ -10,6 +10,7 @@ import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { EmailService } from '../email/email.service';
 import { ConfigService } from '@nestjs/config';
+import { Response } from 'express'; // Añade esta importación
 
 @Injectable()
 export class AuthService {
@@ -87,16 +88,15 @@ export class AuthService {
     };
   }
 
-  async login(loginDto: LoginDto) {
+  async login(loginDto: LoginDto, response: Response) {
     const { email, password } = loginDto;
 
-    // Buscar usuario por email
+    // Verificación de credenciales (código existente)
     const user = await this.usersService.findByEmail(email);
     if (!user) {
       throw new UnauthorizedException('Credenciales inválidas');
     }
 
-    // Verificar contraseña
     const isPasswordValid = await this.verifyPassword(user.password, password);
     if (!isPasswordValid) {
       throw new UnauthorizedException('Credenciales inválidas');
@@ -105,6 +105,15 @@ export class AuthService {
     // Generar token
     const token = this.generateToken(user.id, user.isAdmin);
 
+    // Establecer como cookie HttpOnly
+    response.cookie('auth_token', token, {
+      httpOnly: true, // No accesible desde JavaScript
+      secure: process.env.NODE_ENV === 'production', // Solo HTTPS en producción
+      sameSite: 'strict', // Protección CSRF
+      maxAge: 4 * 60 * 60 * 1000, // 4 horas (ajustar según configuración JWT)
+      path: '/', // Disponible en todo el sitio
+    });
+
     return {
       user: {
         id: user.id,
@@ -112,7 +121,7 @@ export class AuthService {
         name: user.name,
         isAdmin: user.isAdmin,
       },
-      token,
+      // No enviamos el token en la respuesta
     };
   }
 

@@ -23,6 +23,10 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error) => {
+    // Si el error ya fue manejado por otro código, no hacer nada
+    if (error.handled) {
+      return Promise.reject(error);
+    }
     // Manejo de errores de autenticación (401)
     if (error.response && error.response.status === 401) {
       // Redireccionar a login si no estamos ya en la página de login

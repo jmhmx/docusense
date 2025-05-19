@@ -109,7 +109,7 @@ export class AuthService {
     response.cookie('auth_token', token, {
       httpOnly: true, // No accesible desde JavaScript
       secure: process.env.NODE_ENV === 'production', // Solo HTTPS en producción
-      sameSite: 'strict', // Protección CSRF
+      sameSite: 'lax', // Cambiar de 'strict' a 'lax' para desarrollo
       maxAge: 4 * 60 * 60 * 1000, // 4 horas (ajustar según configuración JWT)
       path: '/', // Disponible en todo el sitio
     });

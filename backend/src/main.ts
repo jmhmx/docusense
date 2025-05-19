@@ -15,15 +15,15 @@ if (!globalThis.crypto) {
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  // Habilitar CORS
-  app.enableCors({
-    origin: ['http://localhost:3001', 'http://localhost:5173'], // Añadir ambos puertos de desarrollo
-    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
-    credentials: true,
-  });
-
   // Middleware para parsear cookies
   app.use(cookieParser());
+
+  // Habilitar CORS
+  app.enableCors({
+    origin: ['http://localhost:3001', 'http://localhost:5173'],
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+    credentials: true, // Esto es crucial para las cookies
+  });
 
   await app.listen(process.env.PORT ?? 3000);
 }

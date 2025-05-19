@@ -52,23 +52,32 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     useState<boolean>(false);
 
   useEffect(() => {
-    // Verificar si hay datos del usuario guardados (ya no verificamos el token)
-    const loadUser = async () => {
-      const storedUser = localStorage.getItem('user');
+    // Verificar la autenticación actual al cargar el componente
+    const checkAuthStatus = async () => {
+      try {
+        // Verificar la URL actual
+        const isSetupRoute = window.location.pathname.includes('/setup');
 
-      if (storedUser) {
-        try {
-          setUser(JSON.parse(storedUser));
-        } catch (error) {
-          console.error('Error al cargar datos del usuario:', error);
-          localStorage.removeItem('user');
+        // Si estamos en la ruta /setup, no intentamos verificar el perfil
+        if (isSetupRoute) {
+          setIsLoading(false);
+          return;
         }
-      }
 
-      setIsLoading(false);
+        // Para otras rutas, intentar obtener el perfil
+        const response = await api.get('/api/auth/profile');
+        setUser(response.data);
+        localStorage.setItem('user', JSON.stringify(response.data));
+      } catch (error) {
+        // Si falla, el usuario no está autenticado
+        localStorage.removeItem('user');
+        setUser(null);
+      } finally {
+        setIsLoading(false);
+      }
     };
 
-    loadUser();
+    checkAuthStatus();
   }, []);
 
   const login = async (email: string, password: string) => {
@@ -77,10 +86,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     try {
       const response = await api.post('/api/auth/login', { email, password });
 
-      // Guardamos tanto el token como los datos del usuario para compatibilidad
-      if (response.data.token) {
-        localStorage.setItem('token', response.data.token);
-      }
+      // La cookie se establece automáticamente en el navegador
+      // Solo necesitamos guardar los datos del usuario
+      setUser(response.data.user);
       localStorage.setItem('user', JSON.stringify(response.data.user));
       setUser(response.data.user);
     } finally {
@@ -98,12 +106,10 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         password,
       });
 
-      // Guardar tanto el token como los datos del usuario
-      if (response.data.token) {
-        localStorage.setItem('token', response.data.token);
-      }
-      localStorage.setItem('user', JSON.stringify(response.data.user));
+      // La cookie se establece automáticamente en el navegador
+      // Solo necesitamos guardar los datos del usuario
       setUser(response.data.user);
+      localStorage.setItem('user', JSON.stringify(response.data.user));
     } finally {
       setIsLoading(false);
     }

@@ -10,19 +10,6 @@ export const api = axios.create({
   withCredentials: true,
 });
 
-// Añade un interceptor para depuración
-api.interceptors.request.use(
-  (config) => {
-    // Si hay un token en localStorage, enviarlo como header
-    const token = localStorage.getItem('token');
-    if (token && !config.headers.Authorization) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => Promise.reject(error),
-);
-
 // Interceptor para manejar errores de respuesta
 api.interceptors.response.use(
   (response) => response,
@@ -31,13 +18,18 @@ api.interceptors.response.use(
     if (error.handled) {
       return Promise.reject(error);
     }
+
+    // Obtener la ruta actual
+    const currentPath = window.location.pathname;
+
     // Manejo de errores de autenticación (401)
     if (error.response && error.response.status === 401) {
-      // Redireccionar a login si no estamos ya en la página de login
-      if (!window.location.pathname.includes('/login')) {
+      // No redirigir si estamos en la página de login o setup
+      if (!currentPath.includes('/login') && !currentPath.includes('/setup')) {
         window.location.href = '/login';
       }
     }
+
     return Promise.reject(error);
   },
 );

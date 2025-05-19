@@ -43,7 +43,6 @@ export class AdminController {
   ) {
     this.logger.log('Intento de creación de administrador inicial');
 
-    // Verificar clave de configuración
     const setupKey = this.configService.get<string>('ADMIN_SETUP_KEY');
 
     if (!setupKey || setupDto.setupKey !== setupKey) {
@@ -57,25 +56,32 @@ export class AdminController {
       setupDto.password,
     );
 
-    // Generar token para el administrador
     const token = this.jwtService.sign({
       sub: user.id,
       isAdmin: true,
     });
 
-    // Establecer cookie
+    // Establecer cookie con método centralizado
+    this.setAuthCookie(response, token);
+
+    return {
+      ...user,
+    };
+  }
+
+  // Método auxiliar para cookie de autenticación (igual que en auth.service.ts)
+  private setAuthCookie(response: Response, token: string) {
+    const expirationHours = this.configService.get<number>(
+      'JWT_EXPIRATION_HOURS',
+      4,
+    );
     response.cookie('auth_token', token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: 4 * 60 * 60 * 1000,
+      maxAge: expirationHours * 60 * 60 * 1000,
       path: '/',
     });
-
-    return {
-      ...user,
-      token, // Devolvemos el token para mantener compatibilidad
-    };
   }
 
   @UseGuards(JwtAuthGuard, AdminGuard)

@@ -42,7 +42,7 @@ interface DocumentCommentsProps {
     text: string;
     start: number;
     end: number;
-  };
+  } | null;
   position?: {
     x: number;
     y: number;

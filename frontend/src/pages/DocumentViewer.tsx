@@ -12,6 +12,7 @@ import MultiSignatureManager from '../components/MultiSignatureManager';
 import MultiSignatureVerification from '../components/MultiSignatureVerification';
 import PDFSearch from '../components/PDFSearch';
 import PDFThumbnails from '../components/PDFThumbnails';
+
 interface DocumentType {
   id: string;
   title: string;
@@ -58,17 +59,24 @@ const DocumentViewer = () => {
     | 'blockchain'
   >('preview');
   const [processingDocument, setProcessingDocument] = useState<boolean>(false);
+  // @ts-ignore
   const [unreadComments, setUnreadComments] = useState(0);
-  //@ts-ignore
+  // @ts-ignore
   const [multiSignatureEnabled, setMultiSignatureEnabled] = useState(true);
   const [signatures, setSignatures] = useState<Signature[]>([]);
   const [currentPage, setCurrentPage] = useState<number>(1);
-  //@ts-ignore
   const [totalPages, setTotalPages] = useState<number>(1);
-  //@ts-ignore
+  // @ts-ignore
   const [isLoadingSignatures, setIsLoadingSignatures] = useState(true);
   const [documentImageUrl, setDocumentImageUrl] = useState<string | null>(null);
+  const [selectedText, setSelectedText] = useState<{
+    text: string;
+    start: number;
+    end: number;
+  } | null>(null);
+  const [showCommentsSidebar, setShowCommentsSidebar] = useState<boolean>(true);
 
+  // Estado para comentarios contextuales
   const [contextualComments, setContextualComments] = useState<{
     visible: boolean;
     x: number;
@@ -82,6 +90,7 @@ const DocumentViewer = () => {
   });
   const [comments, setComments] = useState<any[]>([]);
 
+  // Función para mostrar comentarios contextuales
   const showContextualComments = (
     position: { x: number; y: number },
     pageNumber: number,
@@ -115,6 +124,7 @@ const DocumentViewer = () => {
     }
   };
 
+  // Manejar clic en el documento
   const handleDocumentClick = (e: React.MouseEvent) => {
     // Si hay comentarios contextuales visibles, ocultarlos
     if (contextualComments.visible) {
@@ -143,6 +153,29 @@ const DocumentViewer = () => {
     } catch (err) {
       console.error('Error al obtener comentarios no leídos:', err);
     }
+  };
+
+  // Función para obtener texto seleccionado
+  const handleTextSelection = () => {
+    const selection = window.getSelection();
+    if (!selection || selection.isCollapsed) {
+      setSelectedText(null);
+      return;
+    }
+
+    const text = selection.toString().trim();
+    if (!text) {
+      setSelectedText(null);
+      return;
+    }
+
+    // Solo para fines de demostración, en una implementación real
+    // se obtendrían las posiciones de inicio y fin reales del texto dentro del PDF
+    setSelectedText({
+      text,
+      start: 0,
+      end: text.length,
+    });
   };
 
   useEffect(() => {
@@ -324,62 +357,159 @@ const DocumentViewer = () => {
       // Para PDFs, vamos a usar nuestro sistema mejorado
       return (
         <div className='flex flex-col space-y-4'>
-          {/* Búsqueda en PDF */}
-          <PDFSearch
-            documentId={id || ''}
-            numPages={totalPages}
-            onResultClick={(page) => setCurrentPage(page)}
-          />
+          <div className='flex items-center justify-between'>
+            <h3 className='text-lg font-medium text-gray-900'>
+              Visualizador de documento
+            </h3>
+            <button
+              onClick={() => setShowCommentsSidebar(!showCommentsSidebar)}
+              className='inline-flex items-center px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50'>
+              <svg
+                xmlns='http://www.w3.org/2000/svg'
+                className='w-5 h-5 mr-1'
+                fill='none'
+                viewBox='0 0 24 24'
+                stroke='currentColor'>
+                <path
+                  strokeLinecap='round'
+                  strokeLinejoin='round'
+                  strokeWidth={2}
+                  d={
+                    showCommentsSidebar
+                      ? 'M11 19l-7-7 7-7m8 14l-7-7 7-7'
+                      : 'M13 5l7 7-7 7M5 5l7 7-7 7'
+                  }
+                />
+              </svg>
+              {showCommentsSidebar
+                ? 'Ocultar comentarios'
+                : 'Mostrar comentarios'}
+            </button>
+          </div>
 
-          {/* Miniaturas de páginas */}
-          <PDFThumbnails
-            documentId={id || ''}
-            numPages={totalPages}
-            currentPage={currentPage}
-            onPageSelect={(page) => setCurrentPage(page)}
-          />
+          {/* PDF Viewer + Comentarios en columnas */}
+          <div className='flex flex-col space-y-4 md:flex-row md:space-y-0 md:space-x-4'>
+            <div
+              className={`${
+                showCommentsSidebar ? 'md:w-1/2' : 'w-full'
+              } transition-all duration-300`}>
+              {/* Búsqueda en PDF */}
+              <PDFSearch
+                documentId={id || ''}
+                numPages={totalPages}
+                onResultClick={(page) => setCurrentPage(page)}
+              />
 
-          {/* Añadir botón de descarga con firmas */}
-          {signatures.length > 0 && (
-            <div className='flex justify-end mb-2'>
-              <button
-                onClick={() => {
-                  downloadFile(
-                    `/api/documents/${id}/download-signed`,
-                    `signed_${document.filename || 'documento'}.pdf`,
-                  );
-                }}
-                className='inline-flex items-center px-3 py-1 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500'>
-                <svg
-                  xmlns='http://www.w3.org/2000/svg'
-                  className='w-4 h-4 mr-2'
-                  fill='none'
-                  viewBox='0 0 24 24'
-                  stroke='currentColor'>
-                  <path
-                    strokeLinecap='round'
-                    strokeLinejoin='round'
-                    strokeWidth={2}
-                    d='M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4'
+              {/* Añadir botón de descarga con firmas */}
+              {signatures.length > 0 && (
+                <div className='flex justify-end mb-2'>
+                  <button
+                    onClick={() => {
+                      downloadFile(
+                        `/api/documents/${id}/download-signed`,
+                        `signed_${document.filename || 'documento'}.pdf`,
+                      );
+                    }}
+                    className='inline-flex items-center px-3 py-1 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500'>
+                    <svg
+                      xmlns='http://www.w3.org/2000/svg'
+                      className='w-4 h-4 mr-2'
+                      fill='none'
+                      viewBox='0 0 24 24'
+                      stroke='currentColor'>
+                      <path
+                        strokeLinecap='round'
+                        strokeLinejoin='round'
+                        strokeWidth={2}
+                        d='M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4'
+                      />
+                    </svg>
+                    Descargar PDF con firmas
+                  </button>
+                </div>
+              )}
+
+              {/* PDF Viewer */}
+              <div
+                className='relative'
+                onClick={handleDocumentClick}
+                onMouseUp={handleTextSelection}>
+                {documentImageUrl ? (
+                  <PDFViewer
+                    documentId={id || ''}
+                    onPageChange={(page) => setCurrentPage(page)}
+                    annotations={formattedSignatures}
+                    showAnnotationTools={false}
                   />
-                </svg>
-                Descargar PDF con firmas
-              </button>
-            </div>
-          )}
+                ) : (
+                  <div className='flex items-center justify-center h-96'>
+                    <div className='w-16 h-16 border-4 border-blue-500 rounded-full border-t-transparent animate-spin'></div>
+                  </div>
+                )}
 
-          {documentImageUrl ? (
-            <PDFViewer
-              documentId={id || ''}
-              onPageChange={(page) => setCurrentPage(page)}
-              annotations={formattedSignatures}
-              showAnnotationTools={false}
-            />
-          ) : (
-            <div className='flex items-center justify-center h-96'>
-              <div className='w-16 h-16 border-4 border-blue-500 rounded-full border-t-transparent animate-spin'></div>
+                {/* Popup de comentarios contextuales */}
+                {contextualComments.visible &&
+                  contextualComments.comments.length > 0 && (
+                    <div
+                      className='absolute z-20 p-2 bg-white border border-gray-200 rounded-md shadow-lg'
+                      style={{
+                        left: `${contextualComments.x}px`,
+                        top: `${contextualComments.y}px`,
+                        maxWidth: '300px',
+                      }}>
+                      <div className='mb-2 text-xs font-medium text-gray-700'>
+                        {contextualComments.comments.length} comentario(s) en
+                        esta área
+                      </div>
+                      <div className='space-y-2 overflow-y-auto max-h-60'>
+                        {contextualComments.comments.map((comment) => (
+                          <div
+                            key={comment.id}
+                            className='p-2 text-xs border-b border-gray-100'>
+                            <div className='font-medium'>
+                              {comment.user?.name || 'Usuario'}
+                            </div>
+                            <div className='mt-1 text-gray-600'>
+                              {comment.content}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <div className='flex justify-end mt-2'>
+                        <button
+                          onClick={() => setActiveTab('comments')}
+                          className='px-2 py-1 text-xs text-white bg-blue-600 rounded hover:bg-blue-700'>
+                          Ver todos
+                        </button>
+                      </div>
+                    </div>
+                  )}
+              </div>
+
+              {/* Miniaturas de páginas */}
+              <PDFThumbnails
+                documentId={id || ''}
+                numPages={totalPages}
+                currentPage={currentPage}
+                onPageSelect={(page) => setCurrentPage(page)}
+              />
             </div>
-          )}
+
+            {/* Panel lateral de comentarios */}
+            {showCommentsSidebar && (
+              <div className='max-h-screen p-4 overflow-y-auto transition-all duration-300 rounded-lg md:w-1/2 bg-gray-50'>
+                <DocumentComments
+                  documentId={id || ''}
+                  currentPage={currentPage}
+                  selectedText={selectedText}
+                  onCommentAdded={handleCommentAdded}
+                  onCommentsUpdated={(count) => {
+                    setUnreadComments(count);
+                  }}
+                />
+              </div>
+            )}
+          </div>
         </div>
       );
     } else if (document.mimeType?.includes('image')) {
@@ -901,18 +1031,13 @@ const DocumentViewer = () => {
             Análisis
           </button>
           <button
-            onClick={() => setActiveTab('comments')}
+            onClick={() => setActiveTab('signatures')}
             className={`${
-              activeTab === 'comments'
+              activeTab === 'signatures'
                 ? 'border-blue-500 text-blue-600'
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm relative`}>
-            Comentarios
-            {unreadComments > 0 && (
-              <span className='absolute inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-white transform translate-x-1/2 -translate-y-1/2 bg-red-500 rounded-full top-2 -right-1'>
-                {unreadComments}
-              </span>
-            )}
+            } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}>
+            Firmado
           </button>
           <button
             onClick={() => setActiveTab('sharing')}
@@ -922,15 +1047,6 @@ const DocumentViewer = () => {
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
             } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}>
             Compartir
-          </button>
-          <button
-            onClick={() => setActiveTab('signatures')}
-            className={`${
-              activeTab === 'signatures'
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}>
-            Firmado
           </button>
           <button
             onClick={() => setActiveTab('blockchain')}
@@ -945,51 +1061,7 @@ const DocumentViewer = () => {
       </div>
 
       {/* Tab content */}
-      {activeTab === 'preview' && (
-        <div
-          onClick={handleDocumentClick}
-          className='relative'>
-          {renderDocumentPreview()}
-
-          {/* Popup de comentarios contextuales */}
-          {contextualComments.visible &&
-            contextualComments.comments.length > 0 && (
-              <div
-                className='absolute z-20 p-2 bg-white border border-gray-200 rounded-md shadow-lg'
-                style={{
-                  left: `${contextualComments.x}px`,
-                  top: `${contextualComments.y}px`,
-                  maxWidth: '300px',
-                }}>
-                <div className='mb-2 text-xs font-medium text-gray-700'>
-                  {contextualComments.comments.length} comentario(s) en esta
-                  área
-                </div>
-                <div className='space-y-2 overflow-y-auto max-h-60'>
-                  {contextualComments.comments.map((comment) => (
-                    <div
-                      key={comment.id}
-                      className='p-2 text-xs border-b border-gray-100'>
-                      <div className='font-medium'>
-                        {comment.user?.name || 'Usuario'}
-                      </div>
-                      <div className='mt-1 text-gray-600'>
-                        {comment.content}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <div className='flex justify-end mt-2'>
-                  <button
-                    onClick={() => setActiveTab('comments')}
-                    className='px-2 py-1 text-xs text-white bg-blue-600 rounded hover:bg-blue-700'>
-                    Ver todos
-                  </button>
-                </div>
-              </div>
-            )}
-        </div>
-      )}
+      {activeTab === 'preview' && renderDocumentPreview()}
       {activeTab === 'metadata' && renderMetadataTab()}
       {activeTab === 'content' && renderContentTab()}
       {activeTab === 'analysis' && id && <DocumentAnalysis documentId={id} />}
@@ -999,17 +1071,6 @@ const DocumentViewer = () => {
           documentId={id}
           documentTitle={document?.title || ''}
           onPermissionsUpdated={() => fetchDocument()}
-        />
-      )}
-      {activeTab === 'comments' && id && (
-        <DocumentComments
-          documentId={id}
-          currentPage={currentPage}
-          onCommentAdded={handleCommentAdded}
-          onCommentsUpdated={(count) => {
-            // Actualizar badge o contador de comentarios si es necesario
-            setUnreadComments(count);
-          }}
         />
       )}
       {activeTab === 'blockchain' && id && (

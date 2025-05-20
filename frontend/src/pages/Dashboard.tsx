@@ -6,6 +6,7 @@ import FileUpload from '../components/FileUpload';
 import ContentSearch from '../components/ContentSearch';
 import AnalyticsDashboard from './AnalyticsDashboard';
 import Button from '../components/Button';
+import DocumentStatusBadge from '../components/DocumentStatusBadge';
 
 // Tipos
 interface DocumentType {
@@ -340,12 +341,7 @@ const Dashboard = () => {
           </p>
         )}
         <div className='flex items-center justify-between mt-2'>
-          <span
-            className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusBadgeClass(
-              document.status,
-            )}`}>
-            {document.status}
-          </span>
+          <DocumentStatusBadge status={document.status} />
           <span className='text-xs text-gray-500'>
             {formatFileSize(document.fileSize)}
           </span>

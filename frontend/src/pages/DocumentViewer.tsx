@@ -12,6 +12,7 @@ import MultiSignatureManager from '../components/MultiSignatureManager';
 import MultiSignatureVerification from '../components/MultiSignatureVerification';
 import PDFSearch from '../components/PDFSearch';
 import PDFThumbnails from '../components/PDFThumbnails';
+import DocumentStatusBadge from '../components/DocumentStatusBadge';
 
 interface DocumentType {
   id: string;
@@ -596,12 +597,7 @@ const DocumentViewer = () => {
             <div className='px-4 py-5 bg-gray-50 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6'>
               <dt className='text-sm font-medium text-gray-500'>Estatus</dt>
               <dd className='mt-1 sm:mt-0 sm:col-span-2'>
-                <span
-                  className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusBadgeClass(
-                    document.status,
-                  )}`}>
-                  {document.status}
-                </span>
+                <DocumentStatusBadge status={document.status} />
               </dd>
             </div>
             <div className='px-4 py-5 bg-white sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6'>

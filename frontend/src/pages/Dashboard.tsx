@@ -799,7 +799,7 @@ const Dashboard = () => {
             {showAnalytics ? 'Mostrar Documentos' : 'Mostrar Analíticas'}
           </Button>
 
-          <button
+          {/* <button
             type='button'
             onClick={() => {
               setShowContentSearch(true);
@@ -820,7 +820,7 @@ const Dashboard = () => {
               />
             </svg>
             Búsqueda avanzada
-          </button>
+          </button> */}
 
           <button
             type='button'

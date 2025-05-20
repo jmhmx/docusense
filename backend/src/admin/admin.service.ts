@@ -478,13 +478,10 @@ export class AdminService {
   }
 
   private async hashPassword(password: string): Promise<string> {
-    // Generar un salt aleatorio
     const salt = crypto.randomBytes(16).toString('hex');
-    // Hashear la contraseña con el salt
     const hash = crypto
       .pbkdf2Sync(password, salt, 10000, 64, 'sha512')
       .toString('hex');
-    // Devolver "salt:hash" para almacenar ambos
     return `${salt}:${hash}`;
   }
 

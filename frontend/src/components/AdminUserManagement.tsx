@@ -77,19 +77,29 @@ const AdminUserManagement = () => {
   const createUser = async () => {
     setIsSaving(true);
     try {
-      const response = await api.post('/api/users', formData);
-      setUsers([...users, response.data]);
+      // Cambiar de '/api/users' a '/api/auth/register' para usar el mismo flujo
+      const response = await api.post('/api/auth/register', formData);
+
+      // Si necesitas que sea admin, hacer una actualización posterior
+      if (formData.isAdmin) {
+        await api.patch(`/api/users/${response.data.user.id}`, {
+          isAdmin: true,
+        });
+
+        // Obtener usuario actualizado con flag de admin
+        const updatedResponse = await api.get(
+          `/api/users/${response.data.user.id}`,
+        );
+        setUsers([...users, updatedResponse.data]);
+      } else {
+        setUsers([...users, response.data.user]);
+      }
+
       setShowUserForm(false);
       resetForm();
     } catch (err: any) {
       console.error('Error al crear usuario:', err);
-      if (err?.response?.status === 500) {
-        setError(
-          'Error interno del servidor. Por favor, inténtalo más tarde o contacta al administrador del sistema.',
-        );
-      } else {
-        setError(err?.response?.data?.message || 'Error al crear usuario');
-      }
+      setError(err?.response?.data?.message || 'Error al crear usuario');
     } finally {
       setIsSaving(false);
     }

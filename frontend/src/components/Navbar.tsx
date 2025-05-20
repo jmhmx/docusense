@@ -90,7 +90,7 @@ const Navbar = () => {
                       aria-orientation='vertical'
                       aria-labelledby='user-menu-button'
                       tabIndex={-1}>
-                      <Link
+                      {/* <Link
                         to='/profile'
                         className='block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100'
                         role='menuitem'
@@ -98,7 +98,7 @@ const Navbar = () => {
                         id='user-menu-item-0'
                         onClick={() => setShowDropdown(false)}>
                         Mi perfil
-                      </Link>
+                      </Link> */}
                       {user?.isAdmin && (
                         <Link
                           to='/admin'
@@ -223,12 +223,12 @@ const Navbar = () => {
                 </div>
               </div>
               <div className='px-2 mt-3 space-y-1'>
-                <Link
+                {/* <Link
                   to='/profile'
                   className='block px-3 py-2 text-base font-medium text-gray-900 rounded-md hover:bg-gray-100'
                   onClick={() => setShowDropdown(false)}>
                   Mi perfil
-                </Link>
+                </Link> */}
                 <button
                   onClick={() => {
                     setShowDropdown(false);

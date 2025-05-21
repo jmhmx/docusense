@@ -1,3 +1,5 @@
+// Mejorado el componente para generar una imagen de mejor calidad
+
 import { useState, useRef, useEffect } from 'react';
 import Button from './Button';
 
@@ -18,8 +20,11 @@ const FirmaAutografa = ({
   const [ctx, setCtx] = useState<CanvasRenderingContext2D | null>(null);
   const [strokeColor, setStrokeColor] = useState('#000000');
   const [strokeWidth, setStrokeWidth] = useState(2);
+  const [lastPoint, setLastPoint] = useState<{ x: number; y: number } | null>(
+    null,
+  );
 
-  // Inicializar canvas
+  // Inicializar canvas con una resolución alta para mejor calidad de firma
   useEffect(() => {
     const canvas = canvasRef.current;
     if (canvas) {
@@ -31,50 +36,69 @@ const FirmaAutografa = ({
       });
 
       if (context) {
-        // Configurar el estilo
-        context.lineWidth = strokeWidth;
-        context.lineCap = 'round';
-        context.lineJoin = 'round';
-        context.strokeStyle = strokeColor;
-
-        // Ajustar el tamaño del canvas para que sea responsivo y de alta resolución
-        const resizeCanvas = () => {
+        // Escalar y configurar el canvas para alta resolución
+        const setupCanvas = () => {
           const container = canvas.parentElement;
           if (container) {
-            // Determinar tamaño del contenedor
+            // Usar un factor de escala alto para mejorar calidad (2x o 3x típicamente)
+            const scale = 3; // Aumentamos la escala para mayor resolución
             const containerWidth = container.clientWidth;
             const containerHeight = 200; // Altura fija
 
-            // Configurar el canvas con un factor de escala para mayor resolución
-            const scale = window.devicePixelRatio || 1;
+            // Configurar el tamaño físico del canvas (pixels reales)
             canvas.width = containerWidth * scale;
             canvas.height = containerHeight * scale;
 
-            // Ajustar el estilo CSS para que coincida con el tamaño del contenedor
+            // Ajustar el estilo CSS para que se muestre del tamaño correcto
             canvas.style.width = `${containerWidth}px`;
             canvas.style.height = `${containerHeight}px`;
 
-            // Escalar el contexto para compensar la mayor resolución
+            // Escalar el contexto para compensar
             context.scale(scale, scale);
 
-            // Restaurar configuración del contexto después de resize
+            // Configurar el estilo para trazos de alta calidad
             context.lineWidth = strokeWidth;
             context.lineCap = 'round';
             context.lineJoin = 'round';
             context.strokeStyle = strokeColor;
+
+            // Mejorar la suavidad de las líneas
+            context.shadowBlur = 1;
+            context.shadowColor = strokeColor;
           }
         };
 
-        resizeCanvas();
-        window.addEventListener('resize', resizeCanvas);
+        setupCanvas();
+        window.addEventListener('resize', setupCanvas);
         setCtx(context);
 
-        return () => window.removeEventListener('resize', resizeCanvas);
+        return () => window.removeEventListener('resize', setupCanvas);
       }
     }
   }, [strokeColor, strokeWidth]);
 
-  // Manejar eventos de dibujo
+  // Función para generar trazos más suaves
+  const drawSmoothLine = (
+    startX: number,
+    startY: number,
+    endX: number,
+    endY: number,
+  ) => {
+    if (!ctx) return;
+
+    // Dibujar una curva Bezier suave entre los puntos
+    ctx.beginPath();
+    ctx.moveTo(startX, startY);
+
+    // Usar un punto de control simple para una curva suave
+    const controlX = (startX + endX) / 2;
+    const controlY = (startY + endY) / 2;
+
+    ctx.quadraticCurveTo(controlX, controlY, endX, endY);
+    ctx.stroke();
+  };
+
+  // Manejar eventos de dibujo con movimientos más suaves
   const startDrawing = (
     e:
       | React.MouseEvent<HTMLCanvasElement>
@@ -84,11 +108,16 @@ const FirmaAutografa = ({
 
     setIsDrawing(true);
 
-    // Obtener posición
+    // Obtener posición inicial
     const position = getPosition(e);
     if (position) {
+      setLastPoint({ x: position.x, y: position.y });
       ctx.beginPath();
       ctx.moveTo(position.x, position.y);
+
+      // Dibujar un pequeño punto para iniciar (mejor para firmas)
+      ctx.arc(position.x, position.y, strokeWidth / 4, 0, Math.PI * 2);
+      ctx.fill();
     }
   };
 
@@ -97,18 +126,21 @@ const FirmaAutografa = ({
       | React.MouseEvent<HTMLCanvasElement>
       | React.TouchEvent<HTMLCanvasElement>,
   ) => {
-    if (!isDrawing || !ctx) return;
+    if (!isDrawing || !ctx || !lastPoint) return;
 
     // Prevenir scroll en dispositivos móviles
     if (e.type === 'touchmove') {
       e.preventDefault();
     }
 
-    // Obtener posición
+    // Obtener posición actual
     const position = getPosition(e);
     if (position) {
-      ctx.lineTo(position.x, position.y);
-      ctx.stroke();
+      // Dibujar línea suave entre último punto y actual
+      drawSmoothLine(lastPoint.x, lastPoint.y, position.x, position.y);
+
+      // Actualizar último punto
+      setLastPoint({ x: position.x, y: position.y });
       setHasSignature(true);
     }
   };
@@ -118,6 +150,7 @@ const FirmaAutografa = ({
       ctx.closePath();
     }
     setIsDrawing(false);
+    setLastPoint(null);
   };
 
   // Obtener posición del ratón o toque
@@ -166,7 +199,7 @@ const FirmaAutografa = ({
     }
   };
 
-  // Guardar firma como imagen PNG base64
+  // Guardar firma como imagen PNG base64 con fondo transparente
   const saveSignature = () => {
     if (!canvasRef.current || !hasSignature) return;
 
@@ -174,7 +207,7 @@ const FirmaAutografa = ({
       // Recortar la firma para eliminar espacio en blanco excesivo
       const imageData = trimCanvas(canvasRef.current);
 
-      // Convertir a formato PNG con alta calidad
+      // Convertir a formato PNG con alta calidad y fondo transparente
       const dataUrl = imageData.toDataURL('image/png', 1.0);
 
       console.log('Firma convertida a base64, longitud:', dataUrl.length);
@@ -187,7 +220,7 @@ const FirmaAutografa = ({
     }
   };
 
-  // Función para recortar el canvas y eliminar espacio en blanco
+  // Función optimizada para recortar el canvas y eliminar espacio en blanco
   const trimCanvas = (canvas: HTMLCanvasElement): HTMLCanvasElement => {
     const context = canvas.getContext('2d');
     if (!context) return canvas;
@@ -236,8 +269,8 @@ const FirmaAutografa = ({
       return canvas;
     }
 
-    // Añadir un pequeño margen
-    const margin = 10;
+    // Añadir un margen proporcional al tamaño del canvas
+    const margin = Math.min(canvas.width, canvas.height) * 0.05;
     bound.top = Math.max(0, (bound.top || 0) - margin);
     bound.left = Math.max(0, (bound.left || 0) - margin);
     bound.right = Math.min(canvas.width, (bound.right || 0) + margin);
@@ -251,10 +284,14 @@ const FirmaAutografa = ({
     trimmedCanvas.width = trimWidth;
     trimmedCanvas.height = trimHeight;
 
-    // Copiar la región recortada al nuevo canvas
+    // Obtener contexto con fondo transparente
     const trimmedContext = trimmedCanvas.getContext('2d');
     if (!trimmedContext) return canvas;
 
+    // Mantener la transparencia
+    trimmedContext.clearRect(0, 0, trimWidth, trimHeight);
+
+    // Copiar la región recortada al nuevo canvas
     trimmedContext.drawImage(
       canvas,
       bound.left || 0,

@@ -1791,13 +1791,29 @@ export class SignaturesService {
       // Generar hash del documento para integridad
       const documentHash = this.cryptoService.generateHash(document.filePath);
 
-      // Preparar datos para la firma
+      // Validar que la imagen sea de un formato compatible (solo PNG o JPEG)
+      const imageFormat = firmaAutografaSvg.startsWith('data:image/png')
+        ? 'png'
+        : firmaAutografaSvg.startsWith('data:image/jpeg')
+          ? 'jpeg'
+          : firmaAutografaSvg.startsWith('data:image/jpg')
+            ? 'jpeg'
+            : 'unknown';
+
+      if (imageFormat === 'unknown') {
+        this.logger.warn(
+          `Formato de imagen no reconocido: ${firmaAutografaSvg.substring(0, 30)}...`,
+        );
+      }
+
+      // Preservar la imagen base64 completa (con header data:image/...)
+      // para facilitar el renderizado posterior
       const timestamp = new Date();
       const signatureEntity = this.signaturesRepository.create({
         id: uuidv4(),
         documentId: document.id,
         userId,
-        signatureData: firmaAutografaSvg, // Guardar la imagen completa incluyendo el encabezado data:image/...
+        signatureData: firmaAutografaSvg, // Guardar la imagen completa (IMPORTANTE)
         documentHash,
         signedAt: timestamp,
         reason: reason || 'Firma autógrafa con verificación 2FA',
@@ -1807,6 +1823,7 @@ export class SignaturesService {
           signatureType: 'autografa',
           authMethod: '2FA',
           verifiedAt: timestamp.toISOString(),
+          imageFormat, // Añadir el formato detectado
           userAgent,
           ipAddress,
           documentMetadata: {

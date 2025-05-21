@@ -452,36 +452,41 @@ export class DocumentsService {
     height: number,
   ): Promise<void> {
     try {
+      // Extraer datos de imagen desde formato base64
       let imageData: string;
 
       // Verificar si es una URL de datos o base64 directo
       if (base64Image.startsWith('data:image/')) {
         // Extraer solo la parte base64 de data:image/png;base64,ABC123...
-        imageData = base64Image.split(',')[1];
+        const matches = base64Image.match(/^data:image\/\w+;base64,(.+)$/);
+        if (!matches || matches.length !== 2) {
+          throw new Error('Formato de imagen base64 inválido');
+        }
+        imageData = matches[1];
       } else {
         imageData = base64Image;
       }
 
-      // Obtener documento padre
-      const pdfDoc = page.doc;
-
       // Decodificar la imagen base64
       const imageBytes = Buffer.from(imageData, 'base64');
 
-      // Incrustar la imagen en el PDF
+      // Detectar tipo de imagen basado en los bytes iniciales (magic numbers)
+      // para mayor precisión
+      const pdfDoc = page.doc;
       let embeddedImage;
+
       try {
-        // Intentar como PNG primero (lo más común desde el canvas)
+        // Intentar como PNG primero
         embeddedImage = await pdfDoc.embedPng(imageBytes);
+        this.logger.log('Imagen embebida como PNG');
       } catch (err) {
-        // Si falla, intentar como JPEG
         try {
+          // Si falla, intentar como JPEG
           embeddedImage = await pdfDoc.embedJpg(imageBytes);
+          this.logger.log('Imagen embebida como JPEG');
         } catch (err2) {
-          this.logger.error(
-            'No se pudo incrustar la imagen ni como PNG ni como JPEG',
-          );
-          throw err2;
+          this.logger.error('Error al incrustar imagen en PDF:', err2);
+          throw new Error('No se pudo determinar el formato de imagen');
         }
       }
 
@@ -498,11 +503,11 @@ export class DocumentsService {
         finalHeight = width / aspectRatio;
       }
 
-      // Centrar la imagen en el área
+      // Centrar la imagen en el área asignada
       const offsetX = (width - finalWidth) / 2;
       const offsetY = (height - finalHeight) / 2;
 
-      // Dibujar la imagen en el PDF
+      // Dibujar la imagen en el PDF en la posición exacta
       page.drawImage(embeddedImage, {
         x: x + offsetX,
         y: y + offsetY,
@@ -510,6 +515,10 @@ export class DocumentsService {
         height: finalHeight,
         opacity: 1,
       });
+
+      this.logger.log(
+        `Imagen renderizada exitosamente en posición (${x}, ${y}) con tamaño ${finalWidth}x${finalHeight}`,
+      );
     } catch (error) {
       this.logger.error(
         `Error al renderizar imagen en PDF: ${error.message}`,
@@ -572,92 +581,44 @@ export class DocumentsService {
         const x = position.x;
         const y = page.getHeight() - position.y - height; // Convertir coordenada y
 
-        // Mejorar la visibilidad del área de firma
-        page.drawRectangle({
-          x,
-          y,
-          width,
-          height,
-          color: rgb(0.95, 0.95, 1), // Color de fondo más claro
-          borderColor: rgb(0.2, 0.4, 0.8), // Borde más oscuro para mejor visibilidad
-          borderWidth: 1.5, // Borde más grueso
-          opacity: 0.9, // Mayor opacidad
-        });
-
-        // Usar un estilo más visible para el texto de la firma
-        const fontSize = 10; // Tamaño de fuente más grande
-
-        // Añadir la información de la firma con mejor formato
-        // Nombre del firmante con mejor contraste
-        page.drawText(`Firmado por: ${signature.user?.name || 'Usuario'}`, {
-          x: x + 10,
-          y: y + height - 20,
-          size: fontSize + 1, // Nombre ligeramente más grande
-          color: rgb(0, 0, 0.7),
-          font: await pdfDoc.embedFont('Helvetica-Bold'),
-        });
-
-        // Fecha
-        page.drawText(
-          `Fecha: ${new Date(signature.signedAt).toLocaleDateString()}`,
-          {
-            x: x + 10,
-            y: y + height - 35,
-            size: fontSize,
-            color: rgb(0.1, 0.1, 0.7),
-          },
-        );
-
-        // Razón de firma si existe
-        if (signature.reason) {
-          page.drawText(`Motivo: ${signature.reason}`, {
-            x: x + 10,
-            y: y + height - 50,
-            size: fontSize,
-            color: rgb(0.1, 0.1, 0.7),
-          });
-        }
-
         // Si es firma autógrafa, procesar la imagen en base64
         if (signature.metadata?.signatureType === 'autografa') {
           try {
-            // Añadir texto indicando que es una firma autógrafa
-            page.drawText('Firma Autógrafa', {
-              x: x + 10,
-              y: y + 15,
-              size: fontSize - 2,
-              color: rgb(0.5, 0, 0.5),
-            });
-
-            // Calcular área para la firma
-            const signatureAreaX = x + 20;
-            const signatureAreaY = y + 25;
-            const signatureAreaWidth = width - 40;
-            const signatureAreaHeight = height - 60;
-
             this.logger.log(
               `Renderizando imagen de firma autógrafa para firma ID: ${signature.id}`,
             );
 
             // Verificar si signatureData existe y tiene contenido
             if (signature.signatureData && signature.signatureData.length > 0) {
-              // Renderizar la imagen de la firma (base64)
+              // No mejorar el fondo, solo renderizar la imagen tal como está
               await this.renderBase64ImageToPdf(
                 page,
                 signature.signatureData,
-                signatureAreaX,
-                signatureAreaY,
-                signatureAreaWidth,
-                signatureAreaHeight,
+                x,
+                y,
+                width,
+                height,
               );
               this.logger.log('Firma autógrafa renderizada correctamente');
             } else {
               this.logger.warn('Firma autógrafa sin datos de imagen');
+              // Crear un área visual para la firma, incluso sin imagen
+              page.drawRectangle({
+                x,
+                y,
+                width,
+                height,
+                color: rgb(0.95, 0.95, 1),
+                borderColor: rgb(0.2, 0.4, 0.8),
+                borderWidth: 1.5,
+                opacity: 0.9,
+              });
+
               // Dibujar texto de respaldo
               page.drawText('[Sin imagen de firma]', {
                 x: x + 30,
                 y: y + 40,
-                size: fontSize,
+                size: 10,
                 color: rgb(0, 0, 0.8),
                 font: await pdfDoc.embedFont('Helvetica-Oblique'),
               });
@@ -668,21 +629,74 @@ export class DocumentsService {
               imgError.stack,
             );
 
-            // En caso de error, dibujar texto de respaldo
+            // En caso de error, crear un área visual para la firma con texto de error
+            page.drawRectangle({
+              x,
+              y,
+              width,
+              height,
+              color: rgb(1, 0.9, 0.9),
+              borderColor: rgb(0.8, 0.2, 0.2),
+              borderWidth: 1.5,
+              opacity: 0.9,
+            });
+
             page.drawText('[Error en firma autógrafa]', {
               x: x + 30,
               y: y + 40,
-              size: fontSize,
-              color: rgb(0, 0, 0.8),
+              size: 10,
+              color: rgb(0.8, 0, 0),
               font: await pdfDoc.embedFont('Helvetica-Oblique'),
+            });
+          }
+        } else {
+          // Para firmas regulares, crear un área visual para la firma
+          page.drawRectangle({
+            x,
+            y,
+            width,
+            height,
+            color: rgb(0.95, 0.95, 1),
+            borderColor: rgb(0.2, 0.4, 0.8),
+            borderWidth: 1.5,
+            opacity: 0.9,
+          });
+
+          // Añadir la información de la firma
+          page.drawText(`Firmado por: ${signature.user?.name || 'Usuario'}`, {
+            x: x + 10,
+            y: y + height - 20,
+            size: 10 + 1,
+            color: rgb(0, 0, 0.7),
+            font: await pdfDoc.embedFont('Helvetica-Bold'),
+          });
+
+          // Fecha
+          page.drawText(
+            `Fecha: ${new Date(signature.signedAt).toLocaleDateString()}`,
+            {
+              x: x + 10,
+              y: y + height - 35,
+              size: 10,
+              color: rgb(0.1, 0.1, 0.7),
+            },
+          );
+
+          // Razón de firma si existe
+          if (signature.reason) {
+            page.drawText(`Motivo: ${signature.reason}`, {
+              x: x + 10,
+              y: y + height - 50,
+              size: 10,
+              color: rgb(0.1, 0.1, 0.7),
             });
           }
         }
 
-        // Añadir un sello de validación
+        // Añadir un sello de validación a todas las firmas
         page.drawText('DOCUMENTO FIRMADO ELECTRÓNICAMENTE', {
-          x: x + width / 2 - 80, // Centrado aproximado
-          y: y + 5, // Parte inferior
+          x: x + width / 2 - 80,
+          y: y + 5,
           size: 8,
           color: rgb(0.8, 0, 0),
           opacity: 0.7,

@@ -449,7 +449,7 @@ const SignaturePositioning = ({
                   onLoadSuccess={onPageLoadSuccess}
                   renderTextLayer={false}
                   renderAnnotationLayer={false}
-                  width={containerRef.current?.clientWidth * 0.95}
+                  width={(containerRef.current?.clientWidth || 0) * 0.95}
                 />
               </Document>
             </div>

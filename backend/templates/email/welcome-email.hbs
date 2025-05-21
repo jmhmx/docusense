@@ -1,4 +1,5 @@
 {{#> email-base emailTitle="¡Bienvenido a DocuSense!"}}
+{{#content "body"}}
 <p>Hola {{name}},</p>
 
 <p>¡Bienvenido a DocuSense! Tu cuenta ha sido creada correctamente.</p>
@@ -18,4 +19,5 @@
 <div class="button-container">
   <a href="{{dashboardUrl}}" class="button">Acceder a DocuSense</a>
 </div>
+{{/content}}
 {{/email-base}}

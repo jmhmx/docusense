@@ -93,6 +93,15 @@ export class EmailService {
       return a === b;
     });
 
+    // Nuevo helper para manejar bloques de contenido
+    handlebars.registerHelper('content', function (name, options) {
+      const blocks = this._blocks || {};
+      if (name in blocks) {
+        return blocks[name];
+      }
+      return options.fn(this);
+    });
+
     // Registrar el partial para la plantilla base
     try {
       const basePath = path.join(this.templateDir, 'email-base.hbs');

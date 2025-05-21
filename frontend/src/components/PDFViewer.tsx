@@ -27,14 +27,12 @@ interface Annotation {
 
 interface PDFViewerProps {
   documentId: string;
-  onPageChange?: (page: number) => void;
   annotations?: Annotation[];
   showAnnotationTools?: boolean;
 }
 
 const PDFViewer = ({
   documentId,
-  onPageChange,
   annotations = [],
   showAnnotationTools = true,
 }: PDFViewerProps) => {
@@ -111,7 +109,6 @@ const PDFViewer = ({
     if (pageNumber > 1) {
       const newPage = pageNumber - 1;
       setPageNumber(newPage);
-      if (onPageChange) onPageChange(newPage);
     }
   };
 
@@ -119,7 +116,6 @@ const PDFViewer = ({
     if (numPages && pageNumber < numPages) {
       const newPage = pageNumber + 1;
       setPageNumber(newPage);
-      if (onPageChange) onPageChange(newPage);
     }
   };
 

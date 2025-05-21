@@ -574,7 +574,7 @@ const DocumentSignature = ({
             documentTitle={documentTitle}
             onSign={handleSignRequest}
             onCancel={() => setShowSignModal(false)}
-            documentPreviewUrl={`/api/documents/${documentId}/view`}
+            documentPreviewUrl={documentId}
             currentPage={currentPage}
             totalPages={totalPages}
           />

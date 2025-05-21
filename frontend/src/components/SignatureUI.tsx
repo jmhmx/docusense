@@ -256,7 +256,7 @@ const SignatureUI = ({
       case 'position':
         return (
           <SignaturePositioning
-            documentId={documentPreviewUrl.split('/').pop() || ''}
+            documentId={documentPreviewUrl}
             currentPage={currentPage}
             totalPages={totalPages}
             onPositionSelected={handlePositionSelected}

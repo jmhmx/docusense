@@ -11,7 +11,6 @@ import DocumentBlockchainVerification from '../components/DocumentBlockchainVeri
 import MultiSignatureManager from '../components/MultiSignatureManager';
 import MultiSignatureVerification from '../components/MultiSignatureVerification';
 import PDFSearch from '../components/PDFSearch';
-import PDFThumbnails from '../components/PDFThumbnails';
 import DocumentStatusBadge from '../components/DocumentStatusBadge';
 
 interface DocumentType {
@@ -438,7 +437,6 @@ const DocumentViewer = () => {
                 {documentImageUrl ? (
                   <PDFViewer
                     documentId={id || ''}
-                    onPageChange={(page) => setCurrentPage(page)}
                     annotations={formattedSignatures}
                     showAnnotationTools={false}
                   />
@@ -486,14 +484,6 @@ const DocumentViewer = () => {
                     </div>
                   )}
               </div>
-
-              {/* Miniaturas de páginas */}
-              <PDFThumbnails
-                documentId={id || ''}
-                numPages={totalPages}
-                currentPage={currentPage}
-                onPageSelect={(page) => setCurrentPage(page)}
-              />
             </div>
 
             {/* Panel lateral de comentarios */}

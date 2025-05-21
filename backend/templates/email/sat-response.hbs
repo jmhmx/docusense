@@ -1,89 +1,17 @@
-<!DOCTYPE html>
-<html>
+{{#> email-base emailTitle="Respuesta del SAT"}}
+<p>Estimado(a) {{userName}},</p>
 
-<head>
-  <meta charset="utf-8">
-  <title>Respuesta del SAT</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      line-height: 1.6;
-      color: #333;
-      margin: 0;
-      padding: 0;
-    }
+<p>Hemos recibido una respuesta del SAT para su trámite de <strong>{{responseType}}</strong>.</p>
 
-    .container {
-      width: 100%;
-      max-width: 600px;
-      margin: 0 auto;
-      padding: 20px;
-    }
+<div class="info-box">
+  <p><strong>Folio:</strong> {{folio}}</p>
+  <p><strong>Estado:</strong> {{status}}</p>
+  <p><strong>Fecha de respuesta:</strong> {{date}}</p>
+</div>
 
-    .header {
-      background-color: #1a5276;
-      color: white;
-      padding: 20px;
-      text-align: center;
-    }
+<p>Para más detalles y acceder a los acuses de recibo, por favor visite su dashboard.</p>
 
-    .content {
-      padding: 20px;
-    }
-
-    .footer {
-      background-color: #f5f5f5;
-      padding: 10px 20px;
-      text-align: center;
-      font-size: 12px;
-      color: #777;
-    }
-
-    .button {
-      display: inline-block;
-      background-color: #1a5276;
-      color: white;
-      padding: 10px 20px;
-      text-decoration: none;
-      border-radius: 4px;
-    }
-
-    .info-box {
-      background-color: #f9f9f9;
-      border-left: 4px solid #1a5276;
-      padding: 15px;
-      margin: 20px 0;
-    }
-  </style>
-</head>
-
-<body>
-  <div class="container">
-    <div class="header">
-      <h1>Respuesta del SAT</h1>
-    </div>
-    <div class="content">
-      <p>Estimado(a) {{userName}},</p>
-
-      <p>Hemos recibido una respuesta del SAT para su trámite de <strong>{{responseType}}</strong>.</p>
-
-      <div class="info-box">
-        <p><strong>Folio:</strong> {{folio}}</p>
-        <p><strong>Estado:</strong> {{status}}</p>
-        <p><strong>Fecha de respuesta:</strong> {{date}}</p>
-      </div>
-
-      <p>Para más detalles y acceder a los acuses de recibo, por favor visite su dashboard.</p>
-
-      <p style="text-align: center; margin-top: 30px;">
-        <a href="{{dashboardUrl}}" class="button">Ver detalles</a>
-      </p>
-    </div>
-    <div class="footer">
-      <p>Este es un correo automático, por favor no responda a este mensaje.</p>
-      <p>© 2025 DocuSense - Todos los derechos reservados</p>
-    </div>
-  </div>
-</body>
-
-</html>
+<div class="button-container">
+  <a href="{{dashboardUrl}}" class="button">Ver detalles</a>
+</div>
+{{/email-base}}

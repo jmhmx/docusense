@@ -89,6 +89,34 @@ const DocumentViewer = () => {
     comments: [],
   });
   const [comments, setComments] = useState<any[]>([]);
+  // Estado para permisos del usuario sobre el documento
+  const [userPermissions, setUserPermissions] = useState({
+    canShare: false,
+    isOwner: false,
+  });
+
+  // Cargar permisos del usuario
+  const checkUserPermissions = async () => {
+    if (!id) return;
+
+    try {
+      // Verificar permiso para compartir
+      const shareResponse = await api.get(
+        `/api/sharing/document/${id}/check-permission?action=share`,
+      );
+      const canShare = shareResponse.data.canAccess;
+
+      // Verificar si es propietario
+      const docResponse = await api.get(`/api/documents/${id}`);
+      const currentUserId = JSON.parse(localStorage.getItem('user') || '{}').id;
+      const isOwner = docResponse.data.userId === currentUserId;
+
+      setUserPermissions({ canShare, isOwner });
+    } catch (err) {
+      console.error('Error verificando permisos:', err);
+      setUserPermissions({ canShare: false, isOwner: false });
+    }
+  };
 
   // Función para mostrar comentarios contextuales
   const showContextualComments = (
@@ -184,6 +212,7 @@ const DocumentViewer = () => {
       fetchUnreadComments();
       fetchSignatures();
       fetchComments();
+      checkUserPermissions();
     }
 
     if (id && currentPage) {
@@ -438,7 +467,6 @@ const DocumentViewer = () => {
                   <PDFViewer
                     documentId={id || ''}
                     annotations={formattedSignatures}
-                    showAnnotationTools={false}
                   />
                 ) : (
                   <div className='flex items-center justify-center h-96'>
@@ -1025,15 +1053,17 @@ const DocumentViewer = () => {
             } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}>
             Firmado
           </button>
-          <button
-            onClick={() => setActiveTab('sharing')}
-            className={`${
-              activeTab === 'sharing'
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}>
-            Compartir
-          </button>
+          {userPermissions.canShare && (
+            <button
+              onClick={() => setActiveTab('sharing')}
+              className={`${
+                activeTab === 'sharing'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}>
+              Compartir
+            </button>
+          )}
           <button
             onClick={() => setActiveTab('blockchain')}
             className={`${

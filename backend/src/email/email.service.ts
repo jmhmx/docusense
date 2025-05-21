@@ -12,12 +12,14 @@ interface EmailOptions {
   text?: string;
   template?: string;
   context?: Record<string, any>;
-  attachments?: Array<{
-    filename: string;
-    path?: string;
-    content?: Buffer;
-    contentType?: string;
-  }>;
+  attachments?:
+    | Array<{
+        filename: string;
+        path?: string;
+        content?: Buffer;
+        contentType?: string;
+      }>
+    | any;
 }
 
 interface Signer {
@@ -30,6 +32,7 @@ export class EmailService {
   private readonly logger = new Logger(EmailService.name);
   private transporter: nodemailer.Transporter;
   private readonly templateDir: string;
+  private readonly logoPath: string;
 
   constructor(private configService: ConfigService) {
     this.templateDir = path.join(process.cwd(), 'templates', 'email');
@@ -69,6 +72,12 @@ export class EmailService {
 
     // Verificar conexión al iniciar
     this.verifyConnection();
+
+    // Ruta al logo
+    this.logoPath = path.resolve(
+      __dirname,
+      '../../templates/email/logotipo.png',
+    );
   }
 
   private async verifyConnection() {
@@ -95,6 +104,9 @@ export class EmailService {
         throw new Error('Destinatario y asunto son requeridos');
       }
 
+      // Verificar que el logo existe
+      const logoExists = fs.existsSync(this.logoPath);
+
       // Preparar opciones de correo
       const mailOptions = {
         from: this.configService.get<string>('EMAIL_FROM'),
@@ -105,7 +117,16 @@ export class EmailService {
           options.text ||
           options.html?.replace(/<[^>]*>/g, '') ||
           options.subject, // Generar texto plano como alternativa
-        attachments: options.attachments,
+        attachments: logoExists
+          ? [
+              {
+                filename: 'logotipo.png',
+                path: this.logoPath,
+                cid: 'logotipo', // Esta ID se usa en el HTML como src="cid:logotipo"
+              },
+              options.attachments,
+            ]
+          : options.attachments,
       };
 
       // Enviar correo con temporizador

@@ -452,33 +452,13 @@ export class DocumentsService {
     height: number,
   ): Promise<void> {
     try {
-      // Verificar si es una imagen o un SVG con imagen incrustada
       let imageData: string;
 
-      // Comprobar si es un SVG con imagen base64 incrustada
-      if (
-        base64Image.startsWith('PCFET0NUWVBFIHNt') ||
-        base64Image.startsWith('PHN2Zy')
-      ) {
-        // Es un SVG en base64
-        const svgContent = atob(base64Image);
-
-        // Extraer la imagen base64 incrustada en el SVG
-        const hrefMatch = svgContent.match(
-          /href="data:image\/[^;]+;base64,([^"]+)"/,
-        );
-
-        if (hrefMatch && hrefMatch[1]) {
-          // Usar la imagen base64 extraída
-          imageData = hrefMatch[1];
-        } else {
-          // Si no se puede extraer la imagen, usar el SVG completo
-          // Esta parte no funcionará directamente con pdf-lib (necesitaría convertirse)
-          this.logger.warn('No se pudo extraer la imagen del SVG');
-          return;
-        }
+      // Verificar si es una URL de datos o base64 directo
+      if (base64Image.startsWith('data:image/')) {
+        // Extraer solo la parte base64 de data:image/png;base64,ABC123...
+        imageData = base64Image.split(',')[1];
       } else {
-        // Es una imagen base64 directa
         imageData = base64Image;
       }
 
@@ -489,9 +469,23 @@ export class DocumentsService {
       const imageBytes = Buffer.from(imageData, 'base64');
 
       // Incrustar la imagen en el PDF
-      const embeddedImage = await pdfDoc.embedPng(imageBytes);
+      let embeddedImage;
+      try {
+        // Intentar como PNG primero (lo más común desde el canvas)
+        embeddedImage = await pdfDoc.embedPng(imageBytes);
+      } catch (err) {
+        // Si falla, intentar como JPEG
+        try {
+          embeddedImage = await pdfDoc.embedJpg(imageBytes);
+        } catch (err2) {
+          this.logger.error(
+            'No se pudo incrustar la imagen ni como PNG ni como JPEG',
+          );
+          throw err2;
+        }
+      }
 
-      // Calcular dimensiones para mantener la relación de aspecto
+      // Calcular dimensiones manteniendo relación de aspecto
       const imgDims = embeddedImage.scale(1);
       const aspectRatio = imgDims.width / imgDims.height;
 
@@ -499,14 +493,12 @@ export class DocumentsService {
       let finalHeight = height;
 
       if (width / height > aspectRatio) {
-        // Si el área es más ancha que la imagen
         finalWidth = height * aspectRatio;
       } else {
-        // Si el área es más alta que la imagen
         finalHeight = width / aspectRatio;
       }
 
-      // Centrar la imagen en el área asignada
+      // Centrar la imagen en el área
       const offsetX = (width - finalWidth) / 2;
       const offsetY = (height - finalHeight) / 2;
 
@@ -520,7 +512,7 @@ export class DocumentsService {
       });
     } catch (error) {
       this.logger.error(
-        `Error al renderizar imagen base64 en PDF: ${error.message}`,
+        `Error al renderizar imagen en PDF: ${error.message}`,
         error.stack,
       );
       throw error;
@@ -538,6 +530,7 @@ export class DocumentsService {
     const pdfDoc = await PDFDocument.load(fileData);
 
     // Para cada firma, añadir su representación visual
+    this.logger.log(`firmas en el documento ${signatures}`);
     for (const signature of signatures) {
       try {
         // Obtener posición
@@ -625,56 +618,39 @@ export class DocumentsService {
           });
         }
 
-        console.log(signature.signatureData);
-
         // Si es firma autógrafa, procesar la imagen en base64
         if (signature.metadata?.signatureType === 'autografa') {
           try {
             // Añadir texto indicando que es una firma autógrafa
             page.drawText('Firma Autógrafa', {
               x: x + 10,
-              y: y + 15, // En la parte inferior
+              y: y + 15,
               size: fontSize - 2,
-              color: rgb(0.5, 0, 0.5), // Color distintivo
+              color: rgb(0.5, 0, 0.5),
             });
 
-            // Calcular el área disponible para la firma
+            // Calcular área para la firma
             const signatureAreaX = x + 20;
             const signatureAreaY = y + 25;
             const signatureAreaWidth = width - 40;
             const signatureAreaHeight = height - 60;
 
-            // Verificar si es contenido de imagen o SVG
-            if (
-              signature.signatureData.startsWith('data:image/') ||
-              signature.signatureData.startsWith('PHN2Zy') || // SVG en base64
-              signature.signatureData.includes('image/')
-            ) {
-              // Extraer la parte base64 si tiene el formato data:image
-              let base64Data = signature.signatureData;
-              if (base64Data.includes('base64,')) {
-                base64Data = base64Data.split('base64,')[1];
-              }
-
-              // Renderizar la imagen en el PDF
-              await this.renderBase64ImageToPdf(
-                page,
-                base64Data,
-                signatureAreaX,
-                signatureAreaY,
-                signatureAreaWidth,
-                signatureAreaHeight,
-              );
-            } else {
-              // Intentar renderizar como SVG tradicional
-            }
+            // Pasar directamente el string base64 de la firma
+            await this.renderBase64ImageToPdf(
+              page,
+              signature.signatureData,
+              signatureAreaX,
+              signatureAreaY,
+              signatureAreaWidth,
+              signatureAreaHeight,
+            );
           } catch (imgError) {
             this.logger.error(
               `Error procesando imagen de firma autógrafa: ${imgError.message}`,
               imgError.stack,
             );
 
-            // Dibujar un texto de respaldo en caso de error
+            // En caso de error, dibujar texto de respaldo
             page.drawText('[Firma autógrafa]', {
               x: x + 30,
               y: y + 40,

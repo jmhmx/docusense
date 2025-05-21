@@ -148,20 +148,7 @@ const FirmaAutografa = ({
     // Convertir el canvas a data URL (PNG en base64)
     const dataUrl = canvasRef.current.toDataURL('image/png');
 
-    // Convertir a SVG para mantener el formato vectorial
-    const svgWidth = canvasRef.current.width;
-    const svgHeight = canvasRef.current.height;
-
-    // Crear el SVG con la imagen base64 incrustada
-    const svgContent = `
-    <svg xmlns="http://www.w3.org/2000/svg" width="${svgWidth}" height="${svgHeight}" viewBox="0 0 ${svgWidth} ${svgHeight}">
-      <image width="${svgWidth}" height="${svgHeight}" href="${dataUrl}" />
-    </svg>`;
-
-    // Convertir el SVG a base64 para enviarlo al servidor
-    const svgBase64 = btoa(svgContent);
-
-    onSave(svgBase64);
+    onSave(dataUrl);
   };
 
   return (

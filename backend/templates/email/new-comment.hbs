@@ -1,86 +1,16 @@
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <title>Nuevo comentario en documento</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      line-height: 1.6;
-      color: #333;
-      margin: 0;
-      padding: 0;
-    }
+{{#> email-base emailTitle="Nuevo comentario en documento"}}
+<p>Hola {{userName}},</p>
 
-    .container {
-      width: 100%;
-      max-width: 600px;
-      margin: 0 auto;
-      padding: 20px;
-    }
+<p><strong>{{commenterName}}</strong> ha añadido un comentario en el documento <strong>{{documentTitle}}</strong>.</p>
 
-    .header {
-      background-color: #1a5276;
-      color: white;
-      padding: 20px;
-      text-align: center;
-    }
+<div class="info-box">
+  <p><strong>Comentario:</strong></p>
+  <p>{{commentContent}}</p>
+</div>
 
-    .content {
-      padding: 20px;
-    }
+<p>Puedes ver el comentario y responder haciendo clic en el siguiente botón:</p>
 
-    .footer {
-      background-color: #f5f5f5;
-      padding: 10px 20px;
-      text-align: center;
-      font-size: 12px;
-      color: #777;
-    }
-
-    .button {
-      display: inline-block;
-      background-color: #1a5276;
-      color: white;
-      padding: 10px 20px;
-      text-decoration: none;
-      border-radius: 4px;
-    }
-
-    .comment-box {
-      background-color: #f9f9f9;
-      border-left: 4px solid #1a5276;
-      padding: 15px;
-      margin: 20px 0;
-    }
-  </style>
-</head>
-
-<body>
-  <div class="container">
-    <div class="header">
-      <h1>Nuevo comentario en documento</h1>
-    </div>
-    <div class="content">
-      <p>Hola {{userName}},</p>
-
-      <p><strong>{{commenterName}}</strong> ha añadido un comentario en el documento <strong>{{documentTitle}}</strong>.</p>
-
-      <div class="comment-box">
-        <p><strong>Comentario:</strong></p>
-        <p>{{commentContent}}</p>
-      </div>
-
-      <p>Puedes ver el comentario y responder haciendo clic en el siguiente botón:</p>
-
-      <p style="text-align: center; margin-top: 30px;">
-        <a href="{{documentUrl}}" class="button">Ver comentario</a>
-      </p>
-    </div>
-    <div class="footer">
-      <p>Este es un correo automático, por favor no respondas a este mensaje.</p>
-      <p>© 2025 DocuSense - Todos los derechos reservados</p>
-    </div>
-  </div>
-</body>
-</html>
+<div class="button-container">
+  <a href="{{documentUrl}}" class="button">Ver comentario</a>
+</div>
+{{/email-base}}

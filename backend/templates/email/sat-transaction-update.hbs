@@ -1,110 +1,24 @@
-<!-- templates/email/sat-transaction-update.hbs -->
-<!DOCTYPE html>
-<html>
+{{#> email-base emailTitle="Actualización de Trámite SAT"}}
+<p>Estimado(a) {{userName}},</p>
 
-<head>
-  <meta charset="utf-8">
-  <title>Actualización de Trámite SAT</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      line-height: 1.6;
-      color: #333;
-      margin: 0;
-      padding: 0;
-    }
+<p>Su trámite con el SAT ha sido actualizado:</p>
 
-    .container {
-      width: 100%;
-      max-width: 600px;
-      margin: 0 auto;
-      padding: 20px;
-    }
+<div class="info-box">
+  <p><strong>ID de Trámite:</strong> {{tramiteId}}</p>
+  <p><strong>Tipo de Trámite:</strong> {{tramiteType}}</p>
+  <p><strong>Nuevo Estado:</strong> <span
+      style="{{#if (eq status 'completed')}}color: #2ecc71; font-weight: bold;{{else if (eq status 'rejected')}}color: #e74c3c; font-weight: bold;{{else if (eq status 'processing')}}color: #3498db; font-weight: bold;{{/if}}">{{status}}</span>
+  </p>
+  <p><strong>Fecha de actualización:</strong> {{date}}</p>
 
-    .header {
-      background-color: #1a5276;
-      color: white;
-      padding: 20px;
-      text-align: center;
-    }
+  {{#if additionalInfo}}
+  <p><strong>Información adicional:</strong> {{additionalInfo}}</p>
+  {{/if}}
+</div>
 
-    .content {
-      padding: 20px;
-    }
+<p>Para más detalles sobre su trámite, por favor visite su dashboard.</p>
 
-    .footer {
-      background-color: #f5f5f5;
-      padding: 10px 20px;
-      text-align: center;
-      font-size: 12px;
-      color: #777;
-    }
-
-    .button {
-      display: inline-block;
-      background-color: #1a5276;
-      color: white;
-      padding: 10px 20px;
-      text-decoration: none;
-      border-radius: 4px;
-    }
-
-    .info-box {
-      background-color: #f9f9f9;
-      border-left: 4px solid #1a5276;
-      padding: 15px;
-      margin: 20px 0;
-    }
-
-    .status-completed {
-      color: green;
-      font-weight: bold;
-    }
-
-    .status-rejected {
-      color: red;
-      font-weight: bold;
-    }
-
-    .status-processing {
-      color: blue;
-      font-weight: bold;
-    }
-  </style>
-</head>
-
-<body>
-  <div class="container">
-    <div class="header">
-      <h1>Actualización de Trámite SAT</h1>
-    </div>
-    <div class="content">
-      <p>Estimado(a) {{userName}},</p>
-
-      <p>Su trámite con el SAT ha sido actualizado:</p>
-
-      <div class="info-box">
-        <p><strong>ID de Trámite:</strong> {{tramiteId}}</p>
-        <p><strong>Tipo de Trámite:</strong> {{tramiteType}}</p>
-        <p><strong>Nuevo Estado:</strong> <span class="status-{{status}}">{{status}}</span></p>
-        <p><strong>Fecha de actualización:</strong> {{date}}</p>
-
-        {{#if additionalInfo}}
-        <p><strong>Información adicional:</strong> {{additionalInfo}}</p>
-        {{/if}}
-      </div>
-
-      <p>Para más detalles sobre su trámite, por favor visite su dashboard.</p>
-
-      <p style="text-align: center; margin-top: 30px;">
-        <a href="{{dashboardUrl}}" class="button">Ver detalles</a>
-      </p>
-    </div>
-    <div class="footer">
-      <p>Este es un correo automático, por favor no responda a este mensaje.</p>
-      <p>© 2025 DocuSense - Todos los derechos reservados</p>
-    </div>
-  </div>
-</body>
-
-</html>
+<div class="button-container">
+  <a href="{{dashboardUrl}}" class="button">Ver detalles</a>
+</div>
+{{/email-base}}

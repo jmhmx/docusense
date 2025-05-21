@@ -15,8 +15,9 @@ import { SharingService } from '../sharing/sharing.service';
 import * as fs from 'fs';
 import * as path from 'path';
 import { BlockchainService } from '../blockchain/blockchain.service';
-import { PDFDocument, rgb } from 'pdf-lib';
+import { PDFDocument, rgb, PDFPage } from 'pdf-lib';
 import { Signature } from '../signatures/entities/signature.entity';
+import * as svgpath from 'svgpath'; // Necesitarás añadir esta dependencia: npm install svgpath
 
 @Injectable()
 export class DocumentsService {
@@ -444,6 +445,230 @@ export class DocumentsService {
     }
   }
 
+  async renderSvgToPdf(
+    page: PDFPage,
+    svgData: string,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+  ): Promise<void> {
+    try {
+      // Extraer el viewBox del SVG para obtener las dimensiones originales
+      const viewBoxMatch = svgData.match(/viewBox=["']([^"']*)["']/);
+      let viewBox = { minX: 0, minY: 0, width: 100, height: 100 };
+
+      if (viewBoxMatch && viewBoxMatch[1]) {
+        const [minX, minY, vbWidth, vbHeight] = viewBoxMatch[1]
+          .split(/\s+/)
+          .map(Number);
+        viewBox = { minX, minY, width: vbWidth, height: vbHeight };
+      }
+
+      // Extraer paths del SVG
+      const pathRegex = /<path[^>]*d=["']([^"']*)["'][^>]*>/g;
+      let pathMatch;
+      const paths = [];
+
+      while ((pathMatch = pathRegex.exec(svgData)) !== null) {
+        paths.push(pathMatch[1]);
+      }
+
+      // Si no hay paths, buscar polylines
+      const polyRegex = /<polyline[^>]*points=["']([^"']*)["'][^>]*>/g;
+      let polyMatch;
+      const polylines = [];
+
+      while ((polyMatch = polyRegex.exec(svgData)) !== null) {
+        const points = polyMatch[1]
+          .trim()
+          .split(/[\s,]+/)
+          .map(Number);
+        let pathData = '';
+
+        if (points.length >= 2) {
+          pathData = `M${points[0]},${points[1]}`;
+          for (let i = 2; i < points.length; i += 2) {
+            if (i < points.length - 1) {
+              pathData += ` L${points[i]},${points[i + 1]}`;
+            }
+          }
+          paths.push(pathData);
+        }
+      }
+
+      // Calcular los factores de escala para ajustar el SVG al área designada
+      const scaleX = width / viewBox.width;
+      const scaleY = height / viewBox.height;
+      const scale = Math.min(scaleX, scaleY) * 0.9; // 90% del área para un margen
+
+      // Para cada path, convertir los comandos SVG a líneas en el PDF
+      for (const pathData of paths) {
+        // Transformar y normalizar el path
+        const transformedPath = svgpath(pathData)
+          .translate(-viewBox.minX, -viewBox.minY)
+          .scale(scale, scale)
+          .translate(x, y)
+          .toString();
+
+        // Extraer comandos del path
+        const commands = transformedPath.match(/[MLCQAZ][^MLCQAZ]*/gi) || [];
+
+        if (commands.length > 0) {
+          let penX = 0,
+            penY = 0;
+          let firstX = 0,
+            firstY = 0;
+          let isFirstCommand = true;
+
+          for (const cmd of commands) {
+            const type = cmd.charAt(0).toUpperCase();
+            const params = cmd
+              .substring(1)
+              .trim()
+              .split(/[\s,]+/)
+              .map(parseFloat);
+
+            switch (type) {
+              case 'M': // Move
+                penX = params[0];
+                penY = params[1];
+                if (isFirstCommand) {
+                  firstX = penX;
+                  firstY = penY;
+                  isFirstCommand = false;
+                }
+                break;
+
+              case 'L': // Line
+                page.drawLine({
+                  start: { x: penX, y: page.getHeight() - penY }, // Invertir Y en PDF
+                  end: { x: params[0], y: page.getHeight() - params[1] },
+                  thickness: 1.5,
+                  color: rgb(0, 0, 0.8),
+                  opacity: 0.9,
+                });
+                penX = params[0];
+                penY = params[1];
+                break;
+
+              case 'C': // Cubic Bezier
+                // Aproximación con segmentos de línea
+                if (params.length >= 6) {
+                  const startX = penX;
+                  const startY = penY;
+                  const cp1x = params[0];
+                  const cp1y = params[1];
+                  const cp2x = params[2];
+                  const cp2y = params[3];
+                  const endX = params[4];
+                  const endY = params[5];
+
+                  // Dividir la curva en múltiples segmentos
+                  const segments = 12; // Suficientes segmentos para una curva suave
+                  let lastX = startX;
+                  let lastY = startY;
+
+                  for (let i = 1; i <= segments; i++) {
+                    const t = i / segments;
+
+                    // Fórmula de Bezier cúbica
+                    const x =
+                      Math.pow(1 - t, 3) * startX +
+                      3 * Math.pow(1 - t, 2) * t * cp1x +
+                      3 * (1 - t) * Math.pow(t, 2) * cp2x +
+                      Math.pow(t, 3) * endX;
+
+                    const y =
+                      Math.pow(1 - t, 3) * startY +
+                      3 * Math.pow(1 - t, 2) * t * cp1y +
+                      3 * (1 - t) * Math.pow(t, 2) * cp2y +
+                      Math.pow(t, 3) * endY;
+
+                    page.drawLine({
+                      start: { x: lastX, y: page.getHeight() - lastY },
+                      end: { x, y: page.getHeight() - y },
+                      thickness: 1.5,
+                      color: rgb(0, 0, 0.8),
+                      opacity: 0.9,
+                    });
+
+                    lastX = x;
+                    lastY = y;
+                  }
+
+                  penX = endX;
+                  penY = endY;
+                }
+                break;
+
+              case 'Q': // Quadratic Bezier
+                // Aproximación con segmentos de línea
+                if (params.length >= 4) {
+                  const startX = penX;
+                  const startY = penY;
+                  const cpx = params[0];
+                  const cpy = params[1];
+                  const endX = params[2];
+                  const endY = params[3];
+
+                  // Dividir la curva en múltiples segmentos
+                  const segments = 10;
+                  let lastX = startX;
+                  let lastY = startY;
+
+                  for (let i = 1; i <= segments; i++) {
+                    const t = i / segments;
+
+                    // Fórmula de Bezier cuadrática
+                    const x =
+                      Math.pow(1 - t, 2) * startX +
+                      2 * (1 - t) * t * cpx +
+                      Math.pow(t, 2) * endX;
+
+                    const y =
+                      Math.pow(1 - t, 2) * startY +
+                      2 * (1 - t) * t * cpy +
+                      Math.pow(t, 2) * endY;
+
+                    page.drawLine({
+                      start: { x: lastX, y: page.getHeight() - lastY },
+                      end: { x, y: page.getHeight() - y },
+                      thickness: 1.5,
+                      color: rgb(0, 0, 0.8),
+                      opacity: 0.9,
+                    });
+
+                    lastX = x;
+                    lastY = y;
+                  }
+
+                  penX = endX;
+                  penY = endY;
+                }
+                break;
+
+              case 'Z': // Close path
+                page.drawLine({
+                  start: { x: penX, y: page.getHeight() - penY },
+                  end: { x: firstX, y: page.getHeight() - firstY },
+                  thickness: 1.5,
+                  color: rgb(0, 0, 0.8),
+                  opacity: 0.9,
+                });
+                penX = firstX;
+                penY = firstY;
+                break;
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error rendering SVG to PDF:', error);
+      throw error;
+    }
+  }
+
   async generateSignedPdf(
     document: Document,
     signatures: Signature[],
@@ -454,7 +679,7 @@ export class DocumentsService {
     // Cargar el PDF con pdf-lib
     const pdfDoc = await PDFDocument.load(fileData);
 
-    // Para cada firma, añadir su representación visual de manera más notoria
+    // Para cada firma, añadir su representación visual
     for (const signature of signatures) {
       try {
         // Obtener posición
@@ -492,7 +717,7 @@ export class DocumentsService {
         const width = position.width || 200;
         const height = position.height || 100;
 
-        // Ajustar las coordenadas y para el sistema de coordenadas de pdf-lib (origen en esquina inferior izquierda)
+        // Ajustar las coordenadas para el sistema de coordenadas de pdf-lib (origen en esquina inferior izquierda)
         const x = position.x;
         const y = page.getHeight() - position.y - height; // Convertir coordenada y
 
@@ -556,56 +781,21 @@ export class DocumentsService {
               color: rgb(0.5, 0, 0.5), // Color distintivo
             });
 
-            // Dibujar la firma autógrafa (SVG) convertida a paths para PDF
-            // El SVG está almacenado en signature.signatureData
-            const svgString = signature.signatureData;
+            // Calcular el área disponible para la firma
+            const signatureAreaX = x + 20;
+            const signatureAreaY = y + 25;
+            const signatureAreaWidth = width - 40;
+            const signatureAreaHeight = height - 60;
 
-            // Convertir SVG a paths y dibujarlos en el PDF
-            // Aquí usamos una implementación simplificada para dibujar trazos básicos
-            // Asumimos que el SVG tiene un formato simple con elementos <path>
-
-            // Extraer los elementos path del SVG
-            const pathMatches = svgString.match(/<path[^>]*d="([^"]*)"[^>]*>/g);
-
-            if (pathMatches && pathMatches.length > 0) {
-              // Para cada path encontrado
-              for (const pathMatch of pathMatches) {
-                // Extraer el atributo d (datos del path)
-                const dMatch = pathMatch.match(/d="([^"]*)"/);
-                if (dMatch && dMatch[1]) {
-                  const pathData = dMatch[1];
-
-                  // Aquí deberíamos convertir SVG path a comandos de dibujo PDF
-                  // Para una implementación simple, podemos dibujar trazos representativos
-                  // en el área designada para la firma
-
-                  // Dibujar un trazo representativo de la firma
-                  page.drawLine({
-                    start: { x: x + 50, y: y + 40 },
-                    end: { x: x + width - 50, y: y + 40 },
-                    thickness: 2,
-                    color: rgb(0, 0, 0.7),
-                  });
-
-                  // Dibujar un segundo trazo para simular firma
-                  page.drawLine({
-                    start: { x: x + 50, y: y + 30 },
-                    end: { x: x + width - 70, y: y + 35 },
-                    thickness: 2,
-                    color: rgb(0, 0, 0.7),
-                  });
-                }
-              }
-            } else {
-              // Si no se encuentran paths, dibujar un texto indicativo
-              page.drawText('[Garabato de firma autógrafa]', {
-                x: x + 30,
-                y: y + 40,
-                size: fontSize,
-                color: rgb(0, 0, 0.8),
-                font: await pdfDoc.embedFont('Helvetica-Oblique'),
-              });
-            }
+            // Renderizar el SVG en el PDF
+            await this.renderSvgToPdf(
+              page,
+              signature.signatureData,
+              signatureAreaX,
+              signatureAreaY,
+              signatureAreaWidth,
+              signatureAreaHeight,
+            );
           } catch (svgError) {
             this.logger.error(
               `Error procesando SVG de firma autógrafa: ${svgError.message}`,

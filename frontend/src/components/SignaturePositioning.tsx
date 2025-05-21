@@ -71,7 +71,7 @@ const SignaturePositioning = ({
   const adjustScale = () => {
     if (!containerRef.current || !pdfContainerRef.current || !autoScale) return;
 
-    const containerWidth = containerRef.current.clientWidth;
+    const containerWidth = containerRef.current?.clientWidth || 0;
     const pageViewport =
       pdfContainerRef.current.querySelector('.react-pdf__Page');
 

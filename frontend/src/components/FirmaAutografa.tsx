@@ -2,46 +2,59 @@ import { useState, useRef, useEffect } from 'react';
 import Button from './Button';
 
 interface FirmaAutografaProps {
-  onSave: (firmaSvg: string) => void;
+  onSave: (firmaBase64: string) => void;
   onCancel: () => void;
   userName: string;
-  date?: string;
 }
 
 const FirmaAutografa = ({
   onSave,
   onCancel,
   userName,
-  date = new Date().toLocaleDateString(),
 }: FirmaAutografaProps) => {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
+  const [hasSignature, setHasSignature] = useState(false);
   const [ctx, setCtx] = useState<CanvasRenderingContext2D | null>(null);
-  const [isEmpty, setIsEmpty] = useState(true);
-  const [isLimpiando, setIsLimpiando] = useState(false);
 
-  // Inicializar el canvas
+  // Inicializar canvas
   useEffect(() => {
-    if (!canvasRef.current) return;
-
     const canvas = canvasRef.current;
-    const context = canvas.getContext('2d');
+    if (canvas) {
+      // Obtener el contexto del canvas
+      const context = canvas.getContext('2d');
+      if (context) {
+        // Configurar el estilo
+        context.lineWidth = 2;
+        context.lineCap = 'round';
+        context.lineJoin = 'round';
+        context.strokeStyle = '#000000';
 
-    if (context) {
-      context.lineWidth = 2;
-      context.lineCap = 'round';
-      context.lineJoin = 'round';
-      context.strokeStyle = 'black';
+        // Ajustar el tamaño del canvas para que sea responsivo
+        const resizeCanvas = () => {
+          const container = canvas.parentElement;
+          if (container) {
+            canvas.width = container.clientWidth;
+            canvas.height = 200; // Altura fija
 
-      // Limpiar canvas
-      context.fillStyle = 'white';
-      context.fillRect(0, 0, canvas.width, canvas.height);
+            // Mantener configuración del contexto después de resize
+            context.lineWidth = 2;
+            context.lineCap = 'round';
+            context.lineJoin = 'round';
+            context.strokeStyle = '#000000';
+          }
+        };
 
-      setCtx(context);
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+        setCtx(context);
+
+        return () => window.removeEventListener('resize', resizeCanvas);
+      }
     }
-  }, [canvasRef]);
+  }, []);
 
-  // Iniciar trazo
+  // Manejar eventos de dibujo
   const startDrawing = (
     e:
       | React.MouseEvent<HTMLCanvasElement>
@@ -50,204 +63,165 @@ const FirmaAutografa = ({
     if (!ctx) return;
 
     setIsDrawing(true);
-    setIsEmpty(false);
 
-    // Obtener coordenadas según tipo de evento
-    let clientX: number, clientY: number;
-
-    if ('touches' in e) {
-      // Es un evento táctil
-      clientX = e.touches[0].clientX;
-      clientY = e.touches[0].clientY;
-    } else {
-      // Es un evento de mouse
-      clientX = e.clientX;
-      clientY = e.clientY;
+    // Obtener posición
+    const position = getPosition(e);
+    if (position) {
+      ctx.beginPath();
+      ctx.moveTo(position.x, position.y);
     }
-
-    const rect = canvasRef.current?.getBoundingClientRect();
-    if (!rect) return;
-
-    const x = clientX - rect.left;
-    const y = clientY - rect.top;
-
-    ctx.beginPath();
-    ctx.moveTo(x, y);
   };
 
-  // Dibujar
   const draw = (
     e:
       | React.MouseEvent<HTMLCanvasElement>
       | React.TouchEvent<HTMLCanvasElement>,
   ) => {
-    if (!isDrawing || !ctx || !canvasRef.current) return;
+    if (!isDrawing || !ctx) return;
 
-    // Prevenir desplazamiento en dispositivos táctiles
-    if ('touches' in e) {
+    // Prevenir scroll en dispositivos móviles
+    if (e.type === 'touchmove') {
       e.preventDefault();
     }
 
-    // Obtener coordenadas según tipo de evento
-    let clientX: number, clientY: number;
+    // Obtener posición
+    const position = getPosition(e);
+    if (position) {
+      ctx.lineTo(position.x, position.y);
+      ctx.stroke();
+      setHasSignature(true);
+    }
+  };
 
+  const endDrawing = () => {
+    if (ctx) {
+      ctx.closePath();
+    }
+    setIsDrawing(false);
+  };
+
+  // Obtener posición del ratón o toque
+  const getPosition = (
+    e:
+      | React.MouseEvent<HTMLCanvasElement>
+      | React.TouchEvent<HTMLCanvasElement>,
+  ) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return null;
+
+    let clientX: number;
+    let clientY: number;
+
+    // Manejar diferentes tipos de eventos
     if ('touches' in e) {
-      // Es un evento táctil
-      clientX = e.touches[0].clientX;
-      clientY = e.touches[0].clientY;
+      // Touch event
+      if (e.touches.length === 0) return null;
+      const touch = e.touches[0];
+      clientX = touch.clientX;
+      clientY = touch.clientY;
     } else {
-      // Es un evento de mouse
+      // Mouse event
       clientX = e.clientX;
       clientY = e.clientY;
     }
 
-    const rect = canvasRef.current.getBoundingClientRect();
-    const x = clientX - rect.left;
-    const y = clientY - rect.top;
-
-    ctx.lineTo(x, y);
-    ctx.stroke();
+    // Convertir a coordenadas relativas al canvas
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: clientX - rect.left,
+      y: clientY - rect.top,
+    };
   };
 
-  // Finalizar trazo
-  const stopDrawing = () => {
-    if (!ctx) return;
-
-    setIsDrawing(false);
-    ctx.closePath();
-  };
-
-  // Limpiar canvas
-  const limpiarFirma = () => {
-    if (!ctx || !canvasRef.current) return;
-
-    setIsLimpiando(true);
-
-    ctx.fillStyle = 'white';
-    ctx.fillRect(0, 0, canvasRef.current.width, canvasRef.current.height);
-
-    setIsEmpty(true);
-    setIsLimpiando(false);
-  };
-
-  // Guardar firma
-  const guardarFirma = () => {
-    if (!canvasRef.current) return;
-
-    // Convertir firma a SVG
-    const svgData = canvasToSVG(canvasRef.current);
-    onSave(svgData);
-  };
-
-  // Convertir canvas a SVG para mayor compatibilidad
-  const canvasToSVG = (canvas: HTMLCanvasElement): string => {
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return '';
-
-    // Obtener datos de la imagen
-    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const data = imageData.data;
-
-    // Recopilar puntos de trazo
-    const paths = [];
-    let currentPath = '';
-    let isDrawing = false;
-
-    for (let y = 0; y < canvas.height; y++) {
-      for (let x = 0; x < canvas.width; x++) {
-        const idx = (y * canvas.width + x) * 4;
-
-        // Si es un pixel no blanco (parte de la firma)
-        if (data[idx] < 255 || data[idx + 1] < 255 || data[idx + 2] < 255) {
-          if (!isDrawing) {
-            currentPath = `M${x},${y}`;
-            isDrawing = true;
-          } else {
-            currentPath += ` L${x},${y}`;
-          }
-        } else if (isDrawing) {
-          paths.push(currentPath);
-          isDrawing = false;
-        }
-      }
+  // Limpiar firma
+  const clearSignature = () => {
+    if (ctx && canvasRef.current) {
+      ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+      setHasSignature(false);
     }
+  };
 
-    // Crear SVG
-    const svg = `
-      <svg xmlns="http://www.w3.org/2000/svg" width="${canvas.width}" height="${
-      canvas.height
-    }">
-        <rect width="100%" height="100%" fill="white"/>
-        <g stroke="black" stroke-width="2" fill="none">
-          ${paths.map((path) => `<path d="${path}" />`).join('')}
-        </g>
-        <text x="10" y="${
-          canvas.height - 25
-        }" font-family="Arial" font-size="12" fill="black">${userName}</text>
-        <text x="10" y="${
-          canvas.height - 10
-        }" font-family="Arial" font-size="10" fill="gray">${date}</text>
-      </svg>
-    `;
+  // Guardar firma como SVG base64
+  const saveSignature = () => {
+    if (!canvasRef.current || !hasSignature) return;
 
-    return svg.trim();
+    // Convertir el canvas a data URL (PNG en base64)
+    const dataUrl = canvasRef.current.toDataURL('image/png');
+
+    // Convertir a SVG para mantener el formato vectorial
+    const svgWidth = canvasRef.current.width;
+    const svgHeight = canvasRef.current.height;
+
+    // Crear el SVG con la imagen base64 incrustada
+    const svgContent = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="${svgWidth}" height="${svgHeight}" viewBox="0 0 ${svgWidth} ${svgHeight}">
+      <image width="${svgWidth}" height="${svgHeight}" href="${dataUrl}" />
+    </svg>`;
+
+    // Convertir el SVG a base64 para enviarlo al servidor
+    const svgBase64 = btoa(svgContent);
+
+    onSave(svgBase64);
   };
 
   return (
-    <div className='p-6 bg-white rounded-lg shadow-lg'>
-      <h3 className='mb-4 text-lg font-medium text-gray-900'>
-        Firma Autógrafa
-      </h3>
-
+    <div className='max-w-2xl p-6 bg-white rounded-lg shadow-xl'>
+      <h2 className='mb-4 text-xl font-semibold text-gray-800'>
+        Firma autógrafa
+      </h2>
       <p className='mb-4 text-sm text-gray-600'>
-        Dibuja tu firma en el recuadro a continuación. Intenta que sea lo más
-        parecida posible a tu firma habitual.
+        Por favor, dibuje su firma en el recuadro de abajo y luego haga clic en
+        "Guardar firma".
       </p>
 
-      <div className='p-2 mb-4 border-2 border-gray-300 border-dashed rounded-md'>
-        <canvas
-          ref={canvasRef}
-          width={400}
-          height={200}
-          className='bg-white border border-gray-200 cursor-crosshair touch-none'
-          onMouseDown={startDrawing}
-          onMouseMove={draw}
-          onMouseUp={stopDrawing}
-          onMouseLeave={stopDrawing}
-          onTouchStart={startDrawing}
-          onTouchMove={draw}
-          onTouchEnd={stopDrawing}
-        />
+      <div className='relative mb-4'>
+        <div className='bg-white border-2 border-gray-300 rounded-lg'>
+          <canvas
+            ref={canvasRef}
+            className='w-full cursor-crosshair touch-none'
+            onMouseDown={startDrawing}
+            onMouseMove={draw}
+            onMouseUp={endDrawing}
+            onMouseLeave={endDrawing}
+            onTouchStart={startDrawing}
+            onTouchMove={draw}
+            onTouchEnd={endDrawing}></canvas>
+
+          {/* Guía de firma */}
+          {!hasSignature && (
+            <div className='absolute inset-0 flex items-center justify-center text-gray-300 pointer-events-none'>
+              <span className='text-lg italic'>Firme aquí</span>
+            </div>
+          )}
+
+          {/* Línea de base para guiar la firma */}
+          <div className='absolute bottom-0 left-0 right-0 border-t border-gray-300 pointer-events-none'></div>
+
+          {/* Nombre del firmante */}
+          <div className='absolute text-xs text-gray-500 pointer-events-none bottom-2 right-2'>
+            {userName}
+          </div>
+        </div>
       </div>
 
-      <div className='mb-2 text-xs text-gray-500'>
-        Firma de: {userName} - Fecha: {date}
-      </div>
-
-      <div className='flex justify-between mt-4'>
-        <div>
-          <Button
-            variant='secondary'
-            onClick={limpiarFirma}
-            disabled={isLimpiando || isEmpty}>
-            {isLimpiando ? 'Limpiando...' : 'Limpiar'}
-          </Button>
-        </div>
-
-        <div className='space-x-3'>
-          <Button
-            variant='secondary'
-            onClick={onCancel}>
-            Cancelar
-          </Button>
-
-          <Button
-            variant='primary'
-            onClick={guardarFirma}
-            disabled={isEmpty}>
-            Guardar Firma
-          </Button>
-        </div>
+      <div className='flex justify-end space-x-3'>
+        <Button
+          variant='secondary'
+          onClick={clearSignature}
+          disabled={!hasSignature}>
+          Limpiar
+        </Button>
+        <Button
+          variant='secondary'
+          onClick={onCancel}>
+          Cancelar
+        </Button>
+        <Button
+          variant='primary'
+          onClick={saveSignature}
+          disabled={!hasSignature}>
+          Guardar firma
+        </Button>
       </div>
     </div>
   );

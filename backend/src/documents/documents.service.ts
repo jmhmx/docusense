@@ -17,7 +17,6 @@ import * as path from 'path';
 import { BlockchainService } from '../blockchain/blockchain.service';
 import { PDFDocument, rgb, PDFPage } from 'pdf-lib';
 import { Signature } from '../signatures/entities/signature.entity';
-import * as svgpath from 'svgpath'; // Necesitarás añadir esta dependencia: npm install svgpath
 
 @Injectable()
 export class DocumentsService {
@@ -403,7 +402,6 @@ export class DocumentsService {
   /**
    * Obtiene el contenido de un documento, descifrándolo si es necesario
    */
-  // En DocumentsService.ts, método getDocumentContent:
   async getDocumentContent(
     document: Document,
     userId: string,
@@ -445,226 +443,86 @@ export class DocumentsService {
     }
   }
 
-  async renderSvgToPdf(
+  async renderBase64ImageToPdf(
     page: PDFPage,
-    svgData: string,
+    base64Image: string,
     x: number,
     y: number,
     width: number,
     height: number,
   ): Promise<void> {
     try {
-      // Extraer el viewBox del SVG para obtener las dimensiones originales
-      const viewBoxMatch = svgData.match(/viewBox=["']([^"']*)["']/);
-      let viewBox = { minX: 0, minY: 0, width: 100, height: 100 };
+      // Verificar si es una imagen o un SVG con imagen incrustada
+      let imageData: string;
 
-      if (viewBoxMatch && viewBoxMatch[1]) {
-        const [minX, minY, vbWidth, vbHeight] = viewBoxMatch[1]
-          .split(/\s+/)
-          .map(Number);
-        viewBox = { minX, minY, width: vbWidth, height: vbHeight };
-      }
+      // Comprobar si es un SVG con imagen base64 incrustada
+      if (
+        base64Image.startsWith('PCFET0NUWVBFIHNt') ||
+        base64Image.startsWith('PHN2Zy')
+      ) {
+        // Es un SVG en base64
+        const svgContent = atob(base64Image);
 
-      // Extraer paths del SVG
-      const pathRegex = /<path[^>]*d=["']([^"']*)["'][^>]*>/g;
-      let pathMatch;
-      const paths = [];
+        // Extraer la imagen base64 incrustada en el SVG
+        const hrefMatch = svgContent.match(
+          /href="data:image\/[^;]+;base64,([^"]+)"/,
+        );
 
-      while ((pathMatch = pathRegex.exec(svgData)) !== null) {
-        paths.push(pathMatch[1]);
-      }
-
-      // Si no hay paths, buscar polylines
-      const polyRegex = /<polyline[^>]*points=["']([^"']*)["'][^>]*>/g;
-      let polyMatch;
-      const polylines = [];
-
-      while ((polyMatch = polyRegex.exec(svgData)) !== null) {
-        const points = polyMatch[1]
-          .trim()
-          .split(/[\s,]+/)
-          .map(Number);
-        let pathData = '';
-
-        if (points.length >= 2) {
-          pathData = `M${points[0]},${points[1]}`;
-          for (let i = 2; i < points.length; i += 2) {
-            if (i < points.length - 1) {
-              pathData += ` L${points[i]},${points[i + 1]}`;
-            }
-          }
-          paths.push(pathData);
+        if (hrefMatch && hrefMatch[1]) {
+          // Usar la imagen base64 extraída
+          imageData = hrefMatch[1];
+        } else {
+          // Si no se puede extraer la imagen, usar el SVG completo
+          // Esta parte no funcionará directamente con pdf-lib (necesitaría convertirse)
+          this.logger.warn('No se pudo extraer la imagen del SVG');
+          return;
         }
+      } else {
+        // Es una imagen base64 directa
+        imageData = base64Image;
       }
 
-      // Calcular los factores de escala para ajustar el SVG al área designada
-      const scaleX = width / viewBox.width;
-      const scaleY = height / viewBox.height;
-      const scale = Math.min(scaleX, scaleY) * 0.9; // 90% del área para un margen
+      // Obtener documento padre
+      const pdfDoc = page.doc;
 
-      // Para cada path, convertir los comandos SVG a líneas en el PDF
-      for (const pathData of paths) {
-        // Transformar y normalizar el path
-        const transformedPath = svgpath(pathData)
-          .translate(-viewBox.minX, -viewBox.minY)
-          .scale(scale, scale)
-          .translate(x, y)
-          .toString();
+      // Decodificar la imagen base64
+      const imageBytes = Buffer.from(imageData, 'base64');
 
-        // Extraer comandos del path
-        const commands = transformedPath.match(/[MLCQAZ][^MLCQAZ]*/gi) || [];
+      // Incrustar la imagen en el PDF
+      const embeddedImage = await pdfDoc.embedPng(imageBytes);
 
-        if (commands.length > 0) {
-          let penX = 0,
-            penY = 0;
-          let firstX = 0,
-            firstY = 0;
-          let isFirstCommand = true;
+      // Calcular dimensiones para mantener la relación de aspecto
+      const imgDims = embeddedImage.scale(1);
+      const aspectRatio = imgDims.width / imgDims.height;
 
-          for (const cmd of commands) {
-            const type = cmd.charAt(0).toUpperCase();
-            const params = cmd
-              .substring(1)
-              .trim()
-              .split(/[\s,]+/)
-              .map(parseFloat);
+      let finalWidth = width;
+      let finalHeight = height;
 
-            switch (type) {
-              case 'M': // Move
-                penX = params[0];
-                penY = params[1];
-                if (isFirstCommand) {
-                  firstX = penX;
-                  firstY = penY;
-                  isFirstCommand = false;
-                }
-                break;
-
-              case 'L': // Line
-                page.drawLine({
-                  start: { x: penX, y: page.getHeight() - penY }, // Invertir Y en PDF
-                  end: { x: params[0], y: page.getHeight() - params[1] },
-                  thickness: 1.5,
-                  color: rgb(0, 0, 0.8),
-                  opacity: 0.9,
-                });
-                penX = params[0];
-                penY = params[1];
-                break;
-
-              case 'C': // Cubic Bezier
-                // Aproximación con segmentos de línea
-                if (params.length >= 6) {
-                  const startX = penX;
-                  const startY = penY;
-                  const cp1x = params[0];
-                  const cp1y = params[1];
-                  const cp2x = params[2];
-                  const cp2y = params[3];
-                  const endX = params[4];
-                  const endY = params[5];
-
-                  // Dividir la curva en múltiples segmentos
-                  const segments = 12; // Suficientes segmentos para una curva suave
-                  let lastX = startX;
-                  let lastY = startY;
-
-                  for (let i = 1; i <= segments; i++) {
-                    const t = i / segments;
-
-                    // Fórmula de Bezier cúbica
-                    const x =
-                      Math.pow(1 - t, 3) * startX +
-                      3 * Math.pow(1 - t, 2) * t * cp1x +
-                      3 * (1 - t) * Math.pow(t, 2) * cp2x +
-                      Math.pow(t, 3) * endX;
-
-                    const y =
-                      Math.pow(1 - t, 3) * startY +
-                      3 * Math.pow(1 - t, 2) * t * cp1y +
-                      3 * (1 - t) * Math.pow(t, 2) * cp2y +
-                      Math.pow(t, 3) * endY;
-
-                    page.drawLine({
-                      start: { x: lastX, y: page.getHeight() - lastY },
-                      end: { x, y: page.getHeight() - y },
-                      thickness: 1.5,
-                      color: rgb(0, 0, 0.8),
-                      opacity: 0.9,
-                    });
-
-                    lastX = x;
-                    lastY = y;
-                  }
-
-                  penX = endX;
-                  penY = endY;
-                }
-                break;
-
-              case 'Q': // Quadratic Bezier
-                // Aproximación con segmentos de línea
-                if (params.length >= 4) {
-                  const startX = penX;
-                  const startY = penY;
-                  const cpx = params[0];
-                  const cpy = params[1];
-                  const endX = params[2];
-                  const endY = params[3];
-
-                  // Dividir la curva en múltiples segmentos
-                  const segments = 10;
-                  let lastX = startX;
-                  let lastY = startY;
-
-                  for (let i = 1; i <= segments; i++) {
-                    const t = i / segments;
-
-                    // Fórmula de Bezier cuadrática
-                    const x =
-                      Math.pow(1 - t, 2) * startX +
-                      2 * (1 - t) * t * cpx +
-                      Math.pow(t, 2) * endX;
-
-                    const y =
-                      Math.pow(1 - t, 2) * startY +
-                      2 * (1 - t) * t * cpy +
-                      Math.pow(t, 2) * endY;
-
-                    page.drawLine({
-                      start: { x: lastX, y: page.getHeight() - lastY },
-                      end: { x, y: page.getHeight() - y },
-                      thickness: 1.5,
-                      color: rgb(0, 0, 0.8),
-                      opacity: 0.9,
-                    });
-
-                    lastX = x;
-                    lastY = y;
-                  }
-
-                  penX = endX;
-                  penY = endY;
-                }
-                break;
-
-              case 'Z': // Close path
-                page.drawLine({
-                  start: { x: penX, y: page.getHeight() - penY },
-                  end: { x: firstX, y: page.getHeight() - firstY },
-                  thickness: 1.5,
-                  color: rgb(0, 0, 0.8),
-                  opacity: 0.9,
-                });
-                penX = firstX;
-                penY = firstY;
-                break;
-            }
-          }
-        }
+      if (width / height > aspectRatio) {
+        // Si el área es más ancha que la imagen
+        finalWidth = height * aspectRatio;
+      } else {
+        // Si el área es más alta que la imagen
+        finalHeight = width / aspectRatio;
       }
+
+      // Centrar la imagen en el área asignada
+      const offsetX = (width - finalWidth) / 2;
+      const offsetY = (height - finalHeight) / 2;
+
+      // Dibujar la imagen en el PDF
+      page.drawImage(embeddedImage, {
+        x: x + offsetX,
+        y: y + offsetY,
+        width: finalWidth,
+        height: finalHeight,
+        opacity: 1,
+      });
     } catch (error) {
-      console.error('Error rendering SVG to PDF:', error);
+      this.logger.error(
+        `Error al renderizar imagen base64 en PDF: ${error.message}`,
+        error.stack,
+      );
       throw error;
     }
   }
@@ -767,11 +625,10 @@ export class DocumentsService {
           });
         }
 
-        // Si es firma autógrafa, dibujar el SVG en el PDF
-        if (
-          signature.metadata?.signatureType === 'autografa' &&
-          signature.signatureData
-        ) {
+        console.log(signature.signatureData);
+
+        // Si es firma autógrafa, procesar la imagen en base64
+        if (signature.metadata?.signatureType === 'autografa') {
           try {
             // Añadir texto indicando que es una firma autógrafa
             page.drawText('Firma Autógrafa', {
@@ -787,19 +644,34 @@ export class DocumentsService {
             const signatureAreaWidth = width - 40;
             const signatureAreaHeight = height - 60;
 
-            // Renderizar el SVG en el PDF
-            await this.renderSvgToPdf(
-              page,
-              signature.signatureData,
-              signatureAreaX,
-              signatureAreaY,
-              signatureAreaWidth,
-              signatureAreaHeight,
-            );
-          } catch (svgError) {
+            // Verificar si es contenido de imagen o SVG
+            if (
+              signature.signatureData.startsWith('data:image/') ||
+              signature.signatureData.startsWith('PHN2Zy') || // SVG en base64
+              signature.signatureData.includes('image/')
+            ) {
+              // Extraer la parte base64 si tiene el formato data:image
+              let base64Data = signature.signatureData;
+              if (base64Data.includes('base64,')) {
+                base64Data = base64Data.split('base64,')[1];
+              }
+
+              // Renderizar la imagen en el PDF
+              await this.renderBase64ImageToPdf(
+                page,
+                base64Data,
+                signatureAreaX,
+                signatureAreaY,
+                signatureAreaWidth,
+                signatureAreaHeight,
+              );
+            } else {
+              // Intentar renderizar como SVG tradicional
+            }
+          } catch (imgError) {
             this.logger.error(
-              `Error procesando SVG de firma autógrafa: ${svgError.message}`,
-              svgError.stack,
+              `Error procesando imagen de firma autógrafa: ${imgError.message}`,
+              imgError.stack,
             );
 
             // Dibujar un texto de respaldo en caso de error

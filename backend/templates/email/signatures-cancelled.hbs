@@ -1,21 +1,20 @@
-{{#> email-base emailTitle="Proceso de Firmas Cancelado"}}
+{{#> email-base subject="Proceso de firmas cancelado" recipient=userName}}
+<h1>Proceso de firmas cancelado</h1>
+
 <p>Hola {{userName}},</p>
 
-<div class="alert-box">
-  <p><strong>Notificación importante:</strong></p>
-  <p>El proceso de firmas para el documento <strong>{{documentTitle}}</strong> ha sido cancelado por
-    <strong>{{cancelerName}}</strong>.</p>
-  {{#if cancellationReason}}
+<p>El proceso de firmas para el documento "{{documentTitle}}" ha sido cancelado por <strong>{{cancelerName}}</strong>.
+</p>
+
+{{#if cancellationReason}}
+<div style="background-color: #fff0f0; padding: 15px; border-left: 4px solid #cc0000; margin: 20px 0;">
   <p><strong>Motivo de la cancelación:</strong> {{cancellationReason}}</p>
-  {{/if}}
 </div>
+{{/if}}
 
-<p>Las firmas que ya se habían completado se mantendrán en el registro, pero el proceso de múltiples firmas ya no está
-  activo.</p>
-
-<p>Si tienes alguna duda sobre esta cancelación, te recomendamos contactar al propietario del documento.</p>
-
-<div class="button-container">
+<div class="text-center">
   <a href="{{documentUrl}}" class="button">Ver documento</a>
 </div>
+
+<p>Si tienes alguna pregunta sobre esta cancelación, contacta con {{cancelerName}}.</p>
 {{/email-base}}

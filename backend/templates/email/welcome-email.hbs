@@ -1,23 +1,22 @@
-{{#> email-base emailTitle="¡Bienvenido a DocuSense!"}}
-{{#content "body"}}
-<p>Hola {{name}},</p>
+{{#> email-base subject="¡Bienvenido a DocuSense!" recipient=name}}
+<h1>¡Bienvenido a DocuSense, {{name}}!</h1>
 
-<p>¡Bienvenido a DocuSense! Tu cuenta ha sido creada correctamente.</p>
+<p>Estamos emocionados de que te hayas unido a nuestra plataforma. DocuSense te ayudará a gestionar, firmar y compartir
+  tus documentos de manera segura y eficiente.</p>
 
-<div class="info-box">
-  <p><strong>Con DocuSense podrás:</strong></p>
-  <ul>
-    <li>Gestionar documentos de manera segura</li>
-    <li>Firmar documentos digitalmente</li>
-    <li>Compartir documentos con otros usuarios</li>
-    <li>Comentar y colaborar en tiempo real</li>
-  </ul>
+<div class="text-center">
+  <a href="{{dashboardUrl}}" class="button">Ir a mi Dashboard</a>
 </div>
 
-<p>Para comenzar a utilizar todas las funcionalidades, haz clic en el siguiente botón:</p>
+<p>Con DocuSense podrás:</p>
+<ul>
+  <li>Subir y organizar tus documentos</li>
+  <li>Firmar documentos digitalmente</li>
+  <li>Compartir documentos de forma segura</li>
+  <li>Colaborar con otros usuarios</li>
+</ul>
 
-<div class="button-container">
-  <a href="{{dashboardUrl}}" class="button">Acceder a DocuSense</a>
-</div>
-{{/content}}
+<p>Si tienes alguna pregunta, no dudes en contactarnos.</p>
+
+<p>¡Saludos cordiales!<br>El equipo de DocuSense</p>
 {{/email-base}}

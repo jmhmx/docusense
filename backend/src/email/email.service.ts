@@ -34,6 +34,8 @@ export class EmailService {
   private transporter: nodemailer.Transporter;
   private readonly templateDir: string;
   private readonly logoPath: string;
+  private compiledTemplates: Map<string, HandlebarsTemplateDelegate<any>> =
+    new Map();
 
   constructor(private configService: ConfigService) {
     this.templateDir = path.join(process.cwd(), 'templates', 'email');
@@ -86,36 +88,100 @@ export class EmailService {
 
     // Registrar helpers de Handlebars
     this.registerHandlebarsHelpers();
+
+    // Precompilar plantillas
+    this.precompileTemplates();
   }
 
   private registerHandlebarsHelpers() {
+    // Registrar helper para comparación
     handlebars.registerHelper('eq', function (a, b) {
       return a === b;
     });
 
-    // Nuevo helper para manejar bloques de contenido
-    handlebars.registerHelper('content', function (name, options) {
-      const blocks = this._blocks || {};
-      if (name in blocks) {
-        return blocks[name];
+    // Registrar helper para bloques condicionales
+    handlebars.registerHelper('ifCond', function (v1, operator, v2, options) {
+      switch (operator) {
+        case '==':
+          return v1 == v2 ? options.fn(this) : options.inverse(this);
+        case '===':
+          return v1 === v2 ? options.fn(this) : options.inverse(this);
+        case '!=':
+          return v1 != v2 ? options.fn(this) : options.inverse(this);
+        case '!==':
+          return v1 !== v2 ? options.fn(this) : options.inverse(this);
+        case '<':
+          return v1 < v2 ? options.fn(this) : options.inverse(this);
+        case '<=':
+          return v1 <= v2 ? options.fn(this) : options.inverse(this);
+        case '>':
+          return v1 > v2 ? options.fn(this) : options.inverse(this);
+        case '>=':
+          return v1 >= v2 ? options.fn(this) : options.inverse(this);
+        case '&&':
+          return v1 && v2 ? options.fn(this) : options.inverse(this);
+        case '||':
+          return v1 || v2 ? options.fn(this) : options.inverse(this);
+        default:
+          return options.inverse(this);
       }
-      return options.fn(this);
     });
 
-    // Registrar el partial para la plantilla base
+    // Registrar helper para formatear fechas
+    handlebars.registerHelper('formatDate', function (dateString) {
+      try {
+        const date = new Date(dateString);
+        return date.toLocaleString();
+      } catch (e) {
+        return dateString;
+      }
+    });
+  }
+
+  private precompileTemplates() {
+    // Precompilar todas las plantillas para mejor rendimiento
     try {
-      const basePath = path.join(this.templateDir, 'email-base.hbs');
-      if (fs.existsSync(basePath)) {
-        const templateContent = fs.readFileSync(basePath, 'utf8');
-        handlebars.registerPartial('email-base', templateContent);
-        this.logger.log('Plantilla base registrada como partial');
-      } else {
-        this.logger.error(`Plantilla base no encontrada en: ${basePath}`);
+      if (fs.existsSync(this.templateDir)) {
+        const files = fs.readdirSync(this.templateDir);
+
+        // Primero registrar la plantilla base como parcial
+        const baseTemplatePath = path.join(this.templateDir, 'email-base.hbs');
+        if (fs.existsSync(baseTemplatePath)) {
+          const baseTemplate = fs.readFileSync(baseTemplatePath, 'utf8');
+          handlebars.registerPartial('email-base', baseTemplate);
+          this.logger.log('Plantilla base registrada como parcial');
+        } else {
+          this.logger.warn(
+            'Plantilla base no encontrada, los correos no se renderizarán correctamente',
+          );
+        }
+
+        // Luego compilar las demás plantillas
+        for (const file of files) {
+          if (file.endsWith('.hbs') && file !== 'email-base.hbs') {
+            const templateName = file.replace('.hbs', '');
+            const templatePath = path.join(this.templateDir, file);
+            const templateSource = fs.readFileSync(templatePath, 'utf8');
+
+            // Compilar plantilla
+            try {
+              const compiledTemplate = handlebars.compile(templateSource);
+              this.compiledTemplates.set(templateName, compiledTemplate);
+              this.logger.log(`Plantilla compilada: ${templateName}`);
+            } catch (err) {
+              this.logger.error(
+                `Error compilando plantilla ${templateName}: ${err.message}`,
+              );
+            }
+          }
+        }
+
+        this.logger.log(
+          `Precompiladas ${this.compiledTemplates.size} plantillas`,
+        );
       }
     } catch (error) {
-      this.logger.error(
-        `Error registrando partial de email-base: ${error.message}`,
-      );
+      this.logger.error(`Error precompilando plantillas: ${error.message}`);
     }
   }
 
@@ -227,36 +293,68 @@ export class EmailService {
   async sendTemplateEmail(options: EmailOptions): Promise<boolean> {
     try {
       if (!options.template) {
-        throw new Error('Template name is required');
+        throw new Error('El nombre de la plantilla es requerido');
       }
 
-      // Localizar y cargar la plantilla
-      const templatePath = path.join(
-        this.templateDir,
-        `${options.template}.hbs`,
-      );
+      // Buscar la plantilla precompilada
+      const compiledTemplate = this.compiledTemplates.get(options.template);
 
-      if (!fs.existsSync(templatePath)) {
-        throw new Error(`Plantilla no encontrada: ${options.template}.hbs`);
-      }
+      if (!compiledTemplate) {
+        // Si no está precompilada, intentar cargarla en el momento
+        const templatePath = path.join(
+          this.templateDir,
+          `${options.template}.hbs`,
+        );
 
-      try {
-        const templateSource = fs.readFileSync(templatePath, 'utf8');
-        const template = handlebars.compile(templateSource);
-        const html = template(options.context || {});
+        if (!fs.existsSync(templatePath)) {
+          throw new Error(`Plantilla no encontrada: ${options.template}.hbs`);
+        }
+
+        try {
+          const templateSource = fs.readFileSync(templatePath, 'utf8');
+          const template = handlebars.compile(templateSource);
+
+          // Preparar contexto con variables adicionales
+          const logoExists = fs.existsSync(this.logoPath);
+          const context = {
+            ...options.context,
+            logoExists,
+            recipient: Array.isArray(options.to) ? options.to[0] : options.to,
+            subject: options.subject,
+          };
+
+          const html = template(context);
+
+          return this.sendEmail({
+            ...options,
+            html,
+          });
+        } catch (handlebarsError) {
+          this.logger.error(
+            `Error compilando plantilla: ${handlebarsError.message}`,
+            handlebarsError.stack,
+          );
+          throw new Error(
+            `Error en la plantilla de correo: ${handlebarsError.message}`,
+          );
+        }
+      } else {
+        // Usar la plantilla precompilada
+        // Preparar contexto con variables adicionales
+        const logoExists = fs.existsSync(this.logoPath);
+        const context = {
+          ...options.context,
+          logoExists,
+          recipient: Array.isArray(options.to) ? options.to[0] : options.to,
+          subject: options.subject,
+        };
+
+        const html = compiledTemplate(context);
 
         return this.sendEmail({
           ...options,
           html,
         });
-      } catch (handlebarsError) {
-        this.logger.error(
-          `Error compilando plantilla: ${handlebarsError.message}`,
-          handlebarsError.stack,
-        );
-        throw new Error(
-          `Error en la plantilla de correo: ${handlebarsError.message}`,
-        );
       }
     } catch (error) {
       this.logger.error(

@@ -1,14 +1,13 @@
-{{#> email-base emailTitle="Has sido mencionado en un comentario"}}
+{{#> email-base subject="Te han mencionado en un comentario" recipient=userName}}
+<h1>Te han mencionado en un comentario</h1>
+
 <p>Hola {{userName}},</p>
 
-<p><strong>{{mentionedBy}}</strong> te ha mencionado en un comentario del documento <strong>{{documentTitle}}</strong>.
-</p>
+<p><strong>{{mentionedBy}}</strong> te ha mencionado en un comentario en el documento "{{documentTitle}}".</p>
 
-<div class="info-box">
-  <p>Para ver el comentario y responder, haz clic en el siguiente botón:</p>
+<div class="text-center">
+  <a href="{{documentUrl}}" class="button">Ver mención</a>
 </div>
 
-<div class="button-container">
-  <a href="{{documentUrl}}" class="button">Ver comentario</a>
-</div>
+<p>Puedes responder al comentario directamente desde la plataforma.</p>
 {{/email-base}}

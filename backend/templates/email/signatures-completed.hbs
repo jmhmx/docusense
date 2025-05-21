@@ -1,21 +1,22 @@
-{{#> email-base emailTitle="Proceso de Firmas Completado"}}
+{{#> email-base subject="Proceso de firmas completado" recipient=userName}}
+<h1>Proceso de firmas completado</h1>
+
 <p>Hola {{userName}},</p>
 
-<div class="success-box">
-  <p><strong>¡Buenas noticias!</strong></p>
-  <p>Todas las firmas requeridas para el documento <strong>{{documentTitle}}</strong> han sido completadas.</p>
+<p>El proceso de firmas para el documento "{{documentTitle}}" se ha completado correctamente.</p>
 
-  <p><strong>Detalles de firmas:</strong></p>
-  <div class="signers-list">
+<div style="background-color: #f0f8f0; padding: 15px; border-left: 4px solid #00cc66; margin: 20px 0;">
+  <p><strong>Firmantes:</strong></p>
+  <ul>
     {{#each signers}}
-    <p>• {{this.name}} - {{this.date}}</p>
+    <li>{{this.name}} - {{this.date}}</li>
     {{/each}}
-  </div>
+  </ul>
 </div>
 
-<p>El documento ha sido firmado por todos los participantes requeridos y ahora tiene validez completa.</p>
-
-<div class="button-container">
+<div class="text-center">
   <a href="{{documentUrl}}" class="button">Ver documento firmado</a>
 </div>
+
+<p>Ya puedes descargar el documento con todas las firmas desde la plataforma.</p>
 {{/email-base}}

@@ -1,18 +1,18 @@
-{{#> email-base emailTitle="Código de Verificación"}}
+{{#> email-base subject="Tu código de verificación" recipient=userName}}
+<h1>Código de verificación para {{action}}</h1>
+
 <p>Hola {{userName}},</p>
 
 <p>Has solicitado un código de verificación para <strong>{{action}}</strong> en DocuSense.</p>
 
-<div class="code-container">
-  <p>Tu código de verificación es:</p>
-  <p class="verification-code">{{verificationCode}}</p>
+<div
+  style="background-color: #f5f5f5; padding: 20px; text-align: center; font-size: 24px; font-weight: bold; letter-spacing: 5px; margin: 20px 0; border-radius: 4px;">
+  {{verificationCode}}
 </div>
 
-<div class="warning-box">
-  <p><strong>Importante:</strong></p>
-  <p>Este código expirará en {{CODE_EXPIRY_MINUTES}} minutos (a las {{expiresAt}}).</p>
-  <p>Si no has solicitado este código, ignora este correo y contacta al administrador del sistema.</p>
-</div>
+<p>Este código expirará el {{expiresAt}}.</p>
 
-<p>Si tienes alguna pregunta o necesitas ayuda, por favor contáctanos.</p>
+<p><em>Si no has solicitado este código, puedes ignorar este correo electrónico.</em></p>
+
+<p><strong>No compartas este código con nadie.</strong> El equipo de DocuSense nunca te pedirá este código.</p>
 {{/email-base}}

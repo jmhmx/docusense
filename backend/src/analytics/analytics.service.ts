@@ -3,7 +3,8 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Document } from '../documents/entities/document.entity';
 import { AuditLog } from '../audit/entities/audit-log.entity';
-import { Repository, Between } from 'typeorm';
+import { User } from '../users/entities/user.entity';
+import { Repository, Between, In } from 'typeorm';
 import { format, subWeeks, subMonths, subYears } from 'date-fns';
 import * as PDFDocument from 'pdfkit';
 import { AuditAction } from '../audit/audit-log.service';
@@ -85,6 +86,8 @@ export class AnalyticsService {
     private readonly documentRepository: Repository<Document>,
     @InjectRepository(AuditLog)
     private readonly auditLogRepository: Repository<AuditLog>,
+    @InjectRepository(User)
+    private readonly userRepository: Repository<User>,
   ) {}
 
   async getDashboardMetrics(
@@ -269,12 +272,26 @@ export class AnalyticsService {
         take: 10,
       });
 
+      // Recopilamos todos los IDs de usuario únicos
+      const userIds = [...new Set(logs.map((log) => log.userId))];
+
+      // Buscamos todos los usuarios en una sola consulta
+      const users = await this.userRepository.find({
+        where: { id: In(userIds) },
+      });
+
+      // Creamos un mapa para búsqueda rápida
+      const userMap = new Map();
+      users.forEach((user) => userMap.set(user.id, user));
+
       return logs.map((log) => ({
         id: log.id,
         action: log.action,
         user: {
           id: log.userId,
-          name: 'Usuario ' + log.userId.substring(0, 5), // Nombre simplificado para el ejemplo
+          name:
+            userMap.get(log.userId)?.name ||
+            'Usuario ' + log.userId.substring(0, 5),
         },
         resourceId: log.resourceId || '',
         resourceType: 'document',

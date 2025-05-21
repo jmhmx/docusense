@@ -1,33 +1,23 @@
-{{#> email-base emailTitle="Documento Firmado"}}
+{{#> email-base subject="Documento firmado" recipient=userName}}
+<h1>Documento firmado</h1>
+
 <p>Hola {{userName}},</p>
 
-<p><strong>{{signerName}}</strong> ha firmado el documento <strong>{{documentTitle}}</strong>.</p>
+<p><strong>{{signerName}}</strong> ha firmado el documento "{{documentTitle}}" el {{signatureDate}}.</p>
 
-<div class="info-box">
-  <p><strong>Detalles de la firma:</strong></p>
-  <p><strong>Fecha y hora:</strong> {{signatureDate}}</p>
-  {{#if signatureReason}}
-  <p><strong>Motivo:</strong> {{signatureReason}}</p>
-  {{/if}}
-</div>
+{{#if signatureReason}}
+<p><strong>Motivo de la firma:</strong> {{signatureReason}}</p>
+{{/if}}
 
 {{#if pendingSigners}}
-<div class="warning-box">
-  <p><strong>Estado de firmas:</strong></p>
-  <p>Este documento requiere firmas adicionales para completar el proceso.</p>
-  <p><strong>Firmantes pendientes:</strong> {{pendingSigners}}</p>
-  <p><strong>Firmas completadas:</strong> {{completedSigners}} de {{totalRequiredSigners}}</p>
-</div>
-{{else}}
-<div class="success-box">
-  <p><strong>¡Proceso de firmas completo!</strong></p>
-  <p>Todas las firmas requeridas han sido completadas.</p>
+<div style="background-color: #fff7e6; padding: 15px; border-left: 4px solid #ff9900; margin: 20px 0;">
+  <p><strong>Estado de firmas múltiples:</strong> {{completedSigners}} de {{totalRequiredSigners}} firmas completadas
+  </p>
+  <p><strong>Pendientes de firmar:</strong> {{pendingSigners}}</p>
 </div>
 {{/if}}
 
-<p>Para ver el documento y sus firmas, haz clic en el siguiente botón:</p>
-
-<div class="button-container">
-  <a href="{{documentUrl}}" class="button">Ver documento firmado</a>
+<div class="text-center">
+  <a href="{{documentUrl}}" class="button">Ver documento</a>
 </div>
 {{/email-base}}

@@ -1,16 +1,15 @@
-{{#> email-base emailTitle="Nuevo comentario en documento"}}
+{{#> email-base subject="Nuevo comentario en documento" recipient=userName}}
+<h1>Nuevo comentario</h1>
+
 <p>Hola {{userName}},</p>
 
-<p><strong>{{commenterName}}</strong> ha añadido un comentario en el documento <strong>{{documentTitle}}</strong>.</p>
+<p><strong>{{commenterName}}</strong> ha añadido un comentario en el documento "{{documentTitle}}".</p>
 
-<div class="info-box">
-  <p><strong>Comentario:</strong></p>
+<div style="background-color: #f9f9f9; padding: 15px; border-left: 4px solid #0066cc; margin: 20px 0;">
   <p>{{commentContent}}</p>
 </div>
 
-<p>Puedes ver el comentario y responder haciendo clic en el siguiente botón:</p>
-
-<div class="button-container">
+<div class="text-center">
   <a href="{{documentUrl}}" class="button">Ver comentario</a>
 </div>
 {{/email-base}}

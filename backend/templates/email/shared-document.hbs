@@ -1,19 +1,22 @@
-{{#> email-base emailTitle="Documento Compartido"}}
+{{#> email-base subject="Documento compartido contigo" recipient=userName}}
+<h1>Documento compartido</h1>
+
 <p>Hola {{userName}},</p>
 
 <p><strong>{{sharerName}}</strong> ha compartido un documento contigo en DocuSense.</p>
 
-<div class="info-box">
+<div style="background-color: #f9f9f9; padding: 15px; border-left: 4px solid #0066cc; margin: 20px 0;">
   <p><strong>Documento:</strong> {{documentTitle}}</p>
-  <p><strong>Permiso otorgado:</strong> {{permissionLevel}}</p>
+  <p><strong>Nivel de permiso:</strong> {{permissionLevel}}</p>
   {{#if message}}
   <p><strong>Mensaje:</strong> {{message}}</p>
   {{/if}}
 </div>
 
-<p>Ahora puedes acceder al documento y colaborar según los permisos otorgados.</p>
-
-<div class="button-container">
+<div class="text-center">
   <a href="{{documentUrl}}" class="button">Ver documento</a>
 </div>
+
+<p>Si tienes alguna pregunta sobre este documento, puedes responder directamente a {{sharerName}} a través de la
+  plataforma.</p>
 {{/email-base}}

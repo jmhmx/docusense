@@ -1723,14 +1723,28 @@ export class SignaturesService {
     documentId: string,
     userId: string,
     firmaAutografaSvg: string,
-    position?: { page: number; x: number; y: number },
+    position?: {
+      page: number;
+      x: number;
+      y: number;
+      width?: number;
+      height?: number;
+    },
     reason?: string,
     ipAddress?: string,
     userAgent?: string,
   ): Promise<Signature> {
+    // Validación de entradas
     if (!documentId || !userId || !firmaAutografaSvg) {
       throw new BadRequestException(
-        'Faltan datos necesarios para la firma autógrafa',
+        'Faltan datos necesarios para la firma (documento, usuario, o imagen de firma)',
+      );
+    }
+
+    // Validación específica de la imagen de firma
+    if (!firmaAutografaSvg.startsWith('data:image/')) {
+      throw new BadRequestException(
+        'El formato de la imagen de firma no es válido. Debe ser una imagen base64 con formato data:image/...',
       );
     }
 
@@ -1783,7 +1797,7 @@ export class SignaturesService {
         id: uuidv4(),
         documentId: document.id,
         userId,
-        signatureData: firmaAutografaSvg, // Guardar el SVG como datos de firma
+        signatureData: firmaAutografaSvg, // Guardar la imagen completa incluyendo el encabezado data:image/...
         documentHash,
         signedAt: timestamp,
         reason: reason || 'Firma autógrafa con verificación 2FA',
@@ -1806,6 +1820,13 @@ export class SignaturesService {
       // Guardar firma
       const savedSignature =
         await this.signaturesRepository.save(signatureEntity);
+
+      // Log para depuración
+      this.logger.log(`Firma autógrafa guardada con ID: ${savedSignature.id}`);
+      this.logger.log(`La firma tiene ${firmaAutografaSvg.length} caracteres`);
+      this.logger.log(
+        `Los primeros 30 caracteres son: ${firmaAutografaSvg.substring(0, 30)}...`,
+      );
 
       // Actualizar metadata del documento
       document.metadata = {

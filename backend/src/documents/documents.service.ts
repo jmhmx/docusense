@@ -530,7 +530,7 @@ export class DocumentsService {
     const pdfDoc = await PDFDocument.load(fileData);
 
     // Para cada firma, añadir su representación visual
-    this.logger.log(`firmas en el documento ${signatures}`);
+    this.logger.log(`Procesando ${signatures.length} firmas en el documento`);
     for (const signature of signatures) {
       try {
         // Obtener posición
@@ -635,15 +635,33 @@ export class DocumentsService {
             const signatureAreaWidth = width - 40;
             const signatureAreaHeight = height - 60;
 
-            // Pasar directamente el string base64 de la firma
-            await this.renderBase64ImageToPdf(
-              page,
-              signature.signatureData,
-              signatureAreaX,
-              signatureAreaY,
-              signatureAreaWidth,
-              signatureAreaHeight,
+            this.logger.log(
+              `Renderizando imagen de firma autógrafa para firma ID: ${signature.id}`,
             );
+
+            // Verificar si signatureData existe y tiene contenido
+            if (signature.signatureData && signature.signatureData.length > 0) {
+              // Renderizar la imagen de la firma (base64)
+              await this.renderBase64ImageToPdf(
+                page,
+                signature.signatureData,
+                signatureAreaX,
+                signatureAreaY,
+                signatureAreaWidth,
+                signatureAreaHeight,
+              );
+              this.logger.log('Firma autógrafa renderizada correctamente');
+            } else {
+              this.logger.warn('Firma autógrafa sin datos de imagen');
+              // Dibujar texto de respaldo
+              page.drawText('[Sin imagen de firma]', {
+                x: x + 30,
+                y: y + 40,
+                size: fontSize,
+                color: rgb(0, 0, 0.8),
+                font: await pdfDoc.embedFont('Helvetica-Oblique'),
+              });
+            }
           } catch (imgError) {
             this.logger.error(
               `Error procesando imagen de firma autógrafa: ${imgError.message}`,
@@ -651,7 +669,7 @@ export class DocumentsService {
             );
 
             // En caso de error, dibujar texto de respaldo
-            page.drawText('[Firma autógrafa]', {
+            page.drawText('[Error en firma autógrafa]', {
               x: x + 30,
               y: y + 40,
               size: fontSize,

@@ -1,3 +1,5 @@
+// Componente SignaturePositioning.tsx actualizado y completo
+
 import { useState, useRef, useEffect } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
 import Button from './Button';
@@ -54,6 +56,7 @@ const SignaturePositioning = ({
   const [numPages, setNumPages] = useState<number | null>(null);
   const [pageHeight, setPageHeight] = useState<number>(0);
   const [pageWidth, setPageWidth] = useState<number>(0);
+  const [autoScale, setAutoScale] = useState(true);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const signatureRef = useRef<HTMLDivElement>(null);
@@ -63,6 +66,29 @@ const SignaturePositioning = ({
   useEffect(() => {
     setPdfUrl(`/api/documents/${documentId}/view`);
   }, [documentId]);
+
+  // Función para ajustar la escala automáticamente
+  const adjustScale = () => {
+    if (!containerRef.current || !pdfContainerRef.current || !autoScale) return;
+
+    const containerWidth = containerRef.current.clientWidth;
+    const pageViewport =
+      pdfContainerRef.current.querySelector('.react-pdf__Page');
+
+    if (pageViewport) {
+      const pageRect = pageViewport.getBoundingClientRect();
+      const currentPageWidth = pageRect.width;
+
+      // Calcular nueva escala para que el PDF se ajuste al ancho del contenedor
+      // Dejamos un margen del 5% para evitar scroll horizontal
+      const newScale = (containerWidth * 0.95) / (currentPageWidth / scale);
+
+      // Evitar bucles de cambio de escala limitando la frecuencia de cambios
+      if (Math.abs(newScale - scale) > 0.05) {
+        setScale(newScale);
+      }
+    }
+  };
 
   // Inicializar la posición
   useEffect(() => {
@@ -74,6 +100,12 @@ const SignaturePositioning = ({
       });
     }
   }, [pageWidth, pageHeight, signatureSize.width]);
+
+  // Ajustar escala automáticamente cuando cambie el tamaño de la ventana
+  useEffect(() => {
+    window.addEventListener('resize', adjustScale);
+    return () => window.removeEventListener('resize', adjustScale);
+  }, [scale]);
 
   // Manejar evento de mouse down en la firma
   const handleMouseDown = (e: React.MouseEvent) => {
@@ -174,6 +206,9 @@ const SignaturePositioning = ({
     if (totalPages < numPages) {
       setNumPages(numPages);
     }
+
+    // Ajustar escala después de cargar el documento
+    setTimeout(adjustScale, 100);
   }
 
   // Manejar carga de página
@@ -186,6 +221,9 @@ const SignaturePositioning = ({
   }) {
     setPageWidth(width * scale);
     setPageHeight(height * scale);
+
+    // Ajustar escala después de cargar la página
+    setTimeout(adjustScale, 100);
   }
 
   return (
@@ -244,8 +282,37 @@ const SignaturePositioning = ({
             </svg>
           </button>
           <button
+            className={`p-1.5 rounded-md ${
+              autoScale
+                ? 'bg-blue-100 text-blue-700'
+                : 'bg-gray-100 text-gray-600'
+            }`}
+            onClick={() => setAutoScale(!autoScale)}
+            title={
+              autoScale
+                ? 'Desactivar ajuste automático'
+                : 'Activar ajuste automático'
+            }>
+            <svg
+              xmlns='http://www.w3.org/2000/svg'
+              className='w-5 h-5'
+              fill='none'
+              viewBox='0 0 24 24'
+              stroke='currentColor'>
+              <path
+                strokeLinecap='round'
+                strokeLinejoin='round'
+                strokeWidth={2}
+                d='M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4'
+              />
+            </svg>
+          </button>
+          <button
             className='p-1.5 rounded-md bg-gray-100 text-gray-600 hover:bg-gray-200'
-            onClick={() => setScale((prev) => Math.max(0.5, prev - 0.1))}
+            onClick={() => {
+              setScale((prev) => Math.max(0.5, prev - 0.1));
+              setAutoScale(false);
+            }}
             title='Reducir'>
             <svg
               xmlns='http://www.w3.org/2000/svg'
@@ -263,7 +330,10 @@ const SignaturePositioning = ({
           </button>
           <button
             className='p-1.5 rounded-md bg-gray-100 text-gray-600 hover:bg-gray-200'
-            onClick={() => setScale((prev) => Math.min(2, prev + 0.1))}
+            onClick={() => {
+              setScale((prev) => Math.min(2, prev + 0.1));
+              setAutoScale(false);
+            }}
             title='Ampliar'>
             <svg
               xmlns='http://www.w3.org/2000/svg'
@@ -330,10 +400,10 @@ const SignaturePositioning = ({
         className='relative mb-4 border border-gray-300 rounded-md'
         style={{ height: '500px' }}
         ref={containerRef}>
-        {/* Contenedor de documento */}
+        {/* Contenedor de documento con ajuste automático */}
         <div
           ref={pdfContainerRef}
-          className={`relative w-full h-full overflow-hidden bg-white ${
+          className={`relative w-full h-full overflow-auto bg-white ${
             showGrid ? 'bg-grid' : ''
           }`}
           style={{
@@ -345,42 +415,44 @@ const SignaturePositioning = ({
           onClick={handleDocumentClick}>
           {/* Visualización del PDF */}
           {pdfUrl && (
-            <Document
-              file={pdfUrl}
-              onLoadSuccess={onDocumentLoadSuccess}
-              className='w-full h-full'
-              loading={
-                <div className='flex items-center justify-center w-full h-full'>
-                  <div className='w-16 h-16 border-4 border-blue-500 rounded-full border-t-transparent animate-spin'></div>
-                </div>
-              }
-              error={
-                <div className='flex flex-col items-center justify-center w-full h-full'>
-                  <svg
-                    xmlns='http://www.w3.org/2000/svg'
-                    className='w-12 h-12 text-red-500'
-                    fill='none'
-                    viewBox='0 0 24 24'
-                    stroke='currentColor'>
-                    <path
-                      strokeLinecap='round'
-                      strokeLinejoin='round'
-                      strokeWidth={2}
-                      d='M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z'
-                    />
-                  </svg>
-                  <p className='mt-2 text-red-600'>Error al cargar el PDF</p>
-                </div>
-              }>
-              <Page
-                pageNumber={activePage}
-                scale={scale}
-                onLoadSuccess={onPageLoadSuccess}
-                renderTextLayer={false}
-                renderAnnotationLayer={false}
-                className='mx-auto'
-              />
-            </Document>
+            <div className='flex justify-center'>
+              <Document
+                file={pdfUrl}
+                onLoadSuccess={onDocumentLoadSuccess}
+                className='w-full h-full'
+                loading={
+                  <div className='flex items-center justify-center w-full h-full'>
+                    <div className='w-16 h-16 border-4 border-blue-500 rounded-full border-t-transparent animate-spin'></div>
+                  </div>
+                }
+                error={
+                  <div className='flex flex-col items-center justify-center w-full h-full'>
+                    <svg
+                      xmlns='http://www.w3.org/2000/svg'
+                      className='w-12 h-12 text-red-500'
+                      fill='none'
+                      viewBox='0 0 24 24'
+                      stroke='currentColor'>
+                      <path
+                        strokeLinecap='round'
+                        strokeLinejoin='round'
+                        strokeWidth={2}
+                        d='M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z'
+                      />
+                    </svg>
+                    <p className='mt-2 text-red-600'>Error al cargar el PDF</p>
+                  </div>
+                }>
+                <Page
+                  pageNumber={activePage}
+                  scale={scale}
+                  onLoadSuccess={onPageLoadSuccess}
+                  renderTextLayer={false}
+                  renderAnnotationLayer={false}
+                  width={containerRef.current?.clientWidth * 0.95}
+                />
+              </Document>
+            </div>
           )}
 
           {/* Componente de firma arrastrable */}

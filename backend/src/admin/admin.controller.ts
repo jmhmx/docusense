@@ -11,6 +11,7 @@ import {
   UnauthorizedException,
   Logger,
   Res,
+  NotFoundException,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AdminGuard } from './guards/admin.guard';
@@ -19,6 +20,8 @@ import { UpdateSystemConfigurationDto } from './dto/system-configuration.dto';
 import { ConfigService } from '@nestjs/config';
 import { Response } from 'express';
 import { JwtService } from '@nestjs/jwt';
+import { UsersService } from '../users/users.service'; // Añadido
+import { AuditLogService, AuditAction } from '../audit/audit-log.service'; // Añadido
 
 @Controller('api/admin')
 export class AdminController {
@@ -28,6 +31,8 @@ export class AdminController {
     private adminService: AdminService,
     private configService: ConfigService,
     private jwtService: JwtService,
+    private readonly usersService: UsersService, // Añadido
+    private readonly auditLogService: AuditLogService, // Añadido
   ) {}
 
   @Post('setup/initial-admin')
@@ -282,5 +287,53 @@ export class AdminController {
         },
       },
     };
+  }
+
+  @UseGuards(JwtAuthGuard, AdminGuard)
+  @Post('users/:userId/reset-password')
+  async resetUserPassword(
+    @Param('userId') userId: string,
+    @Body() resetPasswordDto: { newPassword: string },
+    @Request() req,
+  ) {
+    this.logger.log(
+      `Admin ${req.user.id} intentando restablecer contraseña para usuario ${userId}`,
+    );
+
+    // Verificar si el usuario existe
+    const user = await this.usersService.findOne(userId);
+    if (!user) {
+      throw new NotFoundException(`Usuario con ID ${userId} no encontrado`);
+    }
+
+    try {
+      // Actualizar contraseña del usuario
+      await this.usersService.update(userId, {
+        password: resetPasswordDto.newPassword,
+      });
+
+      // Registrar en log de auditoría
+      await this.auditLogService.log(
+        AuditAction.USER_UPDATE,
+        req.user.id,
+        userId,
+        {
+          action: 'password_reset_by_admin',
+        },
+      );
+
+      return {
+        success: true,
+        message: 'Contraseña restablecida exitosamente',
+      };
+    } catch (error) {
+      this.logger.error(
+        `Error al restablecer contraseña: ${error.message}`,
+        error.stack,
+      );
+      throw new BadRequestException(
+        `Error al restablecer contraseña: ${error.message}`,
+      );
+    }
   }
 }

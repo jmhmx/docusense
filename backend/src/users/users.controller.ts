@@ -1,4 +1,3 @@
-// backend/src/users/users.controller.ts - actualizado
 import {
   Controller,
   Get,
@@ -10,14 +9,21 @@ import {
   UseGuards,
   UnauthorizedException,
   BadRequestException,
-  Req,
   Logger,
+  ForbiddenException,
+  Req,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AuditLogService, AuditAction } from '../audit/audit-log.service';
+import { AuthService } from '../auth/auth.service';
+
+// Extender el DTO para incluir contraseña actual
+interface UpdateUserWithCurrentPasswordDto extends UpdateUserDto {
+  currentPassword?: string;
+}
 
 @Controller('api/users')
 export class UsersController {
@@ -26,6 +32,7 @@ export class UsersController {
   constructor(
     private readonly usersService: UsersService,
     private readonly auditLogService: AuditLogService,
+    private readonly authService: AuthService, // Añadido para acceder a verifyPassword
   ) {}
 
   @UseGuards(JwtAuthGuard)
@@ -77,8 +84,55 @@ export class UsersController {
 
   @UseGuards(JwtAuthGuard)
   @Patch(':id')
-  update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
-    return this.usersService.update(id, updateUserDto);
+  async update(
+    @Param('id') id: string,
+    @Body() updateUserDto: UpdateUserWithCurrentPasswordDto,
+    @Req() req, // Usar @Req() en lugar de @Request()
+  ) {
+    // Verificar si el usuario es admin o es el mismo usuario
+    if (id !== req.user.id && !req.user.isAdmin) {
+      throw new ForbiddenException(
+        'No tienes permisos para actualizar este usuario',
+      );
+    }
+
+    // Si se actualiza la contraseña y no es admin, verificar contraseña actual
+    if (updateUserDto.password && id === req.user.id && !req.user.isAdmin) {
+      if (!updateUserDto.currentPassword) {
+        throw new BadRequestException(
+          'Se requiere la contraseña actual para cambiar la contraseña',
+        );
+      }
+
+      // Verificar contraseña actual
+      const user = await this.usersService.findOne(id);
+
+      // Usar el método de authService en lugar de uno local
+      const isValid = await this.authService.verifyPassword(
+        user.password,
+        updateUserDto.currentPassword,
+      );
+
+      if (!isValid) {
+        throw new BadRequestException('La contraseña actual es incorrecta');
+      }
+
+      // Eliminar currentPassword para no guardarlo
+      delete updateUserDto.currentPassword;
+    }
+
+    // Actualizar el usuario
+    const updatedUser = await this.usersService.update(id, updateUserDto);
+
+    // Si se cambió la contraseña, registrar en auditoría
+    if (updateUserDto.password) {
+      await this.auditLogService.log(AuditAction.USER_UPDATE, req.user.id, id, {
+        action: 'password_change',
+        byAdmin: req.user.isAdmin && id !== req.user.id,
+      });
+    }
+
+    return updatedUser;
   }
 
   @UseGuards(JwtAuthGuard)

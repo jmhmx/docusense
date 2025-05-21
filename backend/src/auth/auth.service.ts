@@ -1,4 +1,3 @@
-// backend/src/auth/auth.service.ts
 import {
   Injectable,
   ConflictException,
@@ -22,7 +21,7 @@ export class AuthService {
     private readonly configService: ConfigService,
   ) {}
 
-  private async hashPassword(password: string): Promise<string> {
+  async hashPassword(password: string): Promise<string> {
     const salt = crypto.randomBytes(16).toString('hex');
     const hash = crypto
       .pbkdf2Sync(password, salt, 10000, 64, 'sha512')
@@ -30,7 +29,7 @@ export class AuthService {
     return `${salt}:${hash}`;
   }
 
-  private async verifyPassword(
+  async verifyPassword(
     storedPassword: string,
     suppliedPassword: string,
   ): Promise<boolean> {
@@ -56,7 +55,9 @@ export class AuthService {
       password: hashedPassword,
     });
 
-    const token = this.generateToken(user.id, user.isAdmin);
+    // Inicializar keyRotationCount para el token
+    const keyRotationCount = user.keyRotationCount || 0;
+    const token = this.generateToken(user.id, user.isAdmin, keyRotationCount);
 
     // Establecer cookie HTTP
     this.setAuthCookie(response, token);
@@ -93,7 +94,9 @@ export class AuthService {
       throw new UnauthorizedException('Credenciales inválidas');
     }
 
-    const token = this.generateToken(user.id, user.isAdmin);
+    // Obtener el contador de rotación de claves
+    const keyRotationCount = user.keyRotationCount || 0;
+    const token = this.generateToken(user.id, user.isAdmin, keyRotationCount);
 
     // Establecer cookie HTTP
     this.setAuthCookie(response, token);
@@ -109,8 +112,16 @@ export class AuthService {
     };
   }
 
-  private generateToken(userId: string, isAdmin: boolean) {
-    const payload = { sub: userId, isAdmin };
+  private generateToken(
+    userId: string,
+    isAdmin: boolean,
+    keyRotationCount: number,
+  ) {
+    const payload = {
+      sub: userId,
+      isAdmin,
+      keyRotation: keyRotationCount, // Incluir el contador de rotación actual
+    };
     return this.jwtService.sign(payload);
   }
 

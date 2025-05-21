@@ -33,6 +33,17 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     if (!user) {
       throw new UnauthorizedException();
     }
+
+    // Verificar si el token fue generado antes de un cambio de contraseña
+    if (
+      payload.keyRotation !== undefined &&
+      user.keyRotationCount > payload.keyRotation
+    ) {
+      throw new UnauthorizedException(
+        'La contraseña ha cambiado, debe iniciar sesión nuevamente',
+      );
+    }
+
     return user;
   }
 }

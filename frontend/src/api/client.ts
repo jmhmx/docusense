@@ -24,9 +24,44 @@ api.interceptors.response.use(
 
     // Manejo de errores de autenticación (401)
     if (error.response && error.response.status === 401) {
-      // No redirigir si estamos en la página de login o setup
-      if (!currentPath.includes('/login') && !currentPath.includes('/setup')) {
-        window.location.href = '/login';
+      // Si el error indica que la contraseña ha cambiado
+      if (error.response.data?.message?.includes('contraseña ha cambiado')) {
+        // Guardar el mensaje para mostrar en la página de login
+        localStorage.setItem(
+          'auth_message',
+          'Su contraseña ha sido cambiada. Por favor inicie sesión nuevamente.',
+        );
+
+        // Si hay una función de manejo de errores de autenticación disponible globalmente
+        if (window.handleAuthError) {
+          window.handleAuthError(error);
+        } else {
+          // Limpiar datos de usuario
+          localStorage.removeItem('user');
+          localStorage.removeItem('token');
+
+          // No redirigir si estamos en la página de login o setup
+          if (
+            !currentPath.includes('/login') &&
+            !currentPath.includes('/setup')
+          ) {
+            window.location.href = '/login';
+          }
+        }
+      } else {
+        // Otros errores 401 (sesión expirada, etc.)
+        // No redirigir si estamos en la página de login o setup
+        if (
+          !currentPath.includes('/login') &&
+          !currentPath.includes('/setup')
+        ) {
+          // Si es un error de autenticación común, guardar un mensaje genérico
+          localStorage.setItem(
+            'auth_message',
+            'Su sesión ha expirado. Por favor inicie sesión nuevamente.',
+          );
+          window.location.href = '/login';
+        }
       }
     }
 
@@ -61,6 +96,13 @@ export const downloadFile = async (url: string, filename: string) => {
     return false;
   }
 };
+
+// Declarar el tipo global para la función de manejo de errores
+declare global {
+  interface Window {
+    handleAuthError?: (error: any) => void;
+  }
+}
 
 // Funciones para gestión de firmas múltiples
 export const signatures = {

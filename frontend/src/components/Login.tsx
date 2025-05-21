@@ -1,95 +1,125 @@
-import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import useAuth from '../hooks/UseAuth';
+import Button from './Button';
+import Input from './Input';
 
 const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-  const { login } = useAuth();
+  const [error, setError] = useState<string | null>(null);
+  const { login, isAuthenticated, isLoading, authMessage, setAuthMessage } =
+    useAuth();
   const navigate = useNavigate();
+
+  // Redireccionar si ya está autenticado
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate('/dashboard');
+    }
+  }, [isAuthenticated, navigate]);
+
+  // Verificar si hay un mensaje de autenticación
+  useEffect(() => {
+    if (authMessage) {
+      setError(authMessage);
+      // Limpiar el mensaje después de mostrarlo
+      if (setAuthMessage) {
+        setAuthMessage(null);
+      }
+    }
+
+    // También verificar si hay un mensaje en localStorage (para persistencia entre recargas)
+    const savedMessage = localStorage.getItem('auth_message');
+    if (savedMessage) {
+      setError(savedMessage);
+      localStorage.removeItem('auth_message');
+    }
+  }, [authMessage, setAuthMessage]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
+    setError(null);
+
+    if (!email || !password) {
+      setError('Por favor ingrese email y contraseña');
+      return;
+    }
+
     try {
-      await login(email, password);
-      navigate('/dashboard'); // Redirect to dashboard on successful login
-    } catch (err) {
-      setError('Credenciales incorrectas. Por favor, verifica tu email y contraseña.'); // Generic error message for security
+      const result = await login(email, password);
+      if (!result.success) {
+        setError(result.error || 'Error al iniciar sesión');
+      }
+    } catch (err: any) {
+      console.error('Error de inicio de sesión:', err);
+      setError(err.message || 'Error al iniciar sesión');
     }
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen px-4 py-12 bg-gray-100 sm:px-6 lg:px-8">
-      <div className="w-full max-w-md p-10 space-y-8 bg-white shadow-lg rounded-xl">
-        <div>
-          <h2 className="mt-6 text-3xl font-extrabold text-center text-gray-900">
-            Inicia sesión en tu cuenta
+    <div className='flex items-center justify-center min-h-screen bg-gray-100'>
+      <div className='w-full max-w-md p-8 bg-white rounded-lg shadow-md'>
+        <div className='mb-8 text-center'>
+          <h2 className='text-3xl font-extrabold text-gray-900'>
+            Iniciar Sesión
           </h2>
+          <p className='mt-2 text-sm text-gray-600'>
+            Ingrese sus credenciales para acceder al sistema
+          </p>
         </div>
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-          <div className="-space-y-px rounded-md shadow-sm">
-            <div>
-              <label htmlFor="email-address" className="sr-only">
-                Dirección de correo electrónico
-              </label>
-              <input
-                id="email-address"
-                name="email"
-                type="email"
-                autoComplete="email"
-                required
-                className="relative block w-full px-3 py-2 text-gray-900 placeholder-gray-500 border border-gray-300 rounded-none appearance-none rounded-t-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-                placeholder="Dirección de correo electrónico"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
-            </div>
-            <div>
-              <label htmlFor="password" className="sr-only">
-                Contraseña
-              </label>
-              <input
-                id="password"
-                name="password"
-                type="password"
-                autoComplete="current-password"
-                required
-                className="relative block w-full px-3 py-2 text-gray-900 placeholder-gray-500 border border-gray-300 rounded-none appearance-none rounded-b-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-                placeholder="Contraseña"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-            </div>
-          </div>
 
-          {error && (
-            <div className="text-sm text-center text-red-600">
-              {error}
-            </div>
-          )}
+        {error && (
+          <div className='p-4 mb-4 text-sm text-red-700 bg-red-100 rounded-md'>
+            {error}
+          </div>
+        )}
+
+        <form
+          onSubmit={handleSubmit}
+          className='space-y-6'>
+          <Input
+            label='Email'
+            id='email'
+            name='email'
+            type='email'
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            fullWidth
+          />
+
+          <Input
+            label='Contraseña'
+            id='password'
+            name='password'
+            type='password'
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            fullWidth
+          />
 
           <div>
-            <button
-              type="submit"
-              className="relative flex justify-center w-full px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md group hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-            >
-              <span className="absolute inset-y-0 left-0 flex items-center pl-3">
-                {/* Heroicon name: solid/lock-closed */}
-                <svg className="w-5 h-5 text-blue-500 group-hover:text-blue-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                  <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
-                </svg>
-              </span>
-              Iniciar Sesión
-            </button>
+            <Button
+              type='submit'
+              variant='primary'
+              fullWidth
+              disabled={isLoading}>
+              {isLoading ? 'Iniciando sesión...' : 'Iniciar Sesión'}
+            </Button>
           </div>
         </form>
-        <div className="text-sm text-center text-gray-600">
-          ¿No tienes una cuenta?{' '}
-          <Link to="/register" className="font-medium text-blue-600 hover:text-blue-500">
-            Regístrate aquí
-          </Link>
+
+        <div className='mt-6 text-center'>
+          <p className='text-sm text-gray-600'>
+            ¿No tiene una cuenta?{' '}
+            <a
+              href='/register'
+              className='font-medium text-blue-600 hover:text-blue-500'>
+              Registrarse
+            </a>
+          </p>
         </div>
       </div>
     </div>

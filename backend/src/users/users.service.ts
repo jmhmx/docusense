@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { User } from './entities/user.entity';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import * as crypto from 'crypto'; // Importar crypto como módulo
 
 @Injectable()
 export class UsersService {
@@ -35,7 +36,26 @@ export class UsersService {
 
   async update(id: string, updateUserDto: UpdateUserDto): Promise<User> {
     const user = await this.findOne(id);
+
+    // Si se está actualizando la contraseña, hasheamos primero
+    if (updateUserDto.password) {
+      // Hashear la contraseña
+      const salt = crypto.randomBytes(16).toString('hex');
+      const hash = crypto
+        .pbkdf2Sync(updateUserDto.password, salt, 10000, 64, 'sha512')
+        .toString('hex');
+
+      updateUserDto.password = `${salt}:${hash}`;
+
+      // Incrementar el contador de rotación de claves
+      user.keyRotationCount = (user.keyRotationCount || 0) + 1;
+      user.lastKeyRotation = new Date();
+      user.keyCreatedAt = new Date();
+    }
+
+    // Actualizar el resto de campos
     Object.assign(user, updateUserDto);
+
     return this.usersRepository.save(user);
   }
 

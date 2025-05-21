@@ -18,6 +18,7 @@ interface EmailOptions {
         path?: string;
         content?: Buffer;
         contentType?: string;
+        cid?: string;
       }>
     | any;
 }
@@ -36,6 +37,16 @@ export class EmailService {
 
   constructor(private configService: ConfigService) {
     this.templateDir = path.join(process.cwd(), 'templates', 'email');
+    this.logoPath = path.join(process.cwd(), 'templates/email/logotipo.png');
+
+    // Verificar existencia del logo al iniciar
+    if (fs.existsSync(this.logoPath)) {
+      this.logger.log(`Logo encontrado en: ${this.logoPath}`);
+    } else {
+      this.logger.warn(
+        `Logo no encontrado en: ${this.logoPath}. Los correos se enviarán sin logo.`,
+      );
+    }
 
     // Obtener configuración desde variables de entorno
     const host = this.configService.get<string>('EMAIL_HOST');
@@ -73,11 +84,30 @@ export class EmailService {
     // Verificar conexión al iniciar
     this.verifyConnection();
 
-    // Ruta al logo
-    this.logoPath = path.resolve(
-      __dirname,
-      '../../templates/email/logotipo.png',
-    );
+    // Registrar helpers de Handlebars
+    this.registerHandlebarsHelpers();
+  }
+
+  private registerHandlebarsHelpers() {
+    handlebars.registerHelper('eq', function (a, b) {
+      return a === b;
+    });
+
+    // Registrar el partial para la plantilla base
+    try {
+      const basePath = path.join(this.templateDir, 'email-base.hbs');
+      if (fs.existsSync(basePath)) {
+        const templateContent = fs.readFileSync(basePath, 'utf8');
+        handlebars.registerPartial('email-base', templateContent);
+        this.logger.log('Plantilla base registrada como partial');
+      } else {
+        this.logger.error(`Plantilla base no encontrada en: ${basePath}`);
+      }
+    } catch (error) {
+      this.logger.error(
+        `Error registrando partial de email-base: ${error.message}`,
+      );
+    }
   }
 
   private async verifyConnection() {
@@ -106,6 +136,21 @@ export class EmailService {
 
       // Verificar que el logo existe
       const logoExists = fs.existsSync(this.logoPath);
+      let attachments = options.attachments || [];
+
+      // Añadir el logo como adjunto solo si existe
+      if (logoExists) {
+        // Crear un nuevo array con el logo y los adjuntos existentes
+        attachments = [
+          {
+            filename: 'logotipo.png',
+            path: this.logoPath,
+            cid: 'logotipo', // Esta ID se usa en el HTML como src="cid:logotipo"
+            contentType: 'image/png',
+          },
+          ...(Array.isArray(attachments) ? attachments : []),
+        ];
+      }
 
       // Preparar opciones de correo
       const mailOptions = {
@@ -117,16 +162,7 @@ export class EmailService {
           options.text ||
           options.html?.replace(/<[^>]*>/g, '') ||
           options.subject, // Generar texto plano como alternativa
-        attachments: logoExists
-          ? [
-              {
-                filename: 'logotipo.png',
-                path: this.logoPath,
-                cid: 'logotipo', // Esta ID se usa en el HTML como src="cid:logotipo"
-              },
-              options.attachments,
-            ]
-          : options.attachments,
+        attachments: attachments,
       };
 
       // Enviar correo con temporizador
@@ -384,151 +420,6 @@ export class EmailService {
       subject: `${data.mentionedBy} te ha mencionado en un comentario`,
       template: 'mention-notification',
       context: data,
-    });
-  }
-
-  /**
-   * Mejora para validar la configuración de email antes de intentar enviar
-   */
-  private validateEmailConfig() {
-    // Obtener la configuración desde las variables de entorno
-    const host = this.configService.get<string>('EMAIL_HOST');
-    const port = this.configService.get<number>('EMAIL_PORT', 587);
-    const user = this.configService.get<string>('EMAIL_USER');
-    const pass = this.configService.get<string>('EMAIL_PASSWORD');
-    const from = this.configService.get<string>('EMAIL_FROM');
-
-    // Validar que todos los campos requeridos estén presentes
-    if (!host) {
-      throw new Error('EMAIL_HOST es obligatorio en la configuración');
-    }
-
-    if (!port || port < 1 || port > 65535) {
-      throw new Error('EMAIL_PORT inválido (debe estar entre 1 y 65535)');
-    }
-
-    if (!user) {
-      throw new Error('EMAIL_USER es obligatorio en la configuración');
-    }
-
-    if (!pass) {
-      throw new Error('EMAIL_PASSWORD es obligatorio en la configuración');
-    }
-
-    if (!from) {
-      throw new Error('EMAIL_FROM es obligatorio en la configuración');
-    }
-
-    return { host, port, user, pass, from };
-  }
-
-  /**
-   * Actualiza la configuración del servicio de email
-   */
-  async updateEmailConfig(config: {
-    fromEmail: string;
-    smtpServer: string;
-    smtpPort: number;
-    useSSL: boolean;
-    username: string;
-    password?: string;
-  }): Promise<boolean> {
-    try {
-      // Validar configuración
-      if (!config.smtpServer) {
-        throw new Error('Servidor SMTP es obligatorio');
-      }
-
-      if (!config.smtpPort || config.smtpPort < 1 || config.smtpPort > 65535) {
-        throw new Error('Puerto SMTP inválido (debe estar entre 1 y 65535)');
-      }
-
-      if (!config.username) {
-        throw new Error('Nombre de usuario SMTP es obligatorio');
-      }
-
-      if (!config.fromEmail) {
-        throw new Error('Dirección de correo (From) es obligatoria');
-      }
-
-      // Actualizar la configuración en el transporter
-      const secure = config.useSSL;
-
-      // Recrear el transporter con la nueva configuración
-      const transportConfig: any = {
-        host: config.smtpServer,
-        port: config.smtpPort,
-        secure,
-        auth: {
-          user: config.username,
-          pass:
-            config.password || this.configService.get<string>('EMAIL_PASSWORD'),
-        },
-      };
-
-      // Añadir configuración TLS solo para conexiones no seguras
-      if (!secure) {
-        // Configuración básica para superar problemas comunes con TLS
-        transportConfig.tls = {
-          rejectUnauthorized: false, // Desactivar verificación de certificados
-        };
-      }
-
-      // Crear el nuevo transporter
-      this.transporter = nodemailer.createTransport(transportConfig);
-
-      // Verificar la conexión
-      await this.transporter.verify();
-
-      this.logger.log('Configuración de email actualizada correctamente');
-      return true;
-    } catch (error) {
-      this.logger.error(
-        `Error actualizando configuración de email: ${error.message}`,
-        error.stack,
-      );
-      throw error;
-    }
-  }
-
-  /**
-   * Envía un email de informe de configuración de sistema
-   */
-  async sendSystemConfigReport(
-    email: string,
-    configData: any,
-  ): Promise<boolean> {
-    return this.sendTemplateEmail({
-      to: email,
-      subject: 'Reporte de Configuración del Sistema - DocuSense',
-      template: 'system-config-report',
-      context: {
-        date: new Date().toLocaleString(),
-        config: {
-          email: {
-            server: configData.email.smtpServer,
-            port: configData.email.smtpPort,
-            useSSL: configData.email.useSSL ? 'Sí' : 'No',
-            fromEmail: configData.email.fromEmail,
-          },
-          security: {
-            jwtExpiration: `${configData.security.jwtExpirationHours} horas`,
-            passwordMinLength: configData.security.passwordMinLength,
-            twoFactorEnabled: configData.security.twoFactorAuthEnabled
-              ? 'Sí'
-              : 'No',
-          },
-          storage: {
-            maxFileSize: `${configData.storage.maxFileSizeMB} MB`,
-            totalStorage: `${configData.storage.totalStorageGB} GB`,
-            allowedTypes: configData.storage.allowedFileTypes.join(', '),
-          },
-          blockchain: {
-            enabled: configData.blockchain.enabled ? 'Sí' : 'No',
-            provider: configData.blockchain.provider,
-          },
-        },
-      },
     });
   }
 }

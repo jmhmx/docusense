@@ -4,8 +4,8 @@ import {
   MinLength,
   MaxLength,
   IsString,
-  Transform,
 } from 'class-validator';
+import { Transform } from 'class-transformer'; // Importar desde aquí
 
 export class LoginDto {
   @IsEmail({}, { message: 'El correo electrónico no tiene un formato válido' })

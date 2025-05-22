@@ -4,7 +4,6 @@ import {
   UnauthorizedException,
   BadRequestException,
   Logger,
-  TooManyRequestsException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as crypto from 'crypto';
@@ -157,7 +156,7 @@ export class AuthService {
       this.logger.warn(
         `Login bloqueado para ${email} por ${remainingMinutes} minutos`,
       );
-      throw new TooManyRequestsException(
+      throw new BadRequestException(
         `Demasiados intentos fallidos. Intente nuevamente en ${remainingMinutes} minutos`,
       );
     }

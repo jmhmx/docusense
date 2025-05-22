@@ -48,8 +48,7 @@ const SignaturePositioning = ({
   const [scale, setScale] = useState(1);
   const [showGrid, setShowGrid] = useState(true);
   const [snapToGrid, setSnapToGrid] = useState(true);
-  // @ts-ignore
-  const [gridSize, setGridSize] = useState(20);
+  const [gridSize] = useState(20);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [numPages, setNumPages] = useState<number | null>(null);
   const [pdfPageDimensions, setPdfPageDimensions] = useState<{
@@ -57,6 +56,7 @@ const SignaturePositioning = ({
     height: number;
   } | null>(null);
   const [autoScale, setAutoScale] = useState(true);
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
 
   const containerRef = useRef<HTMLDivElement>(null);
   const signatureRef = useRef<HTMLDivElement>(null);
@@ -92,12 +92,6 @@ const SignaturePositioning = ({
       const containerY = clampedPos.y + realDocumentBounds.y;
 
       setPosition({ x: containerX, y: containerY });
-
-      console.log('Posición inicial en área real:', {
-        documentBounds: realDocumentBounds,
-        documentCoords: { x: clampedPos.x, y: clampedPos.y },
-        containerCoords: { x: containerX, y: containerY },
-      });
     }
   }, [realDocumentBounds, signatureSize, pdfPageDimensions]);
 
@@ -111,58 +105,34 @@ const SignaturePositioning = ({
     );
 
     if (pdfPageElement && pdfPageDimensions) {
-      // Usar las dimensiones reales del canvas renderizado
-      const canvasRect = pdfPageElement.getBoundingClientRect();
-
       // Calcular nueva escala para que el PDF se ajuste al ancho del contenedor
       const newScale = (containerWidth * 0.9) / pdfPageDimensions.width;
 
       // Solo actualizar si hay un cambio significativo
       if (Math.abs(newScale - scale) > 0.05) {
         setScale(newScale);
-
-        console.log('Escala ajustada:', {
-          containerWidth,
-          pdfOriginalWidth: pdfPageDimensions.width,
-          canvasWidth: canvasRect.width,
-          newScale,
-        });
       }
     }
   };
-
-  // Ajustar escala automáticamente cuando cambie el tamaño de la ventana
-  useEffect(() => {
-    if (pdfPageDimensions && scale > 0) {
-      const pdfPageElement = pdfContainerRef.current?.querySelector(
-        '.react-pdf__Page canvas',
-      );
-
-      if (pdfPageElement) {
-        const canvasRect = pdfPageElement.getBoundingClientRect();
-
-        // Posicionar inicialmente cerca del centro-derecha del área real
-        const initialX = Math.max(
-          0,
-          canvasRect.width - signatureSize.width - 50,
-        );
-        const initialY = Math.max(0, canvasRect.height / 3);
-
-        setPosition({ x: initialX, y: initialY });
-
-        console.log('Posición inicial calculada:', {
-          canvasSize: { width: canvasRect.width, height: canvasRect.height },
-          signatureSize,
-          position: { x: initialX, y: initialY },
-        });
-      }
-    }
-  }, [pdfPageDimensions, scale, signatureSize.width]);
 
   // Manejar evento de mouse down en la firma
   const handleMouseDown = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
+
+    if (!signatureRef.current) return;
+
+    const signatureRect = signatureRef.current.getBoundingClientRect();
+    const containerRect = pdfContainerRef.current?.getBoundingClientRect();
+
+    if (!containerRect) return;
+
+    // Calcular offset del mouse relativo a la esquina superior izquierda de la firma
+    setDragOffset({
+      x: e.clientX - signatureRect.left,
+      y: e.clientY - signatureRect.top,
+    });
+
     setIsDragging(true);
   };
 
@@ -175,27 +145,26 @@ const SignaturePositioning = ({
         const containerRect = pdfContainerRef.current?.getBoundingClientRect();
         if (!containerRect) return;
 
-        // Coordenadas relativas al contenedor
-        const containerX = e.clientX - containerRect.left;
-        const containerY = e.clientY - containerRect.top;
+        // Calcular nueva posición usando el offset guardado
+        const newX = e.clientX - containerRect.left - dragOffset.x;
+        const newY = e.clientY - containerRect.top - dragOffset.y;
 
         // Convertir a coordenadas del documento
-        const docCoords = containerToDocumentCoords(containerX, containerY);
-
-        // Ajustar por el offset del cursor
-        let newDocX = docCoords.x - signatureSize.width / 2;
-        let newDocY = docCoords.y - 20;
+        const docCoords = containerToDocumentCoords(newX, newY);
 
         // Ajustar a cuadrícula si está habilitado
+        let finalDocX = docCoords.x;
+        let finalDocY = docCoords.y;
+
         if (snapToGrid) {
-          newDocX = Math.round(newDocX / gridSize) * gridSize;
-          newDocY = Math.round(newDocY / gridSize) * gridSize;
+          finalDocX = Math.round(finalDocX / gridSize) * gridSize;
+          finalDocY = Math.round(finalDocY / gridSize) * gridSize;
         }
 
         // Clampar al área del documento
         const clampedPos = clampToDocument(
-          newDocX,
-          newDocY,
+          finalDocX,
+          finalDocY,
           signatureSize.width,
           signatureSize.height,
         );
@@ -209,6 +178,7 @@ const SignaturePositioning = ({
 
       const handleMouseUpGlobal = () => {
         setIsDragging(false);
+        setDragOffset({ x: 0, y: 0 });
       };
 
       window.addEventListener('mousemove', handleMouseMoveGlobal);
@@ -219,7 +189,14 @@ const SignaturePositioning = ({
         window.removeEventListener('mouseup', handleMouseUpGlobal);
       };
     }
-  }, [isDragging, snapToGrid, gridSize, realDocumentBounds, signatureSize]);
+  }, [
+    isDragging,
+    snapToGrid,
+    gridSize,
+    realDocumentBounds,
+    signatureSize,
+    dragOffset,
+  ]);
 
   // Manejar clic en el documento para posicionar la firma
   const handleDocumentClick = (e: React.MouseEvent) => {
@@ -279,7 +256,7 @@ const SignaturePositioning = ({
       '.react-pdf__Page canvas',
     ) as HTMLCanvasElement;
 
-    if (!pdfPageDimensions || !canvas) {
+    if (!pdfPageDimensions || !canvas || !realDocumentBounds) {
       console.error('Dimensiones del PDF o canvas no disponibles');
       return;
     }
@@ -292,25 +269,26 @@ const SignaturePositioning = ({
       return;
     }
 
+    // Convertir posición del contenedor a coordenadas del documento
+    const docX = position.x - realDocumentBounds.x;
+    const docY = position.y - realDocumentBounds.y;
+
     // Calcular escalas entre canvas renderizado y PDF original
-    const scaleX = pdfPageDimensions.width / currentCanvasWidth;
-    const scaleY = pdfPageDimensions.height / currentCanvasHeight;
+    const scaleX = pdfPageDimensions.width / realDocumentBounds.width;
+    const scaleY = pdfPageDimensions.height / realDocumentBounds.height;
 
     // Convertir coordenadas del canvas a coordenadas PDF
-    const pdfX = position.x * scaleX;
+    const pdfX = docX * scaleX;
     const pdfWidth = signatureSize.width * scaleX;
     const pdfHeight = signatureSize.height * scaleY;
 
     // Convertir Y de sistema DOM (top=0) a sistema PDF (bottom=0)
-    const pdfY = pdfPageDimensions.height - position.y * scaleY - pdfHeight;
+    const pdfY = pdfPageDimensions.height - docY * scaleY - pdfHeight;
 
     console.log('=== DEBUG CONFIRMACIÓN POSICIÓN ===');
-    console.log('Canvas position (DOM):', position);
-    console.log('Canvas size:', signatureSize);
-    console.log('Canvas dimensions:', {
-      width: currentCanvasWidth,
-      height: currentCanvasHeight,
-    });
+    console.log('Container position:', position);
+    console.log('Document coords:', { x: docX, y: docY });
+    console.log('Document bounds:', realDocumentBounds);
     console.log('PDF original size:', pdfPageDimensions);
     console.log('Scales:', { x: scaleX, y: scaleY });
     console.log('Final PDF coords:', {
@@ -336,7 +314,6 @@ const SignaturePositioning = ({
       finalPosition.y + finalPosition.height > pdfPageDimensions.height
     ) {
       console.warn('Firma fuera de límites del PDF:', finalPosition);
-      console.warn('Límites PDF:', pdfPageDimensions);
 
       // Ajustar a esquina inferior derecha si está fuera
       finalPosition.x = Math.max(
@@ -406,7 +383,6 @@ const SignaturePositioning = ({
     const updateBounds = () => {
       const bounds = getRealDocumentBounds();
       setRealDocumentBounds(bounds);
-      console.log('Bounds del documento actualizados:', bounds);
     };
 
     const timer = setTimeout(updateBounds, 300);
@@ -674,14 +650,6 @@ const SignaturePositioning = ({
                 Original: {Math.round(pdfPageDimensions.width)} ×{' '}
                 {Math.round(pdfPageDimensions.height)}pts
               </span>
-            </div>
-            <div className='mt-1'>
-              Escala:{' '}
-              {(
-                (realDocumentBounds.width / pdfPageDimensions.width) *
-                100
-              ).toFixed(1)}
-              %
             </div>
           </div>
         </div>

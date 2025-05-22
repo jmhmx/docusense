@@ -1,5 +1,3 @@
-// backend/src/sharing/rate-limiter.service.ts
-
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as crypto from 'crypto';
@@ -262,76 +260,5 @@ export class RateLimiterService {
     }
 
     this.logger.log(`Rate limiting reset para IP ${hashedIp}`);
-  }
-}
-
-// backend/src/sharing/sharing.service.ts - Integración
-
-@Injectable()
-export class SharingService {
-  constructor(
-    // ... otros servicios
-    private readonly rateLimiter: RateLimiterService,
-  ) {}
-
-  async createShareLink(
-    userId: string,
-    createShareLinkDto: CreateShareLinkDto,
-    ipAddress?: string,
-    userAgent?: string,
-  ): Promise<ShareLink> {
-    // Verificar rate limiting
-    if (ipAddress) {
-      await this.rateLimiter.checkCreateLinkAttempts(userId, ipAddress);
-    }
-
-    // ... resto del código de creación ...
-
-    const savedLink = await this.shareLinksRepository.save(shareLink);
-
-    // Registrar creación exitosa
-    if (ipAddress) {
-      await this.rateLimiter.recordSuccessfulCreate(userId, ipAddress);
-    }
-
-    return savedLink;
-  }
-
-  async accessShareLink(
-    accessShareLinkDto: AccessShareLinkDto,
-    userId?: string,
-    ipAddress?: string,
-    userAgent?: string,
-  ): Promise<{ document: Document; permissionLevel: PermissionLevel }> {
-    const { token, password } = accessShareLinkDto;
-
-    // Verificar rate limiting antes de procesar
-    if (ipAddress) {
-      await this.rateLimiter.checkAccessAttempts(ipAddress, token);
-    }
-
-    try {
-      // ... lógica existente de validación ...
-
-      // Si llegamos aquí, acceso exitoso
-      if (ipAddress) {
-        await this.rateLimiter.recordSuccessfulAccess(ipAddress, token);
-      }
-
-      return {
-        document: shareLink.document,
-        permissionLevel: shareLink.permissionLevel,
-      };
-    } catch (error) {
-      // Registrar intento fallido para rate limiting
-      if (
-        ipAddress &&
-        (error instanceof UnauthorizedException ||
-          error instanceof BadRequestException)
-      ) {
-        await this.rateLimiter.recordFailedAccess(ipAddress, token);
-      }
-      throw error;
-    }
   }
 }

@@ -32,6 +32,7 @@ import {
   UpdatePermissionDto,
 } from './dto/share-document.dto';
 import { EmailService } from '../email/email.service';
+import { RateLimiterService } from './rate-limiter.service';
 
 @Injectable()
 export class SharingService {
@@ -51,6 +52,7 @@ export class SharingService {
     private readonly dataSource: DataSource,
     private readonly configService: ConfigService,
     private readonly emailService: EmailService,
+    private readonly rateLimiter: RateLimiterService,
   ) {}
 
   /**
@@ -292,6 +294,11 @@ export class SharingService {
     ipAddress?: string,
     userAgent?: string,
   ): Promise<ShareLink> {
+    // Verificar rate limiting
+    if (ipAddress) {
+      await this.rateLimiter.checkCreateLinkAttempts(userId, ipAddress);
+    }
+
     const {
       documentId,
       permissionLevel,
@@ -355,7 +362,14 @@ export class SharingService {
       },
     });
 
-    return await this.shareLinksRepository.save(shareLink);
+    const savedLink = await this.shareLinksRepository.save(shareLink);
+
+    // Registrar creación exitosa
+    if (ipAddress) {
+      await this.rateLimiter.recordSuccessfulCreate(userId, ipAddress);
+    }
+
+    return savedLink;
   }
 
   /**
@@ -382,111 +396,132 @@ export class SharingService {
     userAgent?: string,
   ): Promise<{ document: Document; permissionLevel: PermissionLevel }> {
     const { token, password } = accessShareLinkDto;
-
-    // Buscar el enlace
-    const shareLink = await this.shareLinksRepository.findOne({
-      where: { token },
-      relations: ['document'],
-    });
-
-    if (!shareLink || !shareLink.isActive) {
-      throw new NotFoundException(
-        'Enlace de compartición no válido o inactivo',
-      );
+    // Verificar rate limiting antes de procesar
+    if (ipAddress) {
+      await this.rateLimiter.checkAccessAttempts(ipAddress, token);
     }
 
-    // Verificar si el enlace ha expirado
-    if (new Date() > shareLink.expiresAt) {
-      // Desactivar el enlace
-      shareLink.isActive = false;
-      await this.shareLinksRepository.save(shareLink);
-
-      throw new BadRequestException('El enlace de compartición ha expirado');
-    }
-
-    // Verificar si se ha alcanzado el número máximo de usos
-    if (shareLink.maxUses && shareLink.accessCount >= shareLink.maxUses) {
-      // Desactivar el enlace
-      shareLink.isActive = false;
-      await this.shareLinksRepository.save(shareLink);
-
-      throw new BadRequestException(
-        'El enlace ha alcanzado su número máximo de usos',
-      );
-    }
-
-    // Verificar la contraseña si es necesario
-    if (shareLink.requiresPassword) {
-      if (!password) {
-        throw new UnauthorizedException('Este enlace requiere contraseña');
-      }
-
-      const passwordMatches = await this.verifyPassword(
-        password,
-        shareLink.passwordHash,
-      );
-      if (!passwordMatches) {
-        throw new UnauthorizedException('Contraseña incorrecta');
-      }
-    }
-
-    // Si el usuario está autenticado, crear o actualizar su permiso
-    if (userId) {
-      const existingPermission = await this.permissionsRepository.findOne({
-        where: { documentId: shareLink.documentId, userId },
+    try {
+      // Buscar el enlace
+      const shareLink = await this.shareLinksRepository.findOne({
+        where: { token },
+        relations: ['document'],
       });
 
-      if (existingPermission) {
-        // Solo actualizar si el nuevo nivel es mayor
-        const permissionLevels = Object.values(PermissionLevel);
-        const currentIndex = permissionLevels.indexOf(
-          existingPermission.permissionLevel,
+      if (!shareLink || !shareLink.isActive) {
+        throw new NotFoundException(
+          'Enlace de compartición no válido o inactivo',
         );
-        const newIndex = permissionLevels.indexOf(shareLink.permissionLevel);
-
-        if (newIndex > currentIndex) {
-          existingPermission.permissionLevel = shareLink.permissionLevel;
-          existingPermission.isActive = true;
-          await this.permissionsRepository.save(existingPermission);
-        }
-      } else {
-        // Crear nuevo permiso
-        const newPermission = this.permissionsRepository.create({
-          documentId: shareLink.documentId,
-          userId,
-          permissionLevel: shareLink.permissionLevel,
-          isActive: true,
-          createdBy: shareLink.createdBy,
-          metadata: {
-            sharedVia: 'link',
-            shareLinkId: shareLink.id,
-          },
-        });
-        await this.permissionsRepository.save(newPermission);
       }
+
+      // Verificar si el enlace ha expirado
+      if (new Date() > shareLink.expiresAt) {
+        // Desactivar el enlace
+        shareLink.isActive = false;
+        await this.shareLinksRepository.save(shareLink);
+
+        throw new BadRequestException('El enlace de compartición ha expirado');
+      }
+
+      // Verificar si se ha alcanzado el número máximo de usos
+      if (shareLink.maxUses && shareLink.accessCount >= shareLink.maxUses) {
+        // Desactivar el enlace
+        shareLink.isActive = false;
+        await this.shareLinksRepository.save(shareLink);
+
+        throw new BadRequestException(
+          'El enlace ha alcanzado su número máximo de usos',
+        );
+      }
+
+      // Verificar la contraseña si es necesario
+      if (shareLink.requiresPassword) {
+        if (!password) {
+          throw new UnauthorizedException('Este enlace requiere contraseña');
+        }
+
+        const passwordMatches = await this.verifyPassword(
+          password,
+          shareLink.passwordHash,
+        );
+        if (!passwordMatches) {
+          throw new UnauthorizedException('Contraseña incorrecta');
+        }
+      }
+
+      // Si el usuario está autenticado, crear o actualizar su permiso
+      if (userId) {
+        const existingPermission = await this.permissionsRepository.findOne({
+          where: { documentId: shareLink.documentId, userId },
+        });
+
+        if (existingPermission) {
+          // Solo actualizar si el nuevo nivel es mayor
+          const permissionLevels = Object.values(PermissionLevel);
+          const currentIndex = permissionLevels.indexOf(
+            existingPermission.permissionLevel,
+          );
+          const newIndex = permissionLevels.indexOf(shareLink.permissionLevel);
+
+          if (newIndex > currentIndex) {
+            existingPermission.permissionLevel = shareLink.permissionLevel;
+            existingPermission.isActive = true;
+            await this.permissionsRepository.save(existingPermission);
+          }
+        } else {
+          // Crear nuevo permiso
+          const newPermission = this.permissionsRepository.create({
+            documentId: shareLink.documentId,
+            userId,
+            permissionLevel: shareLink.permissionLevel,
+            isActive: true,
+            createdBy: shareLink.createdBy,
+            metadata: {
+              sharedVia: 'link',
+              shareLinkId: shareLink.id,
+            },
+          });
+          await this.permissionsRepository.save(newPermission);
+        }
+      }
+
+      // Incrementar contador de accesos
+      shareLink.accessCount += 1;
+      await this.shareLinksRepository.save(shareLink);
+
+      // Registrar en log de auditoría
+      await this.auditLogService.log(
+        AuditAction.SHARE_LINK_ACCESS,
+        userId || 'anonymous',
+        shareLink.documentId,
+        {
+          shareLink: shareLink.id,
+          accessCount: shareLink.accessCount,
+        },
+        ipAddress,
+        userAgent,
+      );
+
+      // Si llegamos aquí, acceso exitoso
+      if (ipAddress) {
+        await this.rateLimiter.recordSuccessfulAccess(ipAddress, token);
+      }
+
+      return {
+        document: shareLink.document,
+        permissionLevel: shareLink.permissionLevel,
+      };
+    } catch (error) {
+      // Registrar intento fallido para rate limiting
+      if (
+        ipAddress &&
+        (error instanceof UnauthorizedException ||
+          error instanceof BadRequestException)
+      ) {
+        await this.rateLimiter.recordFailedAccess(ipAddress, token);
+      }
+      throw error;
     }
-
-    // Incrementar contador de accesos
-    shareLink.accessCount += 1;
-    await this.shareLinksRepository.save(shareLink);
-
-    // Registrar en log de auditoría
-    await this.auditLogService.log(
-      AuditAction.SHARE_LINK_ACCESS,
-      userId || 'anonymous',
-      shareLink.documentId,
-      {
-        shareLink: shareLink.id,
-        accessCount: shareLink.accessCount,
-      },
-      ipAddress,
-      userAgent,
-    );
-
-    return {
-      document: shareLink.document,
-      permissionLevel: shareLink.permissionLevel,
-    };
   }
 
   /**

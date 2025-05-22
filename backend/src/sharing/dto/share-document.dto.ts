@@ -9,8 +9,52 @@ import {
   ValidateIf,
   IsNumber,
   Min,
+  Validate,
+  ValidationArguments,
+  ValidatorConstraint,
+  ValidatorConstraintInterface,
 } from 'class-validator';
 import { PermissionLevel } from '../entities/document-permission.entity';
+
+// Validador personalizado para fechas futuras
+@ValidatorConstraint({ name: 'isFutureDate', async: false })
+export class IsFutureDateConstraint implements ValidatorConstraintInterface {
+  validate(dateString: string, args: ValidationArguments) {
+    if (!dateString) return true; // Opcional, será manejado por @IsOptional()
+
+    const date = new Date(dateString);
+    const now = new Date();
+
+    // Debe ser al menos 1 hora en el futuro
+    const minFutureTime = new Date(now.getTime() + 60 * 60 * 1000);
+
+    return date > minFutureTime;
+  }
+
+  defaultMessage(args: ValidationArguments) {
+    return 'La fecha de expiración debe ser al menos 1 hora en el futuro';
+  }
+}
+
+// Validador para límite máximo de expiración
+@ValidatorConstraint({ name: 'isWithinMaxDays', async: false })
+export class IsWithinMaxDaysConstraint implements ValidatorConstraintInterface {
+  validate(dateString: string, args: ValidationArguments) {
+    if (!dateString) return true;
+
+    const date = new Date(dateString);
+    const now = new Date();
+
+    // Máximo 1 año en el futuro
+    const maxFutureTime = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000);
+
+    return date <= maxFutureTime;
+  }
+
+  defaultMessage(args: ValidationArguments) {
+    return 'La fecha de expiración no puede ser mayor a 1 año';
+  }
+}
 
 export class ShareDocumentDto {
   @IsUUID()
@@ -26,6 +70,8 @@ export class ShareDocumentDto {
 
   @IsOptional()
   @IsDateString()
+  @Validate(IsFutureDateConstraint)
+  @Validate(IsWithinMaxDaysConstraint)
   expiresAt?: string;
 
   @IsOptional()
@@ -47,6 +93,8 @@ export class CreateShareLinkDto {
   permissionLevel: PermissionLevel;
 
   @IsDateString()
+  @Validate(IsFutureDateConstraint)
+  @Validate(IsWithinMaxDaysConstraint)
   expiresAt: string;
 
   @IsOptional()
@@ -55,6 +103,7 @@ export class CreateShareLinkDto {
 
   @ValidateIf((o) => o.requiresPassword === true)
   @IsString()
+  @Min(4, { message: 'La contraseña debe tener al menos 4 caracteres' })
   password?: string;
 
   @IsOptional()

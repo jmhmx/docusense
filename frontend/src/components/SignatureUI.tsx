@@ -133,11 +133,16 @@ const SignatureUI = ({
 
   // Manejar selección de posición
   const handlePositionSelected = (pos: SignaturePosition) => {
+    console.log('Posición recibida de SignaturePositioning:', pos);
+
+    // Las coordenadas ya vienen convertidas de SignaturePositioning
+    // NO necesitamos conversión adicional aquí
     setPosition(pos);
 
-    // Si es firma biométrica o e.firma, finalizar directamente
+    // Si es firma biométrica o autógrafa, finalizar directamente
     if (signatureType === 'biometric' || signatureType === 'autograph') {
-      handleFinalizeSignature();
+      // Pasar la posición tal como viene (ya convertida)
+      handleFinalizeSignature(pos);
     } else {
       goToNextStep();
     }
@@ -150,19 +155,23 @@ const SignatureUI = ({
   };
 
   // Finalizar proceso de firma
-  const handleFinalizeSignature = () => {
+  const handleFinalizeSignature = (finalPosition?: SignaturePosition) => {
     setStep('processing');
     setProcessing(true);
 
-    // Simular proceso de firma (esto sería reemplazado por la llamada real)
+    const positionToUse = finalPosition || position;
+
+    console.log('Finalizando firma con posición:', positionToUse);
+
+    // Simular proceso de firma
     setTimeout(() => {
       try {
-        if (!position) {
+        if (!positionToUse) {
           throw new Error('No se ha seleccionado una posición para la firma');
         }
 
-        // Llamar a onSign con los datos correspondientes
-        onSign(signatureType, reason, position, sealData);
+        // Llamar a onSign con las coordenadas ya convertidas
+        onSign(signatureType, reason, positionToUse, sealData);
 
         setProcessing(false);
         setSuccess(true);

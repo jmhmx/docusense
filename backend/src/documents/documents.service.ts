@@ -455,159 +455,152 @@ export class DocumentsService {
     try {
       const pdfDoc = page.doc;
 
-      // 1. Crear el fondo del sello (rectángulo con borde)
-      page.drawRectangle({
+      // Validar coordenadas y ajustar si están fuera del documento
+      const pageWidth = page.getWidth();
+      const pageHeight = page.getHeight();
+
+      // Si la firma está fuera de los límites, posicionarla en la esquina inferior derecha
+      if (x < 0 || y < 0 || x + width > pageWidth || y + height > pageHeight) {
+        this.logger.warn(
+          `Firma fuera de límites, reposicionando a esquina inferior derecha`,
+        );
+        x = pageWidth - width - 20; // 20px de margen
+        y = 20; // 20px desde abajo (sistema PDF)
+
+        // Asegurar que no sea negativo
+        x = Math.max(20, x);
+        y = Math.max(20, y);
+      }
+
+      // 1. Renderizar directamente la imagen de la firma autógrafa SIN fondo
+      await this.renderAutografaImageOnly(
+        page,
+        base64Image,
         x,
         y,
         width,
         height,
-        color: rgb(0.95, 0.95, 1), // Fondo azul claro
-        borderColor: rgb(0.2, 0.4, 0.8), // Borde azul
-        borderWidth: 1.5,
-        opacity: 0.9,
-      });
-
-      // 2. Área para la firma autógrafa (lado izquierdo del sello)
-      const signatureAreaWidth = width * 0.6; // 60% del ancho para la firma
-      const signatureAreaHeight = height * 0.7; // 70% de la altura
-      const signatureX = x + 5; // Pequeño margen
-      const signatureY = y + (height - signatureAreaHeight) / 2; // Centrado verticalmente
-
-      // 3. Renderizar la imagen de la firma autógrafa
-      await this.renderAutografaImageInArea(
-        page,
-        base64Image,
-        signatureX,
-        signatureY,
-        signatureAreaWidth,
-        signatureAreaHeight,
       );
 
-      // 4. Área para el texto (lado derecho del sello)
-      const textAreaX = x + signatureAreaWidth + 10;
-      const textAreaY = y + height - 15;
-      const textAreaWidth = width - signatureAreaWidth - 15;
-
-      // 5. Renderizar información del firmante
+      // 2. Añadir información textual ENCIMA de la imagen
       const font = await pdfDoc.embedFont('Helvetica-Bold');
       const fontRegular = await pdfDoc.embedFont('Helvetica');
 
-      // Nombre del firmante
+      // Área de texto en la parte superior de la firma
+      const textY = y + height - 15;
+
+      // Nombre del firmante (más pequeño y transparente)
       page.drawText(signature.user?.name || 'Usuario', {
-        x: textAreaX,
-        y: textAreaY,
-        size: 10,
-        color: rgb(0, 0, 0.7),
+        x: x + 5,
+        y: textY,
+        size: 8,
+        color: rgb(0.2, 0.2, 0.2),
         font: font,
-        maxWidth: textAreaWidth,
+        opacity: 0.7,
       });
 
       // Fecha de firma
       page.drawText(new Date(signature.signedAt).toLocaleDateString(), {
-        x: textAreaX,
-        y: textAreaY - 12,
-        size: 8,
-        color: rgb(0.1, 0.1, 0.7),
+        x: x + 5,
+        y: textY - 10,
+        size: 7,
+        color: rgb(0.3, 0.3, 0.3),
         font: fontRegular,
-        maxWidth: textAreaWidth,
-      });
-
-      // Motivo (si existe)
-      if (signature.reason) {
-        page.drawText(`${signature.reason}`, {
-          x: textAreaX,
-          y: textAreaY - 24,
-          size: 7,
-          color: rgb(0.1, 0.1, 0.7),
-          font: fontRegular,
-          maxWidth: textAreaWidth,
-        });
-      }
-
-      // 6. Indicador de tipo de firma
-      page.drawText('Firma Autógrafa', {
-        x: textAreaX,
-        y: y + 5,
-        size: 6,
-        color: rgb(0.5, 0.5, 0.5),
-        font: fontRegular,
-        maxWidth: textAreaWidth,
+        opacity: 0.7,
       });
 
       this.logger.log(
-        `Firma autógrafa integrada en sello en (${x}, ${y}) con tamaño ${width}x${height}`,
+        `Firma autógrafa renderizada en (${x}, ${y}) con tamaño ${width}x${height}`,
       );
     } catch (error) {
       this.logger.error(
-        `Error al renderizar firma autógrafa con sello: ${error.message}`,
+        `Error al renderizar firma autógrafa: ${error.message}`,
         error.stack,
       );
       throw error;
     }
   }
 
-  private async renderAutografaImageInArea(
+  private async renderAutografaImageOnly(
     page: PDFPage,
     base64Image: string,
     x: number,
     y: number,
-    maxWidth: number,
-    maxHeight: number,
+    width: number,
+    height: number,
   ): Promise<void> {
     try {
-      // Extraer datos de imagen desde formato base64
-      let imageBytes: Buffer;
-
+      // Limpiar y validar datos base64
+      let imageData: string;
       if (base64Image.startsWith('data:image/')) {
-        const base64Data = base64Image.split(',')[1];
-        if (!base64Data) {
-          throw new Error('Datos base64 inválidos');
+        const parts = base64Image.split(',');
+        if (parts.length !== 2) {
+          throw new Error('Formato base64 inválido');
         }
-        imageBytes = Buffer.from(base64Data, 'base64');
+        imageData = parts[1];
       } else {
-        imageBytes = Buffer.from(base64Image, 'base64');
+        imageData = base64Image;
       }
 
-      // Embeber imagen
+      // Convertir a Buffer
+      const imageBytes = Buffer.from(imageData, 'base64');
+
+      if (imageBytes.length === 0) {
+        throw new Error('Datos de imagen vacíos');
+      }
+
+      this.logger.log(`Procesando imagen de ${imageBytes.length} bytes`);
+
+      // Detectar tipo de imagen por magic bytes
       const pdfDoc = page.doc;
       let embeddedImage;
 
-      const isPNG =
+      // PNG: 89 50 4E 47
+      if (
         imageBytes[0] === 0x89 &&
         imageBytes[1] === 0x50 &&
         imageBytes[2] === 0x4e &&
-        imageBytes[3] === 0x47;
-      const isJPEG = imageBytes[0] === 0xff && imageBytes[1] === 0xd8;
-
-      if (isPNG) {
+        imageBytes[3] === 0x47
+      ) {
+        this.logger.log('Detectado formato PNG');
         embeddedImage = await pdfDoc.embedPng(imageBytes);
-      } else if (isJPEG) {
+      }
+      // JPEG: FF D8
+      else if (imageBytes[0] === 0xff && imageBytes[1] === 0xd8) {
+        this.logger.log('Detectado formato JPEG');
         embeddedImage = await pdfDoc.embedJpg(imageBytes);
+      }
+      // Si comienza con "<svg" (SVG como texto)
+      else if (imageData.startsWith('PHN2Zw==') || imageData.includes('svg')) {
+        throw new Error('SVG no soportado directamente. Convierte a PNG/JPEG.');
       } else {
         // Intentar PNG por defecto
+        this.logger.log('Tipo desconocido, intentando PNG');
         try {
           embeddedImage = await pdfDoc.embedPng(imageBytes);
         } catch {
+          this.logger.log('PNG falló, intentando JPEG');
           embeddedImage = await pdfDoc.embedJpg(imageBytes);
         }
       }
 
-      // Calcular dimensiones manteniendo relación de aspecto
+      // Obtener dimensiones originales y mantener aspect ratio
       const imgDims = embeddedImage.scale(1);
       const aspectRatio = imgDims.width / imgDims.height;
 
-      let finalWidth = maxWidth;
-      let finalHeight = maxHeight;
+      let finalWidth = width;
+      let finalHeight = height;
 
-      if (maxWidth / maxHeight > aspectRatio) {
-        finalWidth = maxHeight * aspectRatio;
+      // Ajustar manteniendo proporción
+      if (width / height > aspectRatio) {
+        finalWidth = height * aspectRatio;
       } else {
-        finalHeight = maxWidth / aspectRatio;
+        finalHeight = width / aspectRatio;
       }
 
-      // Centrar imagen en el área asignada
-      const offsetX = (maxWidth - finalWidth) / 2;
-      const offsetY = (maxHeight - finalHeight) / 2;
+      // Centrar en el área asignada
+      const offsetX = (width - finalWidth) / 2;
+      const offsetY = (height - finalHeight) / 2;
 
       // Dibujar imagen
       page.drawImage(embeddedImage, {
@@ -615,18 +608,35 @@ export class DocumentsService {
         y: y + offsetY,
         width: finalWidth,
         height: finalHeight,
-        opacity: 1,
+        opacity: 1.0, // Opacidad completa
       });
 
       this.logger.log(
-        `Imagen de firma autógrafa renderizada en área (${x + offsetX}, ${y + offsetY}) con tamaño ${finalWidth}x${finalHeight}`,
+        `Imagen renderizada en (${x + offsetX}, ${y + offsetY}) con tamaño ${finalWidth}x${finalHeight}`,
       );
     } catch (error) {
       this.logger.error(
-        `Error al renderizar imagen de firma autógrafa: ${error.message}`,
+        `Error crítico al renderizar imagen: ${error.message}`,
         error.stack,
       );
-      throw error;
+
+      // Como fallback, dibujar un rectángulo con texto
+      page.drawRectangle({
+        x,
+        y,
+        width,
+        height,
+        color: rgb(0.9, 0.9, 0.9),
+        borderColor: rgb(0.5, 0.5, 0.5),
+        borderWidth: 1,
+      });
+
+      page.drawText('Firma autógrafa', {
+        x: x + 10,
+        y: y + height / 2,
+        size: 10,
+        color: rgb(0, 0, 0),
+      });
     }
   }
 
@@ -638,7 +648,10 @@ export class DocumentsService {
     const fileData = await this.getDocumentContent(document, document.userId);
     const pdfDoc = await PDFDocument.load(fileData);
 
-    this.logger.log(`Procesando ${signatures.length} firmas en el documento`);
+    this.logger.log(`=== GENERANDO PDF FIRMADO ===`);
+    this.logger.log(`Documento: ${document.title}`);
+    this.logger.log(`Páginas PDF: ${pdfDoc.getPageCount()}`);
+    this.logger.log(`Firmas a procesar: ${signatures.length}`);
 
     for (const signature of signatures) {
       try {
@@ -652,6 +665,12 @@ export class DocumentsService {
           this.logger.error(`Error al parsear posición de firma: ${e.message}`);
           continue;
         }
+
+        this.logger.log(`=== PROCESANDO FIRMA ${signature.id} ===`);
+        this.logger.log(
+          `Tipo: ${signature.metadata?.signatureType || 'standard'}`,
+        );
+        this.logger.log(`Posición raw:`, position);
 
         if (
           !position ||
@@ -676,24 +695,49 @@ export class DocumentsService {
         }
 
         const page = pdfDoc.getPages()[pageIndex];
+        const pageWidth = page.getWidth();
+        const pageHeight = page.getHeight();
 
-        // Las coordenadas ya vienen en el sistema correcto desde el frontend
-        // No necesitamos conversión adicional
-        const x = position.x;
-        const y = position.y;
-        const width = position.width;
-        const height = position.height;
+        let x = position.x;
+        let y = position.y;
+        let width = position.width;
+        let height = position.height;
 
-        this.logger.log(`Renderizando firma ${signature.id} en posición:`, {
-          page: position.page,
-          x,
-          y,
-          width,
-          height,
-        });
+        this.logger.log(`Dimensiones página PDF: ${pageWidth} x ${pageHeight}`);
+        this.logger.log(
+          `Coordenadas recibidas: x=${x}, y=${y}, w=${width}, h=${height}`,
+        );
+
+        // Validar y ajustar coordenadas si están fuera de límites
+        if (
+          x < 0 ||
+          y < 0 ||
+          x + width > pageWidth ||
+          y + height > pageHeight
+        ) {
+          this.logger.warn(`COORDENADAS FUERA DE LÍMITES - Reposicionando`);
+          this.logger.warn(`Original: x=${x}, y=${y}, w=${width}, h=${height}`);
+          this.logger.warn(`Límites página: w=${pageWidth}, h=${pageHeight}`);
+
+          // Reposicionar en esquina inferior derecha
+          x = Math.max(20, pageWidth - width - 20);
+          y = Math.max(20, 20); // 20pts desde abajo
+
+          this.logger.log(
+            `Nueva posición: x=${x}, y=${y}, w=${width}, h=${height}`,
+          );
+        }
 
         if (signature.metadata?.signatureType === 'autografa') {
-          if (signature.signatureData?.length > 0) {
+          if (signature.signatureData && signature.signatureData.length > 10) {
+            this.logger.log(`Renderizando FIRMA AUTÓGRAFA:`);
+            this.logger.log(
+              `- Datos imagen: ${signature.signatureData.length} caracteres`,
+            );
+            this.logger.log(
+              `- Posición final: (${x}, ${y}) ${width}x${height}`,
+            );
+
             await this.renderAutografaWithSeal(
               page,
               signature.signatureData,
@@ -703,15 +747,16 @@ export class DocumentsService {
               height,
               signature,
             );
-            this.logger.log(
-              `Firma autógrafa ${signature.id} renderizada correctamente`,
-            );
+
+            this.logger.log(`✓ Firma autógrafa renderizada`);
           } else {
-            this.logger.warn(
-              `Firma autógrafa ${signature.id} sin datos de imagen`,
+            this.logger.error(
+              `Firma autógrafa ${signature.id} sin datos válidos`,
             );
           }
         } else {
+          this.logger.log(`Renderizando FIRMA ESTÁNDAR en (${x}, ${y})`);
+
           // Firmas regulares
           page.drawRectangle({
             x,
@@ -724,12 +769,13 @@ export class DocumentsService {
             opacity: 0.9,
           });
 
+          const font = await pdfDoc.embedFont('Helvetica-Bold');
           page.drawText(`Firmado por: ${signature.user?.name || 'Usuario'}`, {
             x: x + 10,
             y: y + height - 20,
             size: 11,
             color: rgb(0, 0, 0.7),
-            font: await pdfDoc.embedFont('Helvetica-Bold'),
+            font,
           });
 
           page.drawText(
@@ -750,14 +796,18 @@ export class DocumentsService {
               color: rgb(0.1, 0.1, 0.7),
             });
           }
+
+          this.logger.log(`✓ Firma estándar renderizada`);
         }
       } catch (error) {
         this.logger.error(
-          `Error añadiendo firma al PDF: ${error.message}`,
-          error.stack,
+          `❌ Error procesando firma ${signature.id}:`,
+          error.message,
         );
       }
     }
+
+    this.logger.log(`=== PDF GENERADO EXITOSAMENTE ===`);
 
     const pdfBytes = await pdfDoc.save();
     return Buffer.from(pdfBytes);

@@ -164,8 +164,24 @@ const DocumentSignature = ({
     position?: SignaturePosition,
     sealData?: any,
   ) => {
+    console.log('=== DEBUG COORDENADAS ===');
+    console.log('Tipo de firma:', signatureType);
+    console.log('Posición recibida:', position);
+
     if (!position) {
       setError('Posición de firma no especificada');
+      return;
+    }
+
+    // Validar que las coordenadas son válidas
+    if (
+      position.x < 0 ||
+      position.y < 0 ||
+      position.width <= 0 ||
+      position.height <= 0
+    ) {
+      console.warn('Coordenadas inválidas detectadas:', position);
+      setError('Coordenadas de firma inválidas');
       return;
     }
 
@@ -177,31 +193,30 @@ const DocumentSignature = ({
       const signatureData = {
         type: signatureType,
         reason: reason.trim() || 'Firma de documento',
-        position,
+        position, // Ya viene convertida de SignaturePositioning
         sealData,
       };
+
+      console.log('Datos de firma almacenados:', signatureData);
 
       // Manejar según el tipo de firma
       switch (signatureType) {
         case 'standard':
-          // Para firma estándar, mostrar modal 2FA primero
           setPendingSignatureData(signatureData);
           setShowTwoFactorModal(true);
-          setShowSignModal(false); // Cerrar el modal de firma
+          setShowSignModal(false);
           break;
 
         case 'biometric':
-          // Guardar datos y mostrar flujo biométrico
           setPendingSignatureData(signatureData);
           setShowBiometricWorkflow(true);
-          setShowSignModal(false); // Cerrar el modal de firma
+          setShowSignModal(false);
           break;
 
         case 'autograph':
-          // Para firma autógrafa, mostrar modal de firma autógrafa primero
           setPendingSignatureData(signatureData);
           setShowFirmaAutografaModal(true);
-          setShowSignModal(false); // Cerrar el modal de firma
+          setShowSignModal(false);
           break;
 
         default:
@@ -288,12 +303,19 @@ const DocumentSignature = ({
       return;
     }
 
+    console.log('=== DEBUG FIRMA AUTÓGRAFA FINAL ===');
+    console.log('Posición a enviar:', pendingSignatureData.position);
+    console.log(
+      'Imagen SVG length:',
+      pendingSignatureData.firmaAutografaSvg.length,
+    );
+
     setIsLoading(true);
 
     try {
-      // Enviar la firma autógrafa al servidor
+      // Enviar la firma autógrafa al servidor con coordenadas ya convertidas
       await api.post(`/api/signatures/${documentId}/autografa`, {
-        position: pendingSignatureData.position,
+        position: pendingSignatureData.position, // Ya viene en coordenadas PDF
         reason: pendingSignatureData.reason,
         firmaAutografaSvg: pendingSignatureData.firmaAutografaSvg,
       });

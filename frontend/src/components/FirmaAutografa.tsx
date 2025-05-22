@@ -204,107 +204,137 @@ const FirmaAutografa = ({
     if (!canvasRef.current || !hasSignature) return;
 
     try {
-      // Recortar la firma para eliminar espacio en blanco excesivo
-      const imageData = trimCanvas(canvasRef.current);
+      console.log('Iniciando guardado de firma...');
 
-      // Convertir a formato PNG con alta calidad y fondo transparente
-      const dataUrl = imageData.toDataURL('image/png', 1.0);
+      // Obtener canvas y contexto
+      const canvas = canvasRef.current;
+      const ctx = canvas.getContext('2d');
 
-      console.log('Firma convertida a base64, longitud:', dataUrl.length);
+      if (!ctx) {
+        console.error('No se pudo obtener contexto 2D');
+        return;
+      }
+
+      // Verificar que hay contenido en el canvas
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const hasContent = imageData.data.some(
+        (channel, index) => index % 4 === 3 && channel > 0, // Canal alpha > 0
+      );
+
+      if (!hasContent) {
+        console.error('Canvas vacío');
+        alert('Por favor dibuje su firma antes de guardar');
+        return;
+      }
+
+      // Crear canvas temporal para recortar
+      const tempCanvas = document.createElement('canvas');
+      const tempCtx = tempCanvas.getContext('2d');
+
+      if (!tempCtx) {
+        console.error('No se pudo crear canvas temporal');
+        return;
+      }
+
+      // Encontrar límites del contenido
+      const bounds = findImageBounds(imageData, canvas.width, canvas.height);
+
+      if (!bounds) {
+        console.error('No se encontró contenido para recortar');
+        return;
+      }
+
+      // Añadir margen
+      const margin = 10;
+      const finalX = Math.max(0, bounds.minX - margin);
+      const finalY = Math.max(0, bounds.minY - margin);
+      const finalWidth = Math.min(
+        canvas.width - finalX,
+        bounds.width + 2 * margin,
+      );
+      const finalHeight = Math.min(
+        canvas.height - finalY,
+        bounds.height + 2 * margin,
+      );
+
+      // Configurar canvas temporal
+      tempCanvas.width = finalWidth;
+      tempCanvas.height = finalHeight;
+
+      // Copiar contenido recortado
+      tempCtx.drawImage(
+        canvas,
+        finalX,
+        finalY,
+        finalWidth,
+        finalHeight,
+        0,
+        0,
+        finalWidth,
+        finalHeight,
+      );
+
+      // Generar base64 en PNG de alta calidad
+      const dataUrl = tempCanvas.toDataURL('image/png', 1.0);
+
+      console.log('Firma generada:', {
+        originalSize: `${canvas.width}x${canvas.height}`,
+        croppedSize: `${finalWidth}x${finalHeight}`,
+        dataUrlLength: dataUrl.length,
+        dataUrlPrefix: dataUrl.substring(0, 50),
+      });
+
+      // Verificar que la imagen no esté vacía
+      if (
+        dataUrl ===
+        'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=='
+      ) {
+        console.error('Canvas resultó en imagen vacía');
+        alert('Error: la firma está vacía');
+        return;
+      }
+
       onSave(dataUrl);
     } catch (error) {
       console.error('Error al guardar la firma:', error);
-      // Si falla el recorte, usar el canvas completo
-      const dataUrl = canvasRef.current.toDataURL('image/png', 1.0);
-      onSave(dataUrl);
+      alert('Error al procesar la firma. Intente nuevamente.');
     }
   };
 
-  // Función optimizada para recortar el canvas y eliminar espacio en blanco
-  const trimCanvas = (canvas: HTMLCanvasElement): HTMLCanvasElement => {
-    const context = canvas.getContext('2d');
-    if (!context) return canvas;
+  // Función auxiliar para encontrar límites del contenido
+  const findImageBounds = (
+    imageData: ImageData,
+    width: number,
+    height: number,
+  ) => {
+    const data = imageData.data;
+    let minX = width,
+      minY = height,
+      maxX = 0,
+      maxY = 0;
+    let hasContent = false;
 
-    const pixels = context.getImageData(0, 0, canvas.width, canvas.height);
-    const l = pixels.data.length;
-    const bound = {
-      top: null as number | null,
-      left: null as number | null,
-      right: null as number | null,
-      bottom: null as number | null,
-    };
-
-    // Iterate over every pixel to find the highest and lowest x and y
-    for (let i = 0; i < l; i += 4) {
-      if (pixels.data[i + 3] !== 0) {
-        const x = (i / 4) % canvas.width;
-        const y = ~~(i / 4 / canvas.width);
-
-        if (bound.top === null) {
-          bound.top = y;
-        }
-
-        if (bound.left === null) {
-          bound.left = x;
-        } else if (x < bound.left) {
-          bound.left = x;
-        }
-
-        if (bound.right === null) {
-          bound.right = x;
-        } else if (bound.right < x) {
-          bound.right = x;
-        }
-
-        if (bound.bottom === null) {
-          bound.bottom = y;
-        } else if (bound.bottom < y) {
-          bound.bottom = y;
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const alpha = data[(y * width + x) * 4 + 3];
+        if (alpha > 0) {
+          hasContent = true;
+          minX = Math.min(minX, x);
+          minY = Math.min(minY, y);
+          maxX = Math.max(maxX, x);
+          maxY = Math.max(maxY, y);
         }
       }
     }
 
-    // Si no hay firma, devolver el canvas original
-    if (bound.top === null) {
-      return canvas;
-    }
+    if (!hasContent) return null;
 
-    // Añadir un margen proporcional al tamaño del canvas
-    const margin = Math.min(canvas.width, canvas.height) * 0.05;
-    bound.top = Math.max(0, (bound.top || 0) - margin);
-    bound.left = Math.max(0, (bound.left || 0) - margin);
-    bound.right = Math.min(canvas.width, (bound.right || 0) + margin);
-    bound.bottom = Math.min(canvas.height, (bound.bottom || 0) + margin);
-
-    const trimWidth = (bound.right || 0) - (bound.left || 0);
-    const trimHeight = (bound.bottom || 0) - (bound.top || 0);
-
-    // Crear un nuevo canvas con las dimensiones recortadas
-    const trimmedCanvas = document.createElement('canvas');
-    trimmedCanvas.width = trimWidth;
-    trimmedCanvas.height = trimHeight;
-
-    // Obtener contexto con fondo transparente
-    const trimmedContext = trimmedCanvas.getContext('2d');
-    if (!trimmedContext) return canvas;
-
-    // Mantener la transparencia
-    trimmedContext.clearRect(0, 0, trimWidth, trimHeight);
-
-    // Copiar la región recortada al nuevo canvas
-    trimmedContext.drawImage(
-      canvas,
-      bound.left || 0,
-      bound.top || 0,
-      trimWidth,
-      trimHeight,
-      0,
-      0,
-      trimWidth,
-      trimHeight,
-    );
-
-    return trimmedCanvas;
+    return {
+      minX,
+      minY,
+      width: maxX - minX + 1,
+      height: maxY - minY + 1,
+    };
   };
 
   return (

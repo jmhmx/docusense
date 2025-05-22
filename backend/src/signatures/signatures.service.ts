@@ -1739,9 +1739,26 @@ export class SignaturesService {
       throw new BadRequestException('Faltan datos necesarios para la firma');
     }
 
+    // Debug: Verificar datos de imagen
+    console.log('=== DEBUG FIRMA AUTÓGRAFA ===');
+    console.log('Longitud de imagen:', firmaAutografaSvg.length);
+    console.log('Prefijo de imagen:', firmaAutografaSvg.substring(0, 100));
+    console.log('Posición recibida:', position);
+
     // Validar formato de imagen
     if (!firmaAutografaSvg.startsWith('data:image/')) {
+      console.error(
+        'Formato de imagen inválido:',
+        firmaAutografaSvg.substring(0, 50),
+      );
       throw new BadRequestException('Formato de imagen inválido');
+    }
+
+    // Verificar que hay datos base64
+    const base64Part = firmaAutografaSvg.split(',')[1];
+    if (!base64Part || base64Part.length < 100) {
+      console.error('Datos base64 insuficientes:', base64Part?.length || 0);
+      throw new BadRequestException('Datos de imagen insuficientes');
     }
 
     try {
@@ -1769,7 +1786,7 @@ export class SignaturesService {
       // Generar hash del documento
       const documentHash = this.cryptoService.generateHash(document.filePath);
 
-      // Crear entidad de firma con los datos exactos
+      // Crear entidad de firma con debug
       const signatureEntity = this.signaturesRepository.create({
         id: uuidv4(),
         documentId: document.id,
@@ -1785,6 +1802,8 @@ export class SignaturesService {
           authMethod: '2FA',
           userAgent,
           ipAddress,
+          imageDataLength: firmaAutografaSvg.length,
+          positionData: position,
           documentMetadata: {
             title: document.title,
             fileSize: document.fileSize,
@@ -1797,6 +1816,17 @@ export class SignaturesService {
       const savedSignature =
         await this.signaturesRepository.save(signatureEntity);
 
+      // Debug: Verificar lo que se guardó
+      console.log('Firma guardada con ID:', savedSignature.id);
+      console.log(
+        'Datos guardados - longitud:',
+        savedSignature.signatureData.length,
+      );
+      console.log(
+        'Metadatos:',
+        JSON.stringify(savedSignature.metadata, null, 2),
+      );
+
       // Actualizar documento
       document.metadata = {
         ...document.metadata,
@@ -1808,15 +1838,6 @@ export class SignaturesService {
 
       await this.documentsService.update(documentId, document);
 
-      // Log para verificar datos
-      this.logger.log(`Firma autógrafa guardada - ID: ${savedSignature.id}`);
-      this.logger.log(
-        `Datos de imagen - longitud: ${firmaAutografaSvg.length}`,
-      );
-      this.logger.log(
-        `Primeros 50 chars: ${firmaAutografaSvg.substring(0, 50)}...`,
-      );
-
       // Registrar en auditoría
       await this.auditLogService.log(
         AuditAction.DOCUMENT_SIGN,
@@ -1826,17 +1847,16 @@ export class SignaturesService {
           title: document.title,
           signatureId: savedSignature.id,
           signatureType: 'autografa',
+          imageDataLength: firmaAutografaSvg.length,
         },
         ipAddress,
         userAgent,
       );
 
+      console.log('=== FIN DEBUG FIRMA AUTÓGRAFA ===');
       return savedSignature;
     } catch (error) {
-      this.logger.error(
-        `Error en firma autógrafa: ${error.message}`,
-        error.stack,
-      );
+      console.error('Error en firma autógrafa:', error.message, error.stack);
       throw error;
     }
   }

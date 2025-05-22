@@ -1,159 +1,26 @@
-// Componente PDFViewer.tsx actualizado
-
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
 import 'react-pdf/dist/esm/Page/AnnotationLayer.css';
 import 'react-pdf/dist/esm/Page/TextLayer.css';
 
-// Configurar worker de PDF.js
 pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
-
-interface Annotation {
-  id: string;
-  position: {
-    page: number;
-    x: number;
-    y: number;
-    width?: number;
-    height?: number;
-  };
-  user: {
-    name: string;
-    email?: string;
-  };
-  signedAt: string;
-  valid: boolean;
-  reason?: string;
-}
 
 interface PDFViewerProps {
   documentId: string;
-  annotations?: Annotation[];
+  annotations?: any[]; // Mantenemos la prop pero no la usamos
 }
 
-const PDFViewer = ({ documentId, annotations = [] }: PDFViewerProps) => {
+const PDFViewer = ({ documentId }: PDFViewerProps) => {
   const [numPages, setNumPages] = useState<number | null>(null);
   const [pageNumber, setPageNumber] = useState(1);
   const [scale, setScale] = useState(1.0);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  // @ts-ignore
-  const [pageSize, setPageSize] = useState({ width: 0, height: 0 });
-  const [pdfPageDimensions, setPdfPageDimensions] = useState<{
-    width: number;
-    height: number;
-  } | null>(null);
-
-  // Obtener el tamaño de la página cuando cambie la escala o el número de página
-  useEffect(() => {
-    const updatePageSize = () => {
-      const pageViewport = document.querySelector('.react-pdf__Page');
-      if (pageViewport) {
-        const rect = pageViewport.getBoundingClientRect();
-        setPageSize({
-          width: rect.width,
-          height: rect.height,
-        });
-      }
-    };
-
-    // Pequeño retraso para asegurar que el PDF se ha renderizado
-    const timer = setTimeout(updatePageSize, 200);
-    return () => clearTimeout(timer);
-  }, [scale, pageNumber, numPages, isLoading]);
-
-  // Renderizar anotaciones (firmas) como overlays sobre el PDF
-  const renderAnnotations = () => {
-    if (!annotations || annotations.length === 0 || !pdfPageDimensions)
-      return null;
-
-    // Filtrar anotaciones para la página actual
-    const pageAnnotations = annotations.filter(
-      (anno) => anno.position.page === pageNumber,
-    );
-
-    const pageViewport = document.querySelector('.react-pdf__Page');
-    if (!pageViewport) return null;
-
-    const pageRect = pageViewport.getBoundingClientRect();
-    const currentRenderedWidth = pageRect.width;
-    const currentRenderedHeight = pageRect.height;
-
-    // Calcular la relación de escala entre las dimensiones renderizadas y las dimensiones originales del PDF
-    const xScale = currentRenderedWidth / pdfPageDimensions.width;
-    const yScale = currentRenderedHeight / pdfPageDimensions.height;
-
-    return pageAnnotations.map((annotation) => {
-      // Convertir coordenadas y tamaño de PDF a coordenadas de visualización
-      const scaledX = annotation.position.x * xScale;
-      const scaledY =
-        currentRenderedHeight -
-        (annotation.position.y + (annotation.position.height || 100)) * yScale; // Invertir Y para coordenadas PDF
-      const scaledWidth = (annotation.position.width || 200) * xScale;
-      const scaledHeight = (annotation.position.height || 100) * yScale;
-
-      return (
-        <div
-          key={annotation.id}
-          className={`absolute border-2 rounded shadow-sm p-2 ${
-            annotation.valid
-              ? 'border-green-500 bg-green-50/80'
-              : 'border-red-500 bg-red-50/80'
-          }`}
-          style={{
-            left: `${scaledX}px`,
-            top: `${scaledY}px`,
-            width: `${scaledWidth}px`,
-            height: `${scaledHeight}px`,
-            zIndex: 10,
-          }}>
-          <div className='flex items-center'>
-            <div className='flex items-center justify-center flex-shrink-0 w-8 h-8 bg-blue-100 rounded-full'>
-              <span className='text-xs font-bold text-blue-800'>
-                {annotation.user.name.substring(0, 2).toUpperCase()}
-              </span>
-            </div>
-            <div className='flex flex-col ml-2 text-xs'>
-              <span className='text-sm font-medium text-gray-900'>
-                {annotation.user.name}
-              </span>
-              <span className='text-gray-600'>
-                {new Date(annotation.signedAt).toLocaleString()}
-              </span>
-              {annotation.reason && (
-                <span className='text-gray-600'>
-                  Motivo: {annotation.reason}
-                </span>
-              )}
-            </div>
-          </div>
-        </div>
-      );
-    });
-  };
 
   function onDocumentLoadSuccess({ numPages }: { numPages: number }) {
     setNumPages(numPages);
     setIsLoading(false);
-  }
-
-  // Evento para cuando la página se renderiza
-  function onPageLoadSuccess(page: any) {
-    // Actualizar el tamaño de la página
-    const pageViewport = document.querySelector('.react-pdf__Page');
-    if (pageViewport) {
-      const rect = pageViewport.getBoundingClientRect();
-      setPageSize({
-        width: rect.width,
-        height: rect.height,
-      });
-    }
-
-    // Obtener las dimensiones originales de la página del PDF
-    const originalWidth = page.originalWidth;
-    const originalHeight = page.originalHeight;
-    setPdfPageDimensions({ width: originalWidth, height: originalHeight });
   }
 
   return (
@@ -166,10 +33,10 @@ const PDFViewer = ({ documentId, annotations = [] }: PDFViewerProps) => {
           <button
             onClick={() => setPageNumber((prev) => Math.max(1, prev - 1))}
             disabled={pageNumber <= 1}
-            className='p-1 bg-gray-100 rounded disabled:opacity-50'>
+            className='p-1 bg-gray-100 rounded disabled:opacity-50 hover:bg-gray-200'>
             ← Anterior
           </button>
-          <span>
+          <span className='text-sm'>
             Página {pageNumber} de {numPages || '?'}
           </span>
           <button
@@ -177,26 +44,29 @@ const PDFViewer = ({ documentId, annotations = [] }: PDFViewerProps) => {
               setPageNumber((prev) => Math.min(numPages || prev, prev + 1))
             }
             disabled={numPages !== null && pageNumber >= numPages}
-            className='p-1 bg-gray-100 rounded disabled:opacity-50'>
+            className='p-1 bg-gray-100 rounded disabled:opacity-50 hover:bg-gray-200'>
             Siguiente →
           </button>
         </div>
+
         <div className='flex items-center space-x-2'>
           <button
             onClick={() => setScale((prev) => Math.max(0.5, prev - 0.1))}
-            className='p-1 bg-gray-100 rounded'>
+            className='p-1 bg-gray-100 rounded hover:bg-gray-200'>
             -
           </button>
-          <span>{Math.round(scale * 100)}%</span>
+          <span className='text-sm text-center min-w-12'>
+            {Math.round(scale * 100)}%
+          </span>
           <button
             onClick={() => setScale((prev) => Math.min(2, prev + 0.1))}
-            className='p-1 bg-gray-100 rounded'>
+            className='p-1 bg-gray-100 rounded hover:bg-gray-200'>
             +
           </button>
         </div>
       </div>
 
-      {/* Visor de PDF */}
+      {/* Visor de PDF - SIN capa de anotaciones */}
       <div className='relative flex-grow overflow-auto'>
         {isLoading && (
           <div className='absolute inset-0 z-20 flex items-center justify-center bg-white bg-opacity-70'>
@@ -205,29 +75,25 @@ const PDFViewer = ({ documentId, annotations = [] }: PDFViewerProps) => {
         )}
 
         <div className='flex justify-center'>
-          <div className='relative'>
-            <Document
-              file={`/api/documents/${documentId}/view`}
-              onLoadSuccess={onDocumentLoadSuccess}
-              onLoadError={(error) => {
-                console.error('Error loading PDF:', error);
-                setError('No se pudo cargar el documento');
-                setIsLoading(false);
-              }}
-              className='flex justify-center'>
-              <Page
-                pageNumber={pageNumber}
-                scale={scale}
-                renderTextLayer={true}
-                renderAnnotationLayer={true}
-                className='shadow-lg'
-                onLoadSuccess={onPageLoadSuccess}
-              />
+          <Document
+            file={`/api/documents/${documentId}/view`}
+            onLoadSuccess={onDocumentLoadSuccess}
+            onLoadError={(error) => {
+              console.error('Error loading PDF:', error);
+              setError('No se pudo cargar el documento');
+              setIsLoading(false);
+            }}
+            className='flex justify-center'>
+            <Page
+              pageNumber={pageNumber}
+              scale={scale}
+              renderTextLayer={true}
+              renderAnnotationLayer={true}
+              className='shadow-lg'
+            />
 
-              {/* Capa de anotaciones (firmas) */}
-              {renderAnnotations()}
-            </Document>
-          </div>
+            {/* NO renderizamos anotaciones - las firmas están integradas en el PDF */}
+          </Document>
         </div>
 
         {error && (

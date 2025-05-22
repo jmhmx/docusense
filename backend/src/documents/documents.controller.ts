@@ -153,7 +153,7 @@ export class DocumentsController {
     // Obtener firmas del documento
     const signatures = await this.signaturesService.getDocumentSignatures(id);
 
-    // Si hay firmas, generar y mostrar PDF con firmas integradas
+    // Si hay firmas Y es un PDF, generar y servir PDF con firmas integradas
     if (
       signatures &&
       signatures.length > 0 &&
@@ -168,6 +168,7 @@ export class DocumentsController {
         res.set({
           'Content-Type': 'application/pdf',
           'Content-Disposition': `inline; filename="${document.filename}"`,
+          'Cache-Control': 'private, no-cache', // Evitar cache para siempre mostrar versión actualizada
         });
 
         return res.send(pdfWithSignatures);
@@ -177,7 +178,7 @@ export class DocumentsController {
       }
     }
 
-    // Si no hay firmas o falló la generación, mostrar documento original
+    // Mostrar documento original (sin firmas o no es PDF)
     if (document.metadata?.isEncrypted) {
       try {
         const fileData = await this.documentsService.getDocumentContent(
@@ -185,9 +186,8 @@ export class DocumentsController {
           req.user.id,
         );
 
-        // Crear correctamente el stream desde el buffer
         const file = new Readable();
-        file._read = () => {}; // Implementación requerida
+        file._read = () => {};
         file.push(fileData);
         file.push(null);
 
@@ -204,7 +204,7 @@ export class DocumentsController {
         );
       }
     } else {
-      // Lógica para documentos no cifrados
+      // Documentos no cifrados
       const file = createReadStream(document.filePath);
       res.set({
         'Content-Type': document.mimeType || 'application/octet-stream',

@@ -351,69 +351,61 @@ const DocumentViewer = () => {
   const renderDocumentPreview = () => {
     if (!document) return null;
 
-    // Convertir firmas para el componente DocumentPreview
-    const formattedSignatures = signatures.map((sig) => {
-      // Intentar parsear el objeto position
-      let position = { page: 1, x: 0, y: 0, width: 200, height: 100 };
-      try {
-        if (sig.position) {
-          position = JSON.parse(sig.position);
-        }
-      } catch (e) {
-        console.error('Error parsing signature position:', e);
-      }
-
-      return {
-        id: sig.id,
-        position: {
-          page: position.page || 1,
-          x: position.x || 0,
-          y: position.y || 0,
-          width: position.width || 200,
-          height: position.height || 100,
-        },
-        user: {
-          name: sig.user?.name || 'Usuario',
-          email: sig.user?.email,
-        },
-        signedAt: sig.signedAt,
-        valid: sig.valid,
-        reason: sig.reason,
-      };
-    });
-
     if (document.mimeType?.includes('pdf')) {
-      // Para PDFs, vamos a usar nuestro sistema mejorado
       return (
         <div className='flex flex-col space-y-4'>
           <div className='flex items-center justify-between'>
             <h3 className='text-lg font-medium text-gray-900'>
               Visualizador de documento
             </h3>
-            <button
-              onClick={() => setShowCommentsSidebar(!showCommentsSidebar)}
-              className='inline-flex items-center px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50'>
-              <svg
-                xmlns='http://www.w3.org/2000/svg'
-                className='w-5 h-5 mr-1'
-                fill='none'
-                viewBox='0 0 24 24'
-                stroke='currentColor'>
-                <path
-                  strokeLinecap='round'
-                  strokeLinejoin='round'
-                  strokeWidth={2}
-                  d={
-                    showCommentsSidebar
-                      ? 'M11 19l-7-7 7-7m8 14l-7-7 7-7'
-                      : 'M13 5l7 7-7 7M5 5l7 7-7 7'
-                  }
-                />
-              </svg>
-              {showCommentsSidebar
-                ? 'Ocultar comentarios'
-                : 'Mostrar comentarios'}
-            </button>
+            <div className='flex items-center space-x-2'>
+              <button
+                onClick={() => setShowCommentsSidebar(!showCommentsSidebar)}
+                className='inline-flex items-center px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50'>
+                <svg
+                  xmlns='http://www.w3.org/2000/svg'
+                  className='w-5 h-5 mr-1'
+                  fill='none'
+                  viewBox='0 0 24 24'
+                  stroke='currentColor'>
+                  <path
+                    strokeLinecap='round'
+                    strokeLinejoin='round'
+                    strokeWidth={2}
+                    d={
+                      showCommentsSidebar
+                        ? 'M11 19l-7-7 7-7m8 14l-7-7 7-7'
+                        : 'M13 5l7 7-7 7M5 5l7 7-7 7'
+                    }
+                  />
+                </svg>
+                {showCommentsSidebar
+                  ? 'Ocultar comentarios'
+                  : 'Mostrar comentarios'}
+              </button>
+
+              {/* Botón para ver PDF original */}
+              <button
+                onClick={() => {
+                  window.open(`/api/documents/${id}/view`, '_blank');
+                }}
+                className='inline-flex items-center px-3 py-1 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50'>
+                <svg
+                  xmlns='http://www.w3.org/2000/svg'
+                  className='w-4 h-4 mr-2'
+                  fill='none'
+                  viewBox='0 0 24 24'
+                  stroke='currentColor'>
+                  <path
+                    strokeLinecap='round'
+                    strokeLinejoin='round'
+                    strokeWidth={2}
+                    d='M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-2M7 7l10 10M17 7h-4v4'
+                  />
+                </svg>
+                Ver original
+              </button>
+            </div>
           </div>
 
           {/* PDF Viewer + Comentarios en columnas */}
@@ -429,7 +421,7 @@ const DocumentViewer = () => {
                 onResultClick={(page) => setCurrentPage(page)}
               />
 
-              {/* Añadir botón de descarga con firmas */}
+              {/* Botón de descarga con firmas */}
               {signatures.length > 0 && (
                 <div className='flex justify-end mb-2'>
                   <button
@@ -458,7 +450,38 @@ const DocumentViewer = () => {
                 </div>
               )}
 
-              {/* PDF Viewer */}
+              {/* Información sobre las firmas */}
+              {signatures.length > 0 && (
+                <div className='p-3 mb-4 border border-green-200 rounded-md bg-green-50'>
+                  <div className='flex items-center'>
+                    <svg
+                      xmlns='http://www.w3.org/2000/svg'
+                      className='w-5 h-5 mr-2 text-green-600'
+                      fill='none'
+                      viewBox='0 0 24 24'
+                      stroke='currentColor'>
+                      <path
+                        strokeLinecap='round'
+                        strokeLinejoin='round'
+                        strokeWidth={2}
+                        d='M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z'
+                      />
+                    </svg>
+                    <div className='text-sm'>
+                      <span className='font-medium text-green-800'>
+                        Documento firmado
+                      </span>
+                      <p className='text-green-700'>
+                        {signatures.length} firma
+                        {signatures.length > 1 ? 's' : ''} integrada
+                        {signatures.length > 1 ? 's' : ''} en el PDF
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* PDF Viewer - Ahora muestra el PDF con firmas integradas */}
               <div
                 className='relative'
                 onClick={handleDocumentClick}
@@ -466,7 +489,7 @@ const DocumentViewer = () => {
                 {documentImageUrl ? (
                   <PDFViewer
                     documentId={id || ''}
-                    annotations={formattedSignatures}
+                    // NO pasamos annotations - las firmas están integradas en el PDF
                   />
                 ) : (
                   <div className='flex items-center justify-center h-96'>
@@ -474,7 +497,7 @@ const DocumentViewer = () => {
                   </div>
                 )}
 
-                {/* Popup de comentarios contextuales */}
+                {/* Popup de comentarios contextuales - mantenemos esta funcionalidad */}
                 {contextualComments.visible &&
                   contextualComments.comments.length > 0 && (
                     <div
@@ -542,7 +565,7 @@ const DocumentViewer = () => {
         </div>
       );
     } else {
-      // Para otros tipos de documento mostrar un mensaje
+      // Para otros tipos de documento
       return (
         <div className='flex flex-col items-center justify-center p-4 bg-gray-100 rounded-lg h-96'>
           <svg

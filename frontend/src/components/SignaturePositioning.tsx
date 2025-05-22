@@ -61,56 +61,103 @@ const SignaturePositioning = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const signatureRef = useRef<HTMLDivElement>(null);
   const pdfContainerRef = useRef<HTMLDivElement>(null);
+  const [realDocumentBounds, setRealDocumentBounds] = useState<{
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  } | null>(null);
 
   // Cargar la URL del PDF
   useEffect(() => {
     setPdfUrl(`/api/documents/${documentId}/view`);
   }, [documentId]);
 
+  useEffect(() => {
+    if (realDocumentBounds && pdfPageDimensions) {
+      // Posicionar en la esquina inferior derecha del área real del documento
+      const initialDocX = realDocumentBounds.width - signatureSize.width - 20;
+      const initialDocY = realDocumentBounds.height / 3;
+
+      // Clampar al área del documento
+      const clampedPos = clampToDocument(
+        initialDocX,
+        initialDocY,
+        signatureSize.width,
+        signatureSize.height,
+      );
+
+      // Convertir a coordenadas del contenedor
+      const containerX = clampedPos.x + realDocumentBounds.x;
+      const containerY = clampedPos.y + realDocumentBounds.y;
+
+      setPosition({ x: containerX, y: containerY });
+
+      console.log('Posición inicial en área real:', {
+        documentBounds: realDocumentBounds,
+        documentCoords: { x: clampedPos.x, y: clampedPos.y },
+        containerCoords: { x: containerX, y: containerY },
+      });
+    }
+  }, [realDocumentBounds, signatureSize, pdfPageDimensions]);
+
   // Función para ajustar la escala automáticamente
   const adjustScale = () => {
-    if (
-      !containerRef.current ||
-      !pdfContainerRef.current ||
-      !autoScale ||
-      !pdfPageDimensions
-    )
-      return;
+    if (!containerRef.current || !pdfContainerRef.current || !autoScale) return;
 
-    const containerWidth = containerRef.current?.clientWidth || 0;
-    const pageViewport =
-      pdfContainerRef.current.querySelector('.react-pdf__Page');
+    const containerWidth = containerRef.current.clientWidth;
+    const pdfPageElement = pdfContainerRef.current.querySelector(
+      '.react-pdf__Page canvas',
+    );
 
-    if (pageViewport) {
+    if (pdfPageElement && pdfPageDimensions) {
+      // Usar las dimensiones reales del canvas renderizado
+      const canvasRect = pdfPageElement.getBoundingClientRect();
+
       // Calcular nueva escala para que el PDF se ajuste al ancho del contenedor
-      // Dejamos un margen del 5% para evitar scroll horizontal
-      const newScale = (containerWidth * 0.95) / pdfPageDimensions.width;
+      const newScale = (containerWidth * 0.9) / pdfPageDimensions.width;
 
-      // Evitar bucles de cambio de escala limitando la frecuencia de cambios
+      // Solo actualizar si hay un cambio significativo
       if (Math.abs(newScale - scale) > 0.05) {
         setScale(newScale);
+
+        console.log('Escala ajustada:', {
+          containerWidth,
+          pdfOriginalWidth: pdfPageDimensions.width,
+          canvasWidth: canvasRect.width,
+          newScale,
+        });
       }
     }
   };
 
-  // Inicializar la posición
-  useEffect(() => {
-    if (pdfPageDimensions && scale > 0) {
-      // Posicionar inicialmente cerca del centro-derecha de la página, ajustado por la escala
-      const initialX = Math.max(
-        0,
-        pdfPageDimensions.width * scale - signatureSize.width - 100 * scale,
-      );
-      const initialY = Math.max(0, (pdfPageDimensions.height * scale) / 3);
-      setPosition({ x: initialX, y: initialY });
-    }
-  }, [pdfPageDimensions, scale, signatureSize.width]);
-
   // Ajustar escala automáticamente cuando cambie el tamaño de la ventana
   useEffect(() => {
-    window.addEventListener('resize', adjustScale);
-    return () => window.removeEventListener('resize', adjustScale);
-  }, [scale, autoScale, pdfPageDimensions]); // Añadir dependencias
+    if (pdfPageDimensions && scale > 0) {
+      const pdfPageElement = pdfContainerRef.current?.querySelector(
+        '.react-pdf__Page canvas',
+      );
+
+      if (pdfPageElement) {
+        const canvasRect = pdfPageElement.getBoundingClientRect();
+
+        // Posicionar inicialmente cerca del centro-derecha del área real
+        const initialX = Math.max(
+          0,
+          canvasRect.width - signatureSize.width - 50,
+        );
+        const initialY = Math.max(0, canvasRect.height / 3);
+
+        setPosition({ x: initialX, y: initialY });
+
+        console.log('Posición inicial calculada:', {
+          canvasSize: { width: canvasRect.width, height: canvasRect.height },
+          signatureSize,
+          position: { x: initialX, y: initialY },
+        });
+      }
+    }
+  }, [pdfPageDimensions, scale, signatureSize.width]);
 
   // Manejar evento de mouse down en la firma
   const handleMouseDown = (e: React.MouseEvent) => {
@@ -123,26 +170,41 @@ const SignaturePositioning = ({
   useEffect(() => {
     if (isDragging) {
       const handleMouseMoveGlobal = (e: MouseEvent) => {
-        if (!pdfContainerRef.current || !signatureRef.current) return;
+        if (!realDocumentBounds || !signatureRef.current) return;
 
-        const container = pdfContainerRef.current.getBoundingClientRect();
-        const signature = signatureRef.current.getBoundingClientRect();
+        const containerRect = pdfContainerRef.current?.getBoundingClientRect();
+        if (!containerRect) return;
 
-        // Calcular nuevas coordenadas relativas al contenedor
-        let newX = e.clientX - container.left - signature.width / 2;
-        let newY = e.clientY - container.top - 20;
+        // Coordenadas relativas al contenedor
+        const containerX = e.clientX - containerRect.left;
+        const containerY = e.clientY - containerRect.top;
 
-        // Limitar al área del contenedor
-        newX = Math.max(0, Math.min(newX, container.width - signature.width));
-        newY = Math.max(0, Math.min(newY, container.height - signature.height));
+        // Convertir a coordenadas del documento
+        const docCoords = containerToDocumentCoords(containerX, containerY);
 
-        // Ajustar a la cuadrícula si está habilitado
+        // Ajustar por el offset del cursor
+        let newDocX = docCoords.x - signatureSize.width / 2;
+        let newDocY = docCoords.y - 20;
+
+        // Ajustar a cuadrícula si está habilitado
         if (snapToGrid) {
-          newX = Math.round(newX / gridSize) * gridSize;
-          newY = Math.round(newY / gridSize) * gridSize;
+          newDocX = Math.round(newDocX / gridSize) * gridSize;
+          newDocY = Math.round(newDocY / gridSize) * gridSize;
         }
 
-        setPosition({ x: newX, y: newY });
+        // Clampar al área del documento
+        const clampedPos = clampToDocument(
+          newDocX,
+          newDocY,
+          signatureSize.width,
+          signatureSize.height,
+        );
+
+        // Convertir de vuelta a coordenadas del contenedor
+        const finalX = clampedPos.x + realDocumentBounds.x;
+        const finalY = clampedPos.y + realDocumentBounds.y;
+
+        setPosition({ x: finalX, y: finalY });
       };
 
       const handleMouseUpGlobal = () => {
@@ -157,29 +219,50 @@ const SignaturePositioning = ({
         window.removeEventListener('mouseup', handleMouseUpGlobal);
       };
     }
-  }, [isDragging, snapToGrid, gridSize, scale]); // Añadir scale como dependencia
+  }, [isDragging, snapToGrid, gridSize, realDocumentBounds, signatureSize]);
 
   // Manejar clic en el documento para posicionar la firma
   const handleDocumentClick = (e: React.MouseEvent) => {
-    if (isDragging) return;
+    if (isDragging || !realDocumentBounds) return;
 
-    const container = pdfContainerRef.current?.getBoundingClientRect();
-    if (!container) return;
+    const containerRect = pdfContainerRef.current?.getBoundingClientRect();
+    if (!containerRect) return;
 
-    let newX = e.clientX - container.left - signatureSize.width / 2;
-    let newY = e.clientY - container.top - signatureSize.height / 2;
+    // Coordenadas relativas al contenedor
+    const containerX = e.clientX - containerRect.left;
+    const containerY = e.clientY - containerRect.top;
 
-    // Limitar al área del contenedor
-    newX = Math.max(0, Math.min(newX, container.width - signatureSize.width));
-    newY = Math.max(0, Math.min(newY, container.height - signatureSize.height));
+    // Convertir a coordenadas del documento
+    const docCoords = containerToDocumentCoords(containerX, containerY);
 
-    // Ajustar a la cuadrícula si está habilitado
-    if (snapToGrid) {
-      newX = Math.round(newX / gridSize) * gridSize;
-      newY = Math.round(newY / gridSize) * gridSize;
+    // Centrar la firma en el punto de clic
+    let newX = docCoords.x - signatureSize.width / 2;
+    let newY = docCoords.y - signatureSize.height / 2;
+
+    // Verificar que está dentro del documento
+    if (
+      isWithinDocument(newX, newY, signatureSize.width, signatureSize.height)
+    ) {
+      // Ajustar a cuadrícula si está habilitado
+      if (snapToGrid) {
+        newX = Math.round(newX / gridSize) * gridSize;
+        newY = Math.round(newY / gridSize) * gridSize;
+      }
+
+      // Clampar al área del documento
+      const clampedPos = clampToDocument(
+        newX,
+        newY,
+        signatureSize.width,
+        signatureSize.height,
+      );
+
+      // Convertir de vuelta a coordenadas del contenedor para el posicionamiento visual
+      const finalX = clampedPos.x + (realDocumentBounds?.x || 0);
+      const finalY = clampedPos.y + (realDocumentBounds?.y || 0);
+
+      setPosition({ x: finalX, y: finalY });
     }
-
-    setPosition({ x: newX, y: newY });
   };
 
   // Cambio de página
@@ -192,40 +275,42 @@ const SignaturePositioning = ({
 
   // Confirmación de la posición
   const confirmPosition = () => {
-    if (onPositionSelected && pdfPageDimensions && scale > 0) {
-      // Desescalar las coordenadas y tamaño a las dimensiones originales del PDF
-      const pdfX = position.x / scale;
-      const pdfWidth = signatureSize.width / scale;
-
-      // Calcular la coordenada Y en el sistema frontend (parte inferior de la firma)
-      const pdfY_frontend_scaled = position.y + signatureSize.height;
-      // Desescalar la coordenada Y
-      const pdfY_frontend_original_scale = pdfY_frontend_scaled / scale;
-
-      // Invertir la coordenada Y para el sistema de coordenadas de pdf-lib (origen abajo a la izquierda)
-      const pdfY = pdfPageDimensions.height - pdfY_frontend_original_scale;
-      const pdfHeight = signatureSize.height / scale; // Desescalar Altura
-
-      console.log('Frontend: Posición en escala original PDF:', {
-        page: activePage,
-        x: pdfX,
-        y: pdfY,
-        width: pdfWidth,
-        height: pdfHeight,
-      });
-
-      onPositionSelected({
-        page: activePage,
-        x: pdfX,
-        y: pdfY,
-        width: pdfWidth,
-        height: pdfHeight,
-      });
-    } else {
-      console.error(
-        'Frontend: No se puede confirmar posición. pdfPageDimensions o scale no válidos.',
-      );
+    if (!onPositionSelected || !pdfPageDimensions || !realDocumentBounds) {
+      console.error('Datos insuficientes para confirmar posición');
+      return;
     }
+
+    // Convertir posición actual del contenedor a coordenadas del documento
+    const docCoords = containerToDocumentCoords(position.x, position.y);
+
+    // Calcular escalas reales entre documento renderizado y PDF original
+    const scaleX = pdfPageDimensions.width / realDocumentBounds.width;
+    const scaleY = pdfPageDimensions.height / realDocumentBounds.height;
+
+    // Convertir a coordenadas del PDF original
+    const pdfX = docCoords.x * scaleX;
+    const pdfWidth = signatureSize.width * scaleX;
+    const pdfHeight = signatureSize.height * scaleY;
+
+    // Convertir Y de sistema DOM (top=0) a sistema PDF (bottom=0)
+    const pdfY = pdfPageDimensions.height - docCoords.y * scaleY - pdfHeight;
+
+    console.log('Confirmación de posición precisa:', {
+      containerPos: position,
+      documentCoords: docCoords,
+      documentBounds: realDocumentBounds,
+      pdfOriginalSize: pdfPageDimensions,
+      scales: { x: scaleX, y: scaleY },
+      finalPdfCoords: { x: pdfX, y: pdfY, width: pdfWidth, height: pdfHeight },
+    });
+
+    onPositionSelected({
+      page: activePage,
+      x: Math.round(pdfX),
+      y: Math.round(pdfY),
+      width: Math.round(pdfWidth),
+      height: Math.round(pdfHeight),
+    });
   };
 
   // Manejar carga del PDF
@@ -250,6 +335,113 @@ const SignaturePositioning = ({
     setTimeout(adjustScale, 100);
   }
 
+  // Función para obtener bounds reales del documento PDF
+  const getRealDocumentBounds = (): {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  } | null => {
+    const pdfPageElement = pdfContainerRef.current?.querySelector(
+      '.react-pdf__Page canvas',
+    );
+    if (!pdfPageElement) return null;
+
+    const containerRect = pdfContainerRef.current?.getBoundingClientRect();
+    const canvasRect = pdfPageElement.getBoundingClientRect();
+
+    if (!containerRect) return null;
+
+    // Calcular offset del canvas dentro del contenedor
+    const offsetX = canvasRect.left - containerRect.left;
+    const offsetY = canvasRect.top - containerRect.top;
+
+    return {
+      x: offsetX,
+      y: offsetY,
+      width: canvasRect.width,
+      height: canvasRect.height,
+    };
+  };
+
+  useEffect(() => {
+    const updateBounds = () => {
+      const bounds = getRealDocumentBounds();
+      setRealDocumentBounds(bounds);
+      console.log('Bounds del documento actualizados:', bounds);
+    };
+
+    const timer = setTimeout(updateBounds, 300);
+    return () => clearTimeout(timer);
+  }, [scale, activePage, numPages, pdfPageDimensions]);
+
+  // Función para convertir coordenadas del contenedor a coordenadas del documento
+  const containerToDocumentCoords = (
+    containerX: number,
+    containerY: number,
+  ) => {
+    if (!realDocumentBounds) return { x: containerX, y: containerY };
+
+    return {
+      x: containerX - realDocumentBounds.x,
+      y: containerY - realDocumentBounds.y,
+    };
+  };
+
+  // Función para validar que las coordenadas están dentro del documento
+  const isWithinDocument = (
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+  ): boolean => {
+    if (!realDocumentBounds) return false;
+
+    return (
+      x >= 0 &&
+      y >= 0 &&
+      x + width <= realDocumentBounds.width &&
+      y + height <= realDocumentBounds.height
+    );
+  };
+
+  // Función para limitar coordenadas al área del documento
+  const clampToDocument = (
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+  ) => {
+    if (!realDocumentBounds) return { x, y };
+
+    const clampedX = Math.max(0, Math.min(x, realDocumentBounds.width - width));
+    const clampedY = Math.max(
+      0,
+      Math.min(y, realDocumentBounds.height - height),
+    );
+
+    return { x: clampedX, y: clampedY };
+  };
+
+  // Indicador visual del área real del documento
+  const renderDocumentBounds = () => {
+    if (!realDocumentBounds || !showGrid) return null;
+
+    return (
+      <div
+        className='absolute border-2 border-red-200 pointer-events-none'
+        style={{
+          left: realDocumentBounds.x,
+          top: realDocumentBounds.y,
+          width: realDocumentBounds.width,
+          height: realDocumentBounds.height,
+          zIndex: 5,
+        }}
+        title='Área real del documento'
+      />
+    );
+  };
+
   return (
     <div className='p-4 bg-white rounded-lg shadow-xl'>
       <div className='flex items-center justify-between pb-3 mb-4 border-b'>
@@ -264,7 +456,7 @@ const SignaturePositioning = ({
                 : 'bg-gray-100 text-gray-600'
             }`}
             onClick={() => setShowGrid(!showGrid)}
-            title={showGrid ? 'Ocultar cuadrícula' : 'Mostrar cuadrícula'}>
+            title={showGrid ? 'Ocultar guías' : 'Mostrar guías'}>
             <svg
               xmlns='http://www.w3.org/2000/svg'
               className='w-5 h-5'
@@ -279,13 +471,14 @@ const SignaturePositioning = ({
               />
             </svg>
           </button>
+
           <button
             className={`p-1.5 rounded-md ${
               snapToGrid
                 ? 'bg-blue-100 text-blue-700'
                 : 'bg-gray-100 text-gray-600'
             }`}
-            onClick={() => setSnapToGrid(!setSnapToGrid)}
+            onClick={() => setSnapToGrid(!snapToGrid)}
             title={
               snapToGrid
                 ? 'Desactivar ajuste a cuadrícula'
@@ -305,18 +498,65 @@ const SignaturePositioning = ({
               />
             </svg>
           </button>
+
+          <div className='flex border border-gray-300 rounded-md'>
+            <button
+              className='p-1.5 rounded-l-md bg-gray-100 text-gray-600 hover:bg-gray-200'
+              onClick={() => {
+                setScale((prev) => Math.max(0.5, prev - 0.1));
+                setAutoScale(false);
+              }}
+              title='Reducir zoom'>
+              <svg
+                xmlns='http://www.w3.org/2000/svg'
+                className='w-5 h-5'
+                fill='none'
+                viewBox='0 0 24 24'
+                stroke='currentColor'>
+                <path
+                  strokeLinecap='round'
+                  strokeLinejoin='round'
+                  strokeWidth={2}
+                  d='M20 12H4'
+                />
+              </svg>
+            </button>
+
+            <span className='px-2 py-1.5 text-xs bg-white border-l border-r border-gray-300 min-w-16 text-center'>
+              {Math.round(scale * 100)}%
+            </span>
+
+            <button
+              className='p-1.5 rounded-r-md bg-gray-100 text-gray-600 hover:bg-gray-200'
+              onClick={() => {
+                setScale((prev) => Math.min(2, prev + 0.1));
+                setAutoScale(false);
+              }}
+              title='Aumentar zoom'>
+              <svg
+                xmlns='http://www.w3.org/2000/svg'
+                className='w-5 h-5'
+                fill='none'
+                viewBox='0 0 24 24'
+                stroke='currentColor'>
+                <path
+                  strokeLinecap='round'
+                  strokeLinejoin='round'
+                  strokeWidth={2}
+                  d='M12 6v6m0 0v6m0-6h6m-6 0H6'
+                />
+              </svg>
+            </button>
+          </div>
+
           <button
             className={`p-1.5 rounded-md ${
               autoScale
-                ? 'bg-blue-100 text-blue-700'
+                ? 'bg-green-100 text-green-700'
                 : 'bg-gray-100 text-gray-600'
             }`}
             onClick={() => setAutoScale(!autoScale)}
-            title={
-              autoScale
-                ? 'Desactivar ajuste automático'
-                : 'Activar ajuste automático'
-            }>
+            title={autoScale ? 'Zoom manual' : 'Zoom automático'}>
             <svg
               xmlns='http://www.w3.org/2000/svg'
               className='w-5 h-5'
@@ -331,60 +571,19 @@ const SignaturePositioning = ({
               />
             </svg>
           </button>
-          <button
-            className='p-1.5 rounded-md bg-gray-100 text-gray-600 hover:bg-gray-200'
-            onClick={() => {
-              setScale((prev) => Math.max(0.5, prev - 0.1));
-              setAutoScale(false);
-            }}
-            title='Reducir'>
-            <svg
-              xmlns='http://www.w3.org/2000/svg'
-              className='w-5 h-5'
-              fill='none'
-              viewBox='0 0 24 24'
-              stroke='currentColor'>
-              <path
-                strokeLinecap='round'
-                strokeLinejoin='round'
-                strokeWidth={2}
-                d='M20 12H4'
-              />
-            </svg>
-          </button>
-          <button
-            className='p-1.5 rounded-md bg-gray-100 text-gray-600 hover:bg-gray-200'
-            onClick={() => {
-              setScale((prev) => Math.min(2, prev + 0.1));
-              setAutoScale(false);
-            }}
-            title='Ampliar'>
-            <svg
-              xmlns='http://www.w3.org/2000/svg'
-              className='w-5 h-5'
-              fill='none'
-              viewBox='0 0 24 24'
-              stroke='currentColor'>
-              <path
-                strokeLinecap='round'
-                strokeLinejoin='round'
-                strokeWidth={2}
-                d='M12 6v6m0 0v6m0-6h6m-6 0H6'
-              />
-            </svg>
-          </button>
         </div>
       </div>
 
+      {/* Controles de página */}
       <div className='flex justify-center mb-4'>
         <div className='flex items-center space-x-4'>
           <button
             onClick={() => changePage(-1)}
             disabled={activePage <= 1}
-            className='p-1 bg-gray-100 rounded-full disabled:opacity-50'>
+            className='p-2 bg-gray-100 rounded-full disabled:opacity-50 hover:bg-gray-200'>
             <svg
               xmlns='http://www.w3.org/2000/svg'
-              className='w-6 h-6 text-gray-600'
+              className='w-5 h-5 text-gray-600'
               fill='none'
               viewBox='0 0 24 24'
               stroke='currentColor'>
@@ -396,16 +595,20 @@ const SignaturePositioning = ({
               />
             </svg>
           </button>
-          <span className='text-sm font-medium'>
-            Página {activePage} de {numPages || totalPages}
-          </span>
+
+          <div className='px-4 py-2 bg-white border border-gray-300 rounded-md'>
+            <span className='text-sm font-medium'>
+              Página {activePage} de {numPages || totalPages}
+            </span>
+          </div>
+
           <button
             onClick={() => changePage(1)}
             disabled={activePage >= (numPages || totalPages)}
-            className='p-1 bg-gray-100 rounded-full disabled:opacity-50'>
+            className='p-2 bg-gray-100 rounded-full disabled:opacity-50 hover:bg-gray-200'>
             <svg
               xmlns='http://www.w3.org/2000/svg'
-              className='w-6 h-6 text-gray-600'
+              className='w-5 h-5 text-gray-600'
               fill='none'
               viewBox='0 0 24 24'
               stroke='currentColor'>
@@ -420,20 +623,44 @@ const SignaturePositioning = ({
         </div>
       </div>
 
+      {/* Información del área del documento */}
+      {realDocumentBounds && pdfPageDimensions && (
+        <div className='p-3 mb-4 border border-blue-200 rounded-md bg-blue-50'>
+          <div className='text-xs text-blue-800'>
+            <div className='flex justify-between'>
+              <span>
+                Área del documento: {Math.round(realDocumentBounds.width)} ×{' '}
+                {Math.round(realDocumentBounds.height)}px
+              </span>
+              <span>
+                Original: {Math.round(pdfPageDimensions.width)} ×{' '}
+                {Math.round(pdfPageDimensions.height)}pts
+              </span>
+            </div>
+            <div className='mt-1'>
+              Escala:{' '}
+              {(
+                (realDocumentBounds.width / pdfPageDimensions.width) *
+                100
+              ).toFixed(1)}
+              %
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Contenedor principal con área real del documento */}
       <div
-        className='relative mb-4 border border-gray-300 rounded-md'
+        className='relative mb-4 border border-gray-300 rounded-md bg-gray-50'
         style={{ height: '500px' }}
         ref={containerRef}>
-        {/* Contenedor de documento con ajuste automático */}
         <div
           ref={pdfContainerRef}
           className={`relative w-full h-full overflow-auto bg-white ${
             showGrid ? 'bg-grid' : ''
           }`}
           style={{
-            transformOrigin: 'center',
-            transition: 'transform 0.2s ease-out',
-            cursor: isDragging ? 'grabbing' : 'pointer',
+            cursor: isDragging ? 'grabbing' : 'crosshair',
             backgroundSize: `${gridSize}px ${gridSize}px`,
           }}
           onClick={handleDocumentClick}>
@@ -473,19 +700,21 @@ const SignaturePositioning = ({
                   onLoadSuccess={onPageLoadSuccess}
                   renderTextLayer={false}
                   renderAnnotationLayer={false}
-                  width={(containerRef.current?.clientWidth || 0) * 0.95}
                 />
               </Document>
             </div>
           )}
 
+          {/* Indicador del área real del documento */}
+          {renderDocumentBounds()}
+
           {/* Componente de firma arrastrable */}
           <div
             ref={signatureRef}
-            className={`absolute bg-white border-2 rounded px-3 py-2 ${
+            className={`absolute bg-white border-2 rounded px-3 py-2 transition-all duration-200 ${
               isDragging
-                ? 'border-blue-500 shadow-lg cursor-grabbing'
-                : 'border-blue-300 shadow cursor-grab'
+                ? 'border-blue-500 shadow-lg cursor-grabbing scale-105'
+                : 'border-blue-300 shadow cursor-grab hover:border-blue-400'
             }`}
             style={{
               left: `${position.x}px`,
@@ -495,11 +724,7 @@ const SignaturePositioning = ({
               touchAction: 'none',
               zIndex: 10,
             }}
-            onMouseDown={handleMouseDown}
-            onTouchStart={(e) => {
-              e.preventDefault();
-              setIsDragging(true);
-            }}>
+            onMouseDown={handleMouseDown}>
             {/* Vista previa de la firma */}
             <div className='flex flex-col justify-between h-full'>
               <div className='text-base font-medium text-blue-800'>
@@ -515,9 +740,9 @@ const SignaturePositioning = ({
               )}
             </div>
 
-            {/* Indicadores de arrastre */}
+            {/* Controlador de redimensionamiento */}
             <div
-              className='absolute top-0 right-0 w-4 h-4 cursor-se-resize'
+              className='absolute bottom-0 right-0 w-4 h-4 bg-blue-500 cursor-se-resize rounded-tl-md opacity-70 hover:opacity-100'
               onMouseDown={(e) => {
                 e.stopPropagation();
                 const startX = e.clientX;
@@ -547,17 +772,18 @@ const SignaturePositioning = ({
               }}>
               <svg
                 xmlns='http://www.w3.org/2000/svg'
-                className='w-4 h-4 text-blue-500'
+                className='w-3 h-3 text-white'
                 viewBox='0 0 20 20'
                 fill='currentColor'>
                 <path d='M5 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2H5zM5 11a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5zM11 5a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V5zM14 11a1 1 0 011 1v1h1a1 1 0 110 2h-1v1a1 1 0 11-2 0v-1h-1a1 1 0 110-2h1v-1a1 1 0 011-1z' />
               </svg>
             </div>
 
+            {/* Indicador de arrastre */}
             {isDragging && (
-              <div className='absolute inset-0 flex items-center justify-center bg-blue-500 border-2 border-blue-500 pointer-events-none bg-opacity-10'>
+              <div className='absolute inset-0 flex items-center justify-center bg-blue-500 border-2 border-blue-500 rounded pointer-events-none bg-opacity-10'>
                 <span className='px-2 py-1 text-xs font-medium text-white bg-blue-600 rounded-md'>
-                  Arrastrando
+                  Posicionando...
                 </span>
               </div>
             )}
@@ -565,97 +791,81 @@ const SignaturePositioning = ({
         </div>
       </div>
 
+      {/* Información de uso */}
       <div className='mb-4 text-sm text-gray-500'>
-        <p className='flex items-center mb-1'>
-          <svg
-            xmlns='http://www.w3.org/2000/svg'
-            className='w-4 h-4 mr-1 text-blue-500'
-            fill='none'
-            viewBox='0 0 24 24'
-            stroke='currentColor'>
-            <path
-              strokeLinecap='round'
-              strokeLinejoin='round'
-              strokeWidth={2}
-              d='M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122'
-            />
-          </svg>
-          Haga clic en cualquier lugar del documento para posicionar la firma
-        </p>
-        <p className='flex items-center mb-1'>
-          <svg
-            xmlns='http://www.w3.org/2000/svg'
-            className='w-4 h-4 mr-1 text-blue-500'
-            fill='none'
-            viewBox='0 0 24 24'
-            stroke='currentColor'>
-            <path
-              strokeLinecap='round'
-              strokeLinejoin='round'
-              strokeWidth={2}
-              d='M7 11.5V14m0-2.5v-6a2.5 2.5 0 015 0v6a2.5 2.5 0 01-5 0z'
-            />
-            <path
-              strokeLinecap='round'
-              strokeLinejoin='round'
-              strokeWidth={2}
-              d='M2 9h4m0 0v6a5 5 0 0010 0V9m4 0H2'
-            />
-          </svg>
-          Arrastre la firma para ajustar su posición con precisión
-        </p>
-        <p className='flex items-center'>
-          <svg
-            xmlns='http://www.w3.org/2000/svg'
-            className='w-4 h-4 mr-1 text-blue-500'
-            fill='none'
-            viewBox='0 0 24 24'
-            stroke='currentColor'>
-            <path
-              strokeLinecap='round'
-              strokeLinejoin='round'
-              strokeWidth={2}
-              d='M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4'
-            />
-          </svg>
-          Use el controlador en la esquina inferior derecha para ajustar el
-          tamaño
-        </p>
+        <div className='grid grid-cols-1 gap-2 md:grid-cols-2'>
+          <p className='flex items-center'>
+            <svg
+              xmlns='http://www.w3.org/2000/svg'
+              className='w-4 h-4 mr-1 text-blue-500'
+              fill='none'
+              viewBox='0 0 24 24'
+              stroke='currentColor'>
+              <path
+                strokeLinecap='round'
+                strokeLinejoin='round'
+                strokeWidth={2}
+                d='M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122'
+              />
+            </svg>
+            Clic para posicionar la firma
+          </p>
+          <p className='flex items-center'>
+            <svg
+              xmlns='http://www.w3.org/2000/svg'
+              className='w-4 h-4 mr-1 text-blue-500'
+              fill='none'
+              viewBox='0 0 24 24'
+              stroke='currentColor'>
+              <path
+                strokeLinecap='round'
+                strokeLinejoin='round'
+                strokeWidth={2}
+                d='M7 11.5V14m0-2.5v-6a2.5 2.5 0 015 0v6a2.5 2.5 0 01-5 0z'
+              />
+            </svg>
+            Arrastrar para ajustar posición
+          </p>
+        </div>
+        {realDocumentBounds && (
+          <div className='p-2 mt-2 text-xs text-green-700 border border-green-200 rounded bg-green-50'>
+            ✓ Área del documento detectada correctamente
+          </div>
+        )}
       </div>
 
-      <div className='grid grid-cols-2 gap-4 sm:flex sm:justify-between'>
-        <div className='col-span-2 sm:col-auto'>
-          <div className='flex items-center space-x-2'>
-            <label className='text-sm text-gray-700'>Tamaño:</label>
-            <input
-              type='range'
-              min='150'
-              max='400'
-              value={signatureSize.width}
-              onChange={(e) =>
-                setSignatureSize((_) => ({
-                  width: Number(e.target.value),
-                  height: Number(e.target.value) / 2,
-                }))
-              }
-              className='w-24'
-            />
-            <span className='text-xs text-gray-500'>
-              {signatureSize.width}×{signatureSize.height}px
-            </span>
-          </div>
+      {/* Controles finales */}
+      <div className='flex items-center justify-between'>
+        <div className='flex items-center space-x-3'>
+          <label className='text-sm text-gray-700'>Tamaño:</label>
+          <input
+            type='range'
+            min='150'
+            max='400'
+            value={signatureSize.width}
+            onChange={(e) =>
+              setSignatureSize({
+                width: Number(e.target.value),
+                height: Number(e.target.value) / 2,
+              })
+            }
+            className='w-24'
+          />
+          <span className='text-xs text-gray-500'>
+            {signatureSize.width}×{signatureSize.height}px
+          </span>
         </div>
 
-        <div className='flex justify-end col-span-2 sm:col-auto'>
+        <div className='flex space-x-3'>
           <Button
             variant='secondary'
-            onClick={onCancel}
-            className='mr-2'>
+            onClick={onCancel}>
             Cancelar
           </Button>
           <Button
             variant='primary'
-            onClick={confirmPosition}>
+            onClick={confirmPosition}
+            disabled={!realDocumentBounds}>
             Confirmar posición
           </Button>
         </div>
@@ -664,8 +874,8 @@ const SignaturePositioning = ({
       <style>{`
         .bg-grid {
           background-image:
-            linear-gradient(to right, rgba(0, 0, 0, 0.1) 1px, transparent 1px),
-            linear-gradient(to bottom, rgba(0, 0, 0, 0.1) 1px, transparent 1px);
+            linear-gradient(to right, rgba(0, 0, 0, 0.05) 1px, transparent 1px),
+            linear-gradient(to bottom, rgba(0, 0, 0, 0.05) 1px, transparent 1px);
         }
       `}</style>
     </div>

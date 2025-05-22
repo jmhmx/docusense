@@ -142,7 +142,9 @@ const DocumentSharing = ({
       const response = await api.post('/api/sharing/link', {
         documentId,
         permissionLevel,
-        expiresAt: expirationDate,
+        expiresAt: expirationDate
+          ? new Date(`${expirationDate}T23:59:59`).toISOString()
+          : undefined,
         requiresPassword: requirePassword,
         password: requirePassword ? password : undefined,
         maxUses: maxUses ? Number(maxUses) : undefined,

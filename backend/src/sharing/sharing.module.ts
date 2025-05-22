@@ -14,6 +14,7 @@ import { AuditModule } from '../audit/audit.module';
 import { CommentsModule } from '../comments/comments.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { EmailModule } from '../email/email.module';
+import { RateLimiterService } from './rate-limiter.service';
 
 @Module({
   imports: [
@@ -31,7 +32,7 @@ import { EmailModule } from '../email/email.module';
     EmailModule,
   ],
   controllers: [SharingController],
-  providers: [SharingService],
+  providers: [SharingService, RateLimiterService],
   exports: [SharingService],
 })
 export class SharingModule {}

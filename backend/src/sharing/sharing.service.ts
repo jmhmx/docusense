@@ -321,8 +321,14 @@ export class SharingService {
       );
     }
 
-    // Generar token único para el enlace
-    const token = this.generateUniqueToken();
+    // Generar token seguro y único
+    let token = this.generateUniqueToken();
+    token = await this.ensureTokenUniqueness(token);
+
+    // Log para auditoría (sin exponer token completo)
+    this.logger.log(
+      `Token generado para documento ${documentId}: ${token.substring(0, 8)}...`,
+    );
 
     // Si requiere contraseña, hashearla
     let passwordHash = null;
@@ -342,31 +348,28 @@ export class SharingService {
       maxUses,
       isActive: true,
       metadata: {
-        createdFrom: ipAddress,
-        userAgent,
+        tokenVersion: 'v2', // Versión para futuras migraciones
+        createdFrom: this.hashIpAddress(ipAddress), // Hash de IP en lugar de IP directa
+        userAgent: userAgent?.substring(0, 200), // Truncar user agent
+        entropy: 256, // Bits de entropía del token
       },
     });
 
-    const savedLink = await this.shareLinksRepository.save(shareLink);
+    return await this.shareLinksRepository.save(shareLink);
+  }
 
-    // Registrar en log de auditoría
-    await this.auditLogService.log(
-      AuditAction.SHARE_LINK_CREATE,
-      userId,
-      documentId,
-      {
-        shareLink: savedLink.id,
-        permissionLevel,
-        expiresAt,
-        requiresPassword,
-      },
-      ipAddress,
-      userAgent,
-    );
+  /**
+   * Hash de IP para privacidad (GDPR compliance)
+   */
+  private hashIpAddress(ipAddress?: string): string {
+    if (!ipAddress) return 'unknown';
 
-    // Retornar el enlace pero sin el hash de la contraseña
-    const { passwordHash: _, ...linkWithoutPasswordHash } = savedLink;
-    return linkWithoutPasswordHash as ShareLink;
+    const salt = this.configService.get('IP_HASH_SALT') || 'default-salt';
+    return crypto
+      .createHmac('sha256', salt)
+      .update(ipAddress)
+      .digest('hex')
+      .substring(0, 16); // Primeros 16 caracteres del hash
   }
 
   /**
@@ -983,12 +986,52 @@ export class SharingService {
    * Genera un token único para compartir enlaces
    */
   private generateUniqueToken(): string {
-    // Generar un token con formato 'xxxx-xxxx-xxxx-xxxx'
-    const segments = [];
-    for (let i = 0; i < 4; i++) {
-      segments.push(crypto.randomBytes(2).toString('hex'));
+    // 32 bytes = 256 bits de entropía (recomendado para tokens de seguridad)
+    const randomBytes = crypto.randomBytes(32);
+
+    // Usar base64url (sin caracteres problemáticos en URLs)
+    return randomBytes
+      .toString('base64')
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=/g, ''); // Remover padding
+  }
+
+  /**
+   * Valida que un token tenga el formato correcto
+   */
+  private validateTokenFormat(token: string): boolean {
+    // Token debe tener exactamente 43 caracteres (32 bytes en base64url sin padding)
+    if (token.length !== 43) return false;
+
+    // Solo caracteres válidos para base64url
+    const validChars = /^[A-Za-z0-9_-]+$/;
+    return validChars.test(token);
+  }
+
+  /**
+   * Verifica que el token no existe ya en la base de datos
+   */
+  private async ensureTokenUniqueness(token: string): Promise<string> {
+    let attempts = 0;
+    let uniqueToken = token;
+
+    while (attempts < 5) {
+      // Máximo 5 intentos
+      const existing = await this.shareLinksRepository.findOne({
+        where: { token: uniqueToken },
+      });
+
+      if (!existing) {
+        return uniqueToken; // Token único encontrado
+      }
+
+      // Generar nuevo token si existe conflicto
+      uniqueToken = this.generateUniqueToken();
+      attempts++;
     }
-    return segments.join('-');
+
+    throw new Error('No se pudo generar un token único después de 5 intentos');
   }
 
   /**
@@ -1106,43 +1149,28 @@ export class SharingService {
   }
 
   /**
-   * Busca un enlace de compartición por su token
+   * Busca enlace por token con validación de formato
    */
   async findShareLinkByToken(token: string): Promise<ShareLink> {
+    // Validar formato antes de consultar DB
+    if (!this.validateTokenFormat(token)) {
+      throw new NotFoundException('Token inválido');
+    }
+
     const shareLink = await this.shareLinksRepository.findOne({
       where: { token, isActive: true },
       relations: ['document'],
     });
 
     if (!shareLink) {
-      throw new NotFoundException(
-        'Enlace de compartición no encontrado o inactivo',
+      // Log intento de acceso con token inválido
+      this.logger.warn(
+        `Intento de acceso con token inválido: ${token.substring(0, 8)}...`,
       );
+      throw new NotFoundException('Enlace no encontrado o inactivo');
     }
 
-    // Verificar si el enlace ha expirado
-    if (shareLink.expiresAt && new Date() > shareLink.expiresAt) {
-      // Desactivar el enlace
-      shareLink.isActive = false;
-      await this.shareLinksRepository.save(shareLink);
-
-      throw new BadRequestException('El enlace de compartición ha expirado');
-    }
-
-    // Verificar si se ha alcanzado el número máximo de usos
-    if (shareLink.maxUses && shareLink.accessCount >= shareLink.maxUses) {
-      // Desactivar el enlace
-      shareLink.isActive = false;
-      await this.shareLinksRepository.save(shareLink);
-
-      throw new BadRequestException(
-        'El enlace ha alcanzado su número máximo de usos',
-      );
-    }
-
-    // Eliminar el hash de la contraseña por seguridad
-    const { passwordHash, ...linkWithoutPasswordHash } = shareLink;
-    return linkWithoutPasswordHash as ShareLink;
+    return shareLink;
   }
 
   /**

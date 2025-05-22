@@ -62,5 +62,11 @@ export class ShareLink {
   updatedAt: Date;
 
   @Column({ nullable: true, type: 'jsonb' })
-  metadata: Record<string, any>;
+  metadata: {
+    tokenVersion?: string;
+    createdFrom?: string;
+    userAgent?: string;
+    entropy?: number;
+    [key: string]: any;
+  };
 }

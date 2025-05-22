@@ -1,13 +1,8 @@
-import { useState, useRef } from 'react';
-import { Document, Page, pdfjs } from 'react-pdf';
-import 'react-pdf/dist/esm/Page/AnnotationLayer.css';
-import 'react-pdf/dist/esm/Page/TextLayer.css';
-
-pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
+import { useState, useRef, useEffect } from 'react';
 
 interface PDFViewerProps {
   documentId: string;
-  annotations?: any[]; // Mantenemos la prop pero no la usamos
+  annotations?: any[];
 }
 
 const PDFViewer = ({ documentId }: PDFViewerProps) => {
@@ -16,12 +11,116 @@ const PDFViewer = ({ documentId }: PDFViewerProps) => {
   const [scale, setScale] = useState(1.0);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [pdfDoc, setPdfDoc] = useState<any>(null);
+
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  function onDocumentLoadSuccess({ numPages }: { numPages: number }) {
-    setNumPages(numPages);
-    setIsLoading(false);
-  }
+  // Cargar PDF.js
+  useEffect(() => {
+    const loadPdfJs = async (): Promise<any> => {
+      try {
+        // Importar PDF.js (requiere: npm install pdfjs-dist)
+        const pdfjsLib = await import('pdfjs-dist');
+
+        // Configurar worker
+        pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+          'pdfjs-dist/build/pdf.worker.min.js',
+          import.meta.url,
+        ).toString();
+
+        return pdfjsLib;
+      } catch (error) {
+        console.error('Error cargando PDF.js:', error);
+        throw error;
+      }
+    };
+
+    const loadDocument = async () => {
+      try {
+        setIsLoading(true);
+        setError(null);
+
+        const pdfjsLib = (await loadPdfJs()) as any;
+
+        // Cargar documento
+        const loadingTask = pdfjsLib.getDocument(
+          `/api/documents/${documentId}/view`,
+        );
+        const pdf = await loadingTask.promise;
+
+        setPdfDoc(pdf);
+        setNumPages(pdf.numPages);
+        setIsLoading(false);
+      } catch (err: any) {
+        console.error('Error loading PDF:', err);
+        setError('No se pudo cargar el documento');
+        setIsLoading(false);
+      }
+    };
+
+    loadDocument();
+  }, [documentId]);
+
+  // Renderizar página cuando cambie pageNumber, scale o pdfDoc
+  useEffect(() => {
+    if (pdfDoc && canvasRef.current) {
+      renderPage();
+    }
+  }, [pdfDoc, pageNumber, scale]);
+
+  const renderPage = async () => {
+    if (!pdfDoc || !canvasRef.current) return;
+
+    try {
+      const page = await pdfDoc.getPage(pageNumber);
+      const canvas = canvasRef.current;
+      const context = canvas.getContext('2d');
+
+      if (!context) return;
+
+      const viewport = page.getViewport({ scale });
+
+      // Configurar canvas
+      canvas.height = viewport.height;
+      canvas.width = viewport.width;
+
+      // Renderizar página
+      const renderContext = {
+        canvasContext: context,
+        viewport: viewport,
+      };
+
+      await page.render(renderContext).promise;
+    } catch (err) {
+      console.error('Error rendering page:', err);
+      setError('Error al renderizar la página');
+    }
+  };
+
+  const goToPrevPage = () => {
+    if (pageNumber > 1) {
+      setPageNumber(pageNumber - 1);
+    }
+  };
+
+  const goToNextPage = () => {
+    if (numPages && pageNumber < numPages) {
+      setPageNumber(pageNumber + 1);
+    }
+  };
+
+  const zoomIn = () => {
+    setScale((prev) => Math.min(prev + 0.1, 2));
+  };
+
+  const zoomOut = () => {
+    setScale((prev) => Math.max(prev - 0.1, 0.5));
+  };
+
+  const resetZoom = () => {
+    setScale(1.0);
+  };
 
   return (
     <div
@@ -31,7 +130,7 @@ const PDFViewer = ({ documentId }: PDFViewerProps) => {
       <div className='flex items-center justify-between p-2 bg-white border-b'>
         <div className='flex items-center space-x-2'>
           <button
-            onClick={() => setPageNumber((prev) => Math.max(1, prev - 1))}
+            onClick={goToPrevPage}
             disabled={pageNumber <= 1}
             className='p-1 bg-gray-100 rounded disabled:opacity-50 hover:bg-gray-200'>
             ← Anterior
@@ -40,9 +139,7 @@ const PDFViewer = ({ documentId }: PDFViewerProps) => {
             Página {pageNumber} de {numPages || '?'}
           </span>
           <button
-            onClick={() =>
-              setPageNumber((prev) => Math.min(numPages || prev, prev + 1))
-            }
+            onClick={goToNextPage}
             disabled={numPages !== null && pageNumber >= numPages}
             className='p-1 bg-gray-100 rounded disabled:opacity-50 hover:bg-gray-200'>
             Siguiente →
@@ -51,7 +148,7 @@ const PDFViewer = ({ documentId }: PDFViewerProps) => {
 
         <div className='flex items-center space-x-2'>
           <button
-            onClick={() => setScale((prev) => Math.max(0.5, prev - 0.1))}
+            onClick={zoomOut}
             className='p-1 bg-gray-100 rounded hover:bg-gray-200'>
             -
           </button>
@@ -59,14 +156,20 @@ const PDFViewer = ({ documentId }: PDFViewerProps) => {
             {Math.round(scale * 100)}%
           </span>
           <button
-            onClick={() => setScale((prev) => Math.min(2, prev + 0.1))}
+            onClick={zoomIn}
             className='p-1 bg-gray-100 rounded hover:bg-gray-200'>
             +
+          </button>
+          <button
+            onClick={resetZoom}
+            className='p-1 bg-gray-100 rounded hover:bg-gray-200'
+            title='Restablecer zoom'>
+            ⟲
           </button>
         </div>
       </div>
 
-      {/* Visor de PDF - SIN capa de anotaciones */}
+      {/* Visor de PDF */}
       <div className='relative flex-grow overflow-auto'>
         {isLoading && (
           <div className='absolute inset-0 z-20 flex items-center justify-center bg-white bg-opacity-70'>
@@ -74,33 +177,19 @@ const PDFViewer = ({ documentId }: PDFViewerProps) => {
           </div>
         )}
 
-        <div className='flex justify-center'>
-          <Document
-            file={`/api/documents/${documentId}/view`}
-            onLoadSuccess={onDocumentLoadSuccess}
-            onLoadError={(error) => {
-              console.error('Error loading PDF:', error);
-              setError('No se pudo cargar el documento');
-              setIsLoading(false);
-            }}
-            className='flex justify-center'>
-            <Page
-              pageNumber={pageNumber}
-              scale={scale}
-              renderTextLayer={true}
-              renderAnnotationLayer={true}
-              className='shadow-lg'
-            />
-
-            {/* NO renderizamos anotaciones - las firmas están integradas en el PDF */}
-          </Document>
-        </div>
-
         {error && (
           <div className='absolute inset-0 flex items-center justify-center bg-white'>
             <div className='p-4 text-red-700 rounded-md bg-red-50'>{error}</div>
           </div>
         )}
+
+        <div className='flex justify-center p-4'>
+          <canvas
+            ref={canvasRef}
+            className='max-w-full shadow-lg'
+            style={{ display: isLoading || error ? 'none' : 'block' }}
+          />
+        </div>
       </div>
     </div>
   );

@@ -177,8 +177,8 @@ const DocumentSignature = ({
     if (
       position.x < 0 ||
       position.y < 0 ||
-      position.width <= 0 ||
-      position.height <= 0
+      (position.width && position.width <= 0) ||
+      (position.height && position.height <= 0)
     ) {
       console.warn('Coordenadas inválidas detectadas:', position);
       setError('Coordenadas de firma inválidas');

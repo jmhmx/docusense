@@ -275,12 +275,15 @@ const SignaturePositioning = ({
 
   // Confirmación de la posición
   const confirmPosition = () => {
-    if (!pdfPageDimensions || !canvasRef.current) {
+    const canvas = pdfContainerRef.current?.querySelector(
+      '.react-pdf__Page canvas',
+    ) as HTMLCanvasElement;
+
+    if (!pdfPageDimensions || !canvas) {
       console.error('Dimensiones del PDF o canvas no disponibles');
       return;
     }
 
-    const canvas = canvasRef.current;
     const currentCanvasWidth = canvas.width;
     const currentCanvasHeight = canvas.height;
 

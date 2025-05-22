@@ -40,6 +40,10 @@ const PDFViewer = ({ documentId, annotations = [] }: PDFViewerProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
   // @ts-ignore
   const [pageSize, setPageSize] = useState({ width: 0, height: 0 });
+  const [pdfPageDimensions, setPdfPageDimensions] = useState<{
+    width: number;
+    height: number;
+  } | null>(null);
 
   // Obtener el tamaño de la página cuando cambie la escala o el número de página
   useEffect(() => {
@@ -61,19 +65,33 @@ const PDFViewer = ({ documentId, annotations = [] }: PDFViewerProps) => {
 
   // Renderizar anotaciones (firmas) como overlays sobre el PDF
   const renderAnnotations = () => {
-    if (!annotations || annotations.length === 0) return null;
+    if (!annotations || annotations.length === 0 || !pdfPageDimensions)
+      return null;
 
     // Filtrar anotaciones para la página actual
     const pageAnnotations = annotations.filter(
       (anno) => anno.position.page === pageNumber,
     );
 
+    const pageViewport = document.querySelector('.react-pdf__Page');
+    if (!pageViewport) return null;
+
+    const pageRect = pageViewport.getBoundingClientRect();
+    const currentRenderedWidth = pageRect.width;
+    const currentRenderedHeight = pageRect.height;
+
+    // Calcular la relación de escala entre las dimensiones renderizadas y las dimensiones originales del PDF
+    const xScale = currentRenderedWidth / pdfPageDimensions.width;
+    const yScale = currentRenderedHeight / pdfPageDimensions.height;
+
     return pageAnnotations.map((annotation) => {
-      // Calcular posiciones escaladas
-      const scaledX = annotation.position.x * scale;
-      const scaledY = annotation.position.y * scale;
-      const scaledWidth = (annotation.position.width || 200) * scale;
-      const scaledHeight = (annotation.position.height || 100) * scale;
+      // Convertir coordenadas y tamaño de PDF a coordenadas de visualización
+      const scaledX = annotation.position.x * xScale;
+      const scaledY =
+        currentRenderedHeight -
+        (annotation.position.y + (annotation.position.height || 100)) * yScale; // Invertir Y para coordenadas PDF
+      const scaledWidth = (annotation.position.width || 200) * xScale;
+      const scaledHeight = (annotation.position.height || 100) * yScale;
 
       return (
         <div
@@ -121,7 +139,7 @@ const PDFViewer = ({ documentId, annotations = [] }: PDFViewerProps) => {
   }
 
   // Evento para cuando la página se renderiza
-  function onPageLoadSuccess() {
+  function onPageLoadSuccess(page: any) {
     // Actualizar el tamaño de la página
     const pageViewport = document.querySelector('.react-pdf__Page');
     if (pageViewport) {
@@ -131,6 +149,11 @@ const PDFViewer = ({ documentId, annotations = [] }: PDFViewerProps) => {
         height: rect.height,
       });
     }
+
+    // Obtener las dimensiones originales de la página del PDF
+    const originalWidth = page.originalWidth;
+    const originalHeight = page.originalHeight;
+    setPdfPageDimensions({ width: originalWidth, height: originalHeight });
   }
 
   return (

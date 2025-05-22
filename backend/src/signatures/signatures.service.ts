@@ -1734,96 +1734,55 @@ export class SignaturesService {
     ipAddress?: string,
     userAgent?: string,
   ): Promise<Signature> {
-    // Validación de entradas
+    // Validación básica
     if (!documentId || !userId || !firmaAutografaSvg) {
-      throw new BadRequestException(
-        'Faltan datos necesarios para la firma (documento, usuario, o imagen de firma)',
-      );
+      throw new BadRequestException('Faltan datos necesarios para la firma');
     }
 
-    // Validación específica de la imagen de firma
+    // Validar formato de imagen
     if (!firmaAutografaSvg.startsWith('data:image/')) {
-      throw new BadRequestException(
-        'El formato de la imagen de firma no es válido. Debe ser una imagen base64 con formato data:image/...',
-      );
+      throw new BadRequestException('Formato de imagen inválido');
     }
 
     try {
-      // Verificar documento
+      // Verificar documento y usuario
       const document = await this.documentsRepository.findOne({
         where: { id: documentId },
       });
-
       if (!document) {
-        throw new NotFoundException(
-          `Documento con ID ${documentId} no encontrado`,
-        );
+        throw new NotFoundException(`Documento no encontrado: ${documentId}`);
       }
 
-      // Verificar usuario
       const user = await this.usersService.findOne(userId);
       if (!user) {
-        throw new NotFoundException(`Usuario con ID ${userId} no encontrado`);
-      }
-
-      // Verificar estado del documento
-      if (document.status !== 'completed' && document.status !== 'pending') {
-        throw new BadRequestException(
-          `El documento no está listo para firma. Estado actual: ${document.status}`,
-        );
+        throw new NotFoundException(`Usuario no encontrado: ${userId}`);
       }
 
       // Verificar permisos
-      if (document.userId !== userId) {
-        // Verificar si el usuario puede firmar este documento
-        const canSignResult = await this.canUserSignDocument(
-          documentId,
-          userId,
+      const canSignResult = await this.canUserSignDocument(documentId, userId);
+      if (!canSignResult.canSign) {
+        throw new UnauthorizedException(
+          canSignResult.reason || 'Sin permisos para firmar',
         );
-        if (!canSignResult.canSign) {
-          throw new UnauthorizedException(
-            canSignResult.reason ||
-              'No tienes permiso para firmar este documento',
-          );
-        }
       }
 
-      // Generar hash del documento para integridad
+      // Generar hash del documento
       const documentHash = this.cryptoService.generateHash(document.filePath);
 
-      // Validar que la imagen sea de un formato compatible (solo PNG o JPEG)
-      const imageFormat = firmaAutografaSvg.startsWith('data:image/png')
-        ? 'png'
-        : firmaAutografaSvg.startsWith('data:image/jpeg')
-          ? 'jpeg'
-          : firmaAutografaSvg.startsWith('data:image/jpg')
-            ? 'jpeg'
-            : 'unknown';
-
-      if (imageFormat === 'unknown') {
-        this.logger.warn(
-          `Formato de imagen no reconocido: ${firmaAutografaSvg.substring(0, 30)}...`,
-        );
-      }
-
-      // Preservar la imagen base64 completa (con header data:image/...)
-      // para facilitar el renderizado posterior
-      const timestamp = new Date();
+      // Crear entidad de firma con los datos exactos
       const signatureEntity = this.signaturesRepository.create({
         id: uuidv4(),
         documentId: document.id,
         userId,
-        signatureData: firmaAutografaSvg, // Guardar la imagen completa (IMPORTANTE)
+        signatureData: firmaAutografaSvg, // Guardar imagen completa
         documentHash,
-        signedAt: timestamp,
+        signedAt: new Date(),
         reason: reason || 'Firma autógrafa con verificación 2FA',
         position: position ? JSON.stringify(position) : null,
         valid: true,
         metadata: {
           signatureType: 'autografa',
           authMethod: '2FA',
-          verifiedAt: timestamp.toISOString(),
-          imageFormat, // Añadir el formato detectado
           userAgent,
           ipAddress,
           documentMetadata: {
@@ -1838,14 +1797,7 @@ export class SignaturesService {
       const savedSignature =
         await this.signaturesRepository.save(signatureEntity);
 
-      // Log para depuración
-      this.logger.log(`Firma autógrafa guardada con ID: ${savedSignature.id}`);
-      this.logger.log(`La firma tiene ${firmaAutografaSvg.length} caracteres`);
-      this.logger.log(
-        `Los primeros 30 caracteres son: ${firmaAutografaSvg.substring(0, 30)}...`,
-      );
-
-      // Actualizar metadata del documento
+      // Actualizar documento
       document.metadata = {
         ...document.metadata,
         isSigned: true,
@@ -1856,6 +1808,15 @@ export class SignaturesService {
 
       await this.documentsService.update(documentId, document);
 
+      // Log para verificar datos
+      this.logger.log(`Firma autógrafa guardada - ID: ${savedSignature.id}`);
+      this.logger.log(
+        `Datos de imagen - longitud: ${firmaAutografaSvg.length}`,
+      );
+      this.logger.log(
+        `Primeros 50 chars: ${firmaAutografaSvg.substring(0, 50)}...`,
+      );
+
       // Registrar en auditoría
       await this.auditLogService.log(
         AuditAction.DOCUMENT_SIGN,
@@ -1865,38 +1826,11 @@ export class SignaturesService {
           title: document.title,
           signatureId: savedSignature.id,
           signatureType: 'autografa',
-          authMethod: '2FA',
         },
         ipAddress,
         userAgent,
       );
 
-      // Registrar en blockchain
-      try {
-        await this.blockchainService.updateDocumentRecord(
-          documentId,
-          documentHash,
-          'SIGNATURE_AUTOGRAFA',
-          userId,
-          {
-            signatureId: savedSignature.id,
-            timestamp: savedSignature.signedAt.toISOString(),
-          },
-        );
-      } catch (blockchainError) {
-        this.logger.error(
-          `Error al registrar firma en blockchain: ${blockchainError.message}`,
-          blockchainError.stack,
-        );
-        // Continuamos con el proceso aunque falle el registro en blockchain
-      }
-
-      // Verificar si es parte de un proceso de firmas múltiples y actualizar estado
-      await this.updateMultiSignatureStatus(document, userId);
-
-      this.logger.log(
-        `Documento ${documentId} firmado con firma autógrafa por usuario ${userId}`,
-      );
       return savedSignature;
     } catch (error) {
       this.logger.error(

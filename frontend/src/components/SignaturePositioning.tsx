@@ -1,5 +1,3 @@
-// Componente SignaturePositioning.tsx actualizado y completo
-
 import { useState, useRef, useEffect } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
 import Button from './Button';
@@ -54,8 +52,10 @@ const SignaturePositioning = ({
   const [gridSize, setGridSize] = useState(20);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [numPages, setNumPages] = useState<number | null>(null);
-  const [pageHeight, setPageHeight] = useState<number>(0);
-  const [pageWidth, setPageWidth] = useState<number>(0);
+  const [pdfPageDimensions, setPdfPageDimensions] = useState<{
+    width: number;
+    height: number;
+  } | null>(null);
   const [autoScale, setAutoScale] = useState(true);
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -69,19 +69,22 @@ const SignaturePositioning = ({
 
   // Función para ajustar la escala automáticamente
   const adjustScale = () => {
-    if (!containerRef.current || !pdfContainerRef.current || !autoScale) return;
+    if (
+      !containerRef.current ||
+      !pdfContainerRef.current ||
+      !autoScale ||
+      !pdfPageDimensions
+    )
+      return;
 
     const containerWidth = containerRef.current?.clientWidth || 0;
     const pageViewport =
       pdfContainerRef.current.querySelector('.react-pdf__Page');
 
     if (pageViewport) {
-      const pageRect = pageViewport.getBoundingClientRect();
-      const currentPageWidth = pageRect.width;
-
       // Calcular nueva escala para que el PDF se ajuste al ancho del contenedor
       // Dejamos un margen del 5% para evitar scroll horizontal
-      const newScale = (containerWidth * 0.95) / (currentPageWidth / scale);
+      const newScale = (containerWidth * 0.95) / pdfPageDimensions.width;
 
       // Evitar bucles de cambio de escala limitando la frecuencia de cambios
       if (Math.abs(newScale - scale) > 0.05) {
@@ -92,20 +95,22 @@ const SignaturePositioning = ({
 
   // Inicializar la posición
   useEffect(() => {
-    if (containerRef.current && pageWidth > 0 && pageHeight > 0) {
-      // Posicionar inicialmente cerca del centro-derecha de la página
-      setPosition({
-        x: Math.max(0, pageWidth - signatureSize.width - 100),
-        y: Math.max(0, pageHeight / 3),
-      });
+    if (pdfPageDimensions && scale > 0) {
+      // Posicionar inicialmente cerca del centro-derecha de la página, ajustado por la escala
+      const initialX = Math.max(
+        0,
+        pdfPageDimensions.width * scale - signatureSize.width - 100 * scale,
+      );
+      const initialY = Math.max(0, (pdfPageDimensions.height * scale) / 3);
+      setPosition({ x: initialX, y: initialY });
     }
-  }, [pageWidth, pageHeight, signatureSize.width]);
+  }, [pdfPageDimensions, scale, signatureSize.width]);
 
   // Ajustar escala automáticamente cuando cambie el tamaño de la ventana
   useEffect(() => {
     window.addEventListener('resize', adjustScale);
     return () => window.removeEventListener('resize', adjustScale);
-  }, [scale]);
+  }, [scale, autoScale, pdfPageDimensions]); // Añadir dependencias
 
   // Manejar evento de mouse down en la firma
   const handleMouseDown = (e: React.MouseEvent) => {
@@ -118,12 +123,10 @@ const SignaturePositioning = ({
   useEffect(() => {
     if (isDragging) {
       const handleMouseMoveGlobal = (e: MouseEvent) => {
-        if (!pdfContainerRef.current) return;
+        if (!pdfContainerRef.current || !signatureRef.current) return;
 
         const container = pdfContainerRef.current.getBoundingClientRect();
-        const signature = signatureRef.current?.getBoundingClientRect();
-
-        if (!signature) return;
+        const signature = signatureRef.current.getBoundingClientRect();
 
         // Calcular nuevas coordenadas relativas al contenedor
         let newX = e.clientX - container.left - signature.width / 2;
@@ -154,7 +157,7 @@ const SignaturePositioning = ({
         window.removeEventListener('mouseup', handleMouseUpGlobal);
       };
     }
-  }, [isDragging, snapToGrid, gridSize]);
+  }, [isDragging, snapToGrid, gridSize, scale]); // Añadir scale como dependencia
 
   // Manejar clic en el documento para posicionar la firma
   const handleDocumentClick = (e: React.MouseEvent) => {
@@ -189,14 +192,39 @@ const SignaturePositioning = ({
 
   // Confirmación de la posición
   const confirmPosition = () => {
-    if (onPositionSelected) {
+    if (onPositionSelected && pdfPageDimensions && scale > 0) {
+      // Desescalar las coordenadas y tamaño a las dimensiones originales del PDF
+      const pdfX = position.x / scale;
+      const pdfWidth = signatureSize.width / scale;
+
+      // Calcular la coordenada Y en el sistema frontend (parte inferior de la firma)
+      const pdfY_frontend_scaled = position.y + signatureSize.height;
+      // Desescalar la coordenada Y
+      const pdfY_frontend_original_scale = pdfY_frontend_scaled / scale;
+
+      // Invertir la coordenada Y para el sistema de coordenadas de pdf-lib (origen abajo a la izquierda)
+      const pdfY = pdfPageDimensions.height - pdfY_frontend_original_scale;
+      const pdfHeight = signatureSize.height / scale; // Desescalar Altura
+
+      console.log('Frontend: Posición en escala original PDF:', {
+        page: activePage,
+        x: pdfX,
+        y: pdfY,
+        width: pdfWidth,
+        height: pdfHeight,
+      });
+
       onPositionSelected({
         page: activePage,
-        x: position.x / scale,
-        y: position.y / scale,
-        width: signatureSize.width / scale,
-        height: signatureSize.height / scale,
+        x: pdfX,
+        y: pdfY,
+        width: pdfWidth,
+        height: pdfHeight,
       });
+    } else {
+      console.error(
+        'Frontend: No se puede confirmar posición. pdfPageDimensions o scale no válidos.',
+      );
     }
   };
 
@@ -212,15 +240,11 @@ const SignaturePositioning = ({
   }
 
   // Manejar carga de página
-  function onPageLoadSuccess({
-    width,
-    height,
-  }: {
-    width: number;
-    height: number;
-  }) {
-    setPageWidth(width * scale);
-    setPageHeight(height * scale);
+  function onPageLoadSuccess(page: any) {
+    // Obtener las dimensiones originales de la página del PDF
+    const originalWidth = page.originalWidth;
+    const originalHeight = page.originalHeight;
+    setPdfPageDimensions({ width: originalWidth, height: originalHeight });
 
     // Ajustar escala después de cargar la página
     setTimeout(adjustScale, 100);
@@ -261,7 +285,7 @@ const SignaturePositioning = ({
                 ? 'bg-blue-100 text-blue-700'
                 : 'bg-gray-100 text-gray-600'
             }`}
-            onClick={() => setSnapToGrid(!snapToGrid)}
+            onClick={() => setSnapToGrid(!setSnapToGrid)}
             title={
               snapToGrid
                 ? 'Desactivar ajuste a cuadrícula'
@@ -639,7 +663,7 @@ const SignaturePositioning = ({
 
       <style>{`
         .bg-grid {
-          background-image: 
+          background-image:
             linear-gradient(to right, rgba(0, 0, 0, 0.1) 1px, transparent 1px),
             linear-gradient(to bottom, rgba(0, 0, 0, 0.1) 1px, transparent 1px);
         }

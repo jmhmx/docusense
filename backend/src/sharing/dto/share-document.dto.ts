@@ -66,7 +66,7 @@ export class ShareDocumentDto {
   @IsEnum(PermissionLevel, {
     message: 'El nivel de permiso debe ser: viewer, commenter, editor, o owner',
   })
-  permissionLevel: PermissionLevel;
+  permissionLevel: any;
 
   @IsOptional()
   @IsDateString()

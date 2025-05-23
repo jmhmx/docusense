@@ -12,12 +12,14 @@ import {
   Headers,
   Ip,
   ForbiddenException,
+  Logger,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { SignaturesService } from './signatures.service';
 import { CreateSignatureDto } from './dto/create-signature.dto';
 import { CreateSignatureWithBiometricDto } from './dto/create-signature-with-biometric.dto';
 import { AuditLogService, AuditAction } from '../audit/audit-log.service';
+import { DocumentsService } from 'src/documents/documents.service';
 
 // Nueva clase DTO para firma autógrafa
 class AutografaSignatureDto {
@@ -34,9 +36,11 @@ class AutografaSignatureDto {
 
 @Controller('api/signatures')
 export class SignaturesController {
+  private readonly logger = new Logger(SignaturesController.name);
   constructor(
     private readonly signaturesService: SignaturesService,
     private readonly auditLogService: AuditLogService,
+    private readonly documentsService: DocumentsService,
   ) {}
 
   @UseGuards(JwtAuthGuard)

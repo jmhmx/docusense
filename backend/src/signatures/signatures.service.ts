@@ -1103,6 +1103,7 @@ export class SignaturesService {
         totalSigners: signerIds.length,
         lastNotificationSent: new Date().toISOString(),
       },
+      completedSigners: [], // Inicializar array de firmantes completados
     };
 
     await this.documentsService.update(documentId, document);
@@ -1113,6 +1114,7 @@ export class SignaturesService {
 
     let emailsSent = 0;
     let documentsShared = 0;
+    let emailPromises = [];
 
     // 1. COMPARTIR DOCUMENTO Y ENVIAR NOTIFICACIONES
     for (const signerId of signerIds) {
@@ -1138,34 +1140,53 @@ export class SignaturesService {
         );
         documentsShared++;
 
-        // Enviar notificación personalizada de firma múltiple
-        await this.emailService.sendTemplateEmail({
-          to: signer.email,
-          subject: `Solicitud de firma: "${document.title}"`,
-          template: 'multi-signature-request',
-          context: {
-            signerName: signer.name,
-            ownerName: owner.name,
-            documentTitle: document.title,
-            documentUrl: documentUrl,
-            requiredSigners: requiredSigners || signerIds.length,
-            totalSigners: signerIds.length,
-            dueDate: dueDate,
-            instructions:
-              options?.customMessage || this.getSigningInstructions(),
-            customMessage: options?.customMessage,
-          },
-        });
-        emailsSent++;
+        // Crear promesa de envío de email
+        const emailPromise = this.emailService
+          .sendTemplateEmail({
+            to: signer.email,
+            subject: `Solicitud de firma: "${document.title}"`,
+            template: 'multi-signature-request',
+            context: {
+              signerName: signer.name,
+              ownerName: owner.name,
+              documentTitle: document.title,
+              documentUrl: documentUrl,
+              requiredSigners: requiredSigners || signerIds.length,
+              totalSigners: signerIds.length,
+              dueDate: dueDate,
+              instructions:
+                options?.customMessage || this.getSigningInstructions(),
+              customMessage: options?.customMessage,
+            },
+          })
+          .catch((error) => {
+            this.logger.error(
+              `Error enviando correo a ${signer.email}: ${error.message}`,
+            );
+            return false; // Devolver false en caso de error para contabilizar correctamente
+          });
 
-        this.logger.log(
-          `Notificación y documento compartido con ${signer.email}`,
-        );
+        emailPromises.push(emailPromise);
+        this.logger.log(`Documento compartido con ${signer.email}`);
       } catch (error) {
         this.logger.error(
           `Error procesando firmante ${signerId}: ${error.message}`,
         );
       }
+    }
+
+    // Esperar a que todos los correos sean enviados
+    try {
+      const emailResults = await Promise.allSettled(emailPromises);
+      emailsSent = emailResults.filter(
+        (result) => result.status === 'fulfilled' && result.value !== false,
+      ).length;
+
+      this.logger.log(
+        `Se enviaron ${emailsSent} de ${emailPromises.length} correos electrónicos`,
+      );
+    } catch (error) {
+      this.logger.error(`Error enviando notificaciones: ${error.message}`);
     }
 
     // Actualizar estadísticas de notificaciones en el documento

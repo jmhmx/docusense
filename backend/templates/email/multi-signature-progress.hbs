@@ -1,35 +1,15 @@
-{{
-#>
-email-base}}
+{{#> email-base subject="Proceso de Firmas"}}
 <div style="max-width: 600px; margin: 0 auto; font-family: Arial, sans-serif;">
-  <div style="background: linear-gradient(135deg, #48bb78 0%, #38a169 100%); padding: 40px 20px; text-align: center;">
-    {{
-    #if
-    logoExists}}
-    <img src="cid:logotipo" alt="DocuSense" style="height: 40px; margin-bottom: 20px;">
-    {{
-    /if
-    }}
-    <h1 style="color: white; margin: 0; font-size: 28px; font-weight: 300;">
-      {{
-      #if
-      isComplete}}Proceso de Firmas Completado{{else}}Progreso de Firmas{{
-      /if
-      }}
+  
+    <h1>
+      {{#if isComplete}}Proceso de Firmas Completado{{else}}Progreso de Firmas{{/if}}
     </h1>
-  </div>
 
   <div style="background: white; padding: 40px 30px;">
     <div style="text-align: center; margin-bottom: 30px;">
       <div
-        style="background: {{
-#if
- isComplete}}#f0fff4{{else}}#f0fff4{{
-/if
-}}; border-radius: 50%; width: 80px; height: 80px; margin: 0 auto 20px; display: flex; align-items: center; justify-content: center;">
-        {{
-        #if
-        isComplete}}
+        style="background: {{#if isComplete}}#f0fff4{{else}}#f0fff4{{/if}}; border-radius: 50%; width: 80px; height: 80px; margin: 0 auto 20px; display: flex; align-items: center; justify-content: center;">
+        {{#if isComplete}}
         <svg width="40" height="40" fill="#48bb78" viewBox="0 0 24 24">
           <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
@@ -37,23 +17,17 @@ email-base}}
         <svg width="40" height="40" fill="#48bb78" viewBox="0 0 24 24">
           <path d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
-        {{
-        /if
-        }}
+        {{/if}}
       </div>
       <h2 style="color: #2d3748; margin: 0 0 10px 0; font-size: 24px;">
         ¡Hola {{ownerName}}!
       </h2>
       <p style="color: #718096; margin: 0; font-size: 16px;">
-        {{
-        #if
-        isComplete}}
+        {{#if isComplete}}
         El proceso de firmas múltiples ha sido completado exitosamente
         {{else}}
         Hay progreso en el proceso de firmas de tu documento
-        {{
-        /if
-        }}
+        {{/if}}
       </p>
     </div>
 
@@ -76,47 +50,33 @@ email-base}}
 
         <div style="display: flex; justify-content: space-between; margin-top: 15px; font-size: 14px;">
           <span style="color: #4a5568;">{{completedSigners}} de {{requiredSigners}} firmas</span>
-          {{
-          #unless
-          isComplete}}
+          {{#unless isComplete}}
           <span style="color: #718096;">{{remainingSigners}} pendientes</span>
-          {{
-          /unless
-          }}
+          {{/unless}}
         </div>
       </div>
 
-      {{
-      #unless
-      isComplete}}
+      {{#unless isComplete}}
       <div style="background: #fffbf0; border: 1px solid #f6e05e; border-radius: 8px; padding: 15px;">
         <p style="color: #744210; margin: 0; font-size: 14px;">
           <strong>Última firma:</strong> {{signerName}} acaba de firmar el documento.
         </p>
       </div>
-      {{
-      /unless
-      }}
+      {{/unless}}
     </div>
 
     <div style="text-align: center; margin-bottom: 30px;">
       <a href="{{documentUrl}}"
-        style="display: inline-block; background: linear-gradient(135deg, #48bb78 0%, #38a169 100%); color: white; text-decoration: none; padding: 15px 40px; border-radius: 50px; font-weight: 600; font-size: 16px;">
-        {{
-        #if
-        isComplete}}
+        class="button">
+        {{#if isComplete}}
         📋 Ver Documento Firmado
         {{else}}
         👀 Ver Progreso
-        {{
-        /if
-        }}
+        {{/if}}
       </a>
     </div>
 
-    {{
-    #if
-    isComplete}}
+    {{#if isComplete}}
     <div style="background: #f0fff4; border: 1px solid #9ae6b4; border-radius: 8px; padding: 20px; text-align: center;">
       <h4 style="color: #22543d; margin: 0 0 10px 0;">🎉 ¡Proceso Completado!</h4>
       <p style="color: #22543d; margin: 0; font-size: 14px;">
@@ -124,9 +84,7 @@ email-base}}
         integradas.
       </p>
     </div>
-    {{
-    /if
-    }}
+    {{/if}}
   </div>
 
   <div style="background: #f7fafc; padding: 30px; text-align: center; border-top: 1px solid #e2e8f0;">
@@ -135,6 +93,4 @@ email-base}}
     </p>
   </div>
 </div>
-{{
-/email-base
-}}
+{{/email-base}}

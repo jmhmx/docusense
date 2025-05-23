@@ -377,32 +377,31 @@ const MultiSignatureManager = ({
               <>
                 <div className='mb-4 overflow-y-auto max-h-60'>
                   <ul className='divide-y divide-gray-200'>
-                    {availableUsers
-                      .filter((u) => u.id !== currentUser?.id)
-                      .map((user) => (
-                        <li
-                          key={user.id}
-                          className='py-2'>
-                          <label className='flex items-center space-x-3'>
-                            <input
-                              type='checkbox'
-                              className='w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500'
-                              checked={
-                                !!selectedUsers.find((u) => u.id === user.id)
-                              }
-                              onChange={() => handleUserSelect(user)}
-                            />
-                            <div>
-                              <p className='text-sm font-medium text-gray-900'>
-                                {user.name}
-                              </p>
-                              <p className='text-xs text-gray-500'>
-                                {user.email}
-                              </p>
-                            </div>
-                          </label>
-                        </li>
-                      ))}
+                    {availableUsers.map((user) => (
+                      <li
+                        key={user.id}
+                        className='py-2'>
+                        <label className='flex items-center space-x-3'>
+                          <input
+                            type='checkbox'
+                            className='w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500'
+                            checked={
+                              !!selectedUsers.find((u) => u.id === user.id)
+                            }
+                            onChange={() => handleUserSelect(user)}
+                          />
+                          <div>
+                            <p className='text-sm font-medium text-gray-900'>
+                              {user.name}{' '}
+                              {user.id === currentUser?.id && '(Propietario)'}
+                            </p>
+                            <p className='text-xs text-gray-500'>
+                              {user.email}
+                            </p>
+                          </div>
+                        </label>
+                      </li>
+                    ))}
                   </ul>
                 </div>
 

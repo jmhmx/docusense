@@ -259,9 +259,8 @@ export class SignaturesController {
 
       // Verificar que el usuario no se incluya a sí mismo en la lista de firmantes
       if (initDto.signerIds.includes(req.user.id)) {
-        throw new BadRequestException(
-          'No puede incluirse a sí mismo como firmante del proceso',
-        );
+        // Si el propietario está incluido, permitirlo (eliminamos la restricción)
+        this.logger.log('Propietario incluido como firmante en el proceso');
       }
 
       const userAgent = headers['user-agent'] || 'Unknown';

@@ -1,19 +1,9 @@
-{{
-#>
-email-base}}
+{{#> email-base subject="Recordatorio de Firma"}}
 <div style="max-width: 600px; margin: 0 auto; font-family: Arial, sans-serif;">
-  <div style="background: linear-gradient(135deg, #ed8936 0%, #dd6b20 100%); padding: 40px 20px; text-align: center;">
-    {{
-    #if
-    logoExists}}
-    <img src="cid:logotipo" alt="DocuSense" style="height: 40px; margin-bottom: 20px;">
-    {{
-    /if
-    }}
-    <h1 style="color: white; margin: 0; font-size: 28px; font-weight: 300;">
+  
+    <h1>
       Recordatorio de Firma
     </h1>
-  </div>
 
   <div style="background: white; padding: 40px 30px;">
     <div style="text-align: center; margin-bottom: 30px;">
@@ -63,7 +53,7 @@ email-base}}
 
     <div style="text-align: center; margin-bottom: 30px;">
       <a href="{{documentUrl}}"
-        style="display: inline-block; background: linear-gradient(135deg, #ed8936 0%, #dd6b20 100%); color: white; text-decoration: none; padding: 15px 40px; border-radius: 50px; font-weight: 600; font-size: 16px; box-shadow: 0 4px 15px rgba(237, 137, 54, 0.4);">
+        class="button">
         ⚡ Firmar Ahora
       </a>
     </div>
@@ -88,6 +78,4 @@ email-base}}
     </p>
   </div>
 </div>
-{{
-/email-base
-}}
+{{/email-base}}

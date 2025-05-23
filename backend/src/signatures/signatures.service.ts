@@ -1652,7 +1652,7 @@ export class SignaturesService {
       await this.documentsService.update(documentId, document);
 
       this.logger.log(
-        `Quorum alcanzado para documento ${documentId}: ${validCompletedSigners.length}/${requiredSigners}`,
+        `Firmas Completadas para documento ${documentId}: ${validCompletedSigners.length}/${requiredSigners}`,
       );
     }
 

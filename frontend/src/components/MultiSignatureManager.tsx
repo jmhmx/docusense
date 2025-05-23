@@ -267,7 +267,7 @@ const MultiSignatureManager = ({
 
             {documentStatus.isComplete && (
               <div className='p-2 mt-3 text-sm font-medium text-green-800 bg-green-100 rounded'>
-                ✓ Quórum alcanzado. Documento válidamente firmado.
+                ✓ Firmas Completadas. Documento válidamente firmado.
               </div>
             )}
           </div>

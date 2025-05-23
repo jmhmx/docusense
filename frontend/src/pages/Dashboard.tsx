@@ -8,6 +8,7 @@ import AnalyticsDashboard from './AnalyticsDashboard';
 import Button from '../components/Button';
 import DocumentStatusBadge from '../components/DocumentStatusBadge';
 import { useNotifications } from '../components/NotificationSystem';
+import FiltersPanel from '../components/FiltersPanel';
 
 // Tipos
 interface DocumentType {
@@ -484,108 +485,6 @@ const Dashboard = () => {
     </div>
   );
 
-  // Componente para el filtro
-  const FiltersPanel = () => (
-    <div className='p-4 mb-6 transition-shadow duration-300 bg-white rounded-lg shadow hover:shadow-sm'>
-      <div className='grid items-center grid-cols-1 gap-4 md:grid-cols-5'>
-        <div>
-          <label className='block text-sm font-medium text-gray-700'>
-            Estado
-          </label>
-          <select
-            className='block w-full mt-1 border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500'
-            value={filters.status}
-            onChange={(e) => handleFilterChange('status', e.target.value)}>
-            <option value='all'>Todos</option>
-            <option value='pending'>Pendiente</option>
-            <option value='processing'>Procesando</option>
-            <option value='completed'>Completado</option>
-            <option value='error'>Error</option>
-          </select>
-        </div>
-        <div>
-          <label className='block text-sm font-medium text-gray-700'>
-            Fecha
-          </label>
-          <select
-            className='block w-full mt-1 border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500'
-            value={filters.dateRange}
-            onChange={(e) => handleFilterChange('dateRange', e.target.value)}>
-            <option value='all'>Todos</option>
-            <option value='today'>Hoy</option>
-            <option value='week'>Última semana</option>
-            <option value='month'>Último mes</option>
-          </select>
-        </div>
-        <div>
-          <label className='block text-sm font-medium text-gray-700'>
-            Ordenar por
-          </label>
-          <div className='flex mt-1'>
-            <select
-              className='block w-full border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500'
-              value={sortField}
-              onChange={(e) => handleSort(e.target.value)}>
-              <option value='createdAt'>Fecha</option>
-              <option value='title'>Título</option>
-              <option value='fileSize'>Tamaño</option>
-            </select>
-          </div>
-        </div>
-        <div>
-          <button
-            className='p-2 ml-2 transition-colors duration-200 bg-gray-200 rounded-md hover:bg-gray-300'
-            onClick={() =>
-              setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')
-            }
-            aria-label={
-              sortDirection === 'asc'
-                ? 'Ordenar descendente'
-                : 'Ordenar ascendente'
-            }>
-            {sortDirection === 'asc' ? (
-              <svg
-                xmlns='http://www.w3.org/2000/svg'
-                className='w-5 h-5'
-                viewBox='0 0 20 20'
-                fill='currentColor'>
-                <path
-                  fillRule='evenodd'
-                  d='M5.293 7.707a1 1 0 010-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 01-1.414 1.414L11 5.414V17a1 1 0 11-2 0V5.414L6.707 7.707a1 1 0 01-1.414 0z'
-                  clipRule='evenodd'
-                />
-              </svg>
-            ) : (
-              <svg
-                xmlns='http://www.w3.org/2000/svg'
-                className='w-5 h-5'
-                viewBox='0 0 20 20'
-                fill='currentColor'>
-                <path
-                  fillRule='evenodd'
-                  d='M14.707 12.293a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 111.414-1.414L9 14.586V3a1 1 0 012 0v11.586l2.293-2.293a1 1 0 011.414 0z'
-                  clipRule='evenodd'
-                />
-              </svg>
-            )}
-          </button>
-        </div>
-        <div>
-          <label className='block text-sm font-medium text-gray-700'>
-            Buscar
-          </label>
-          <input
-            type='text'
-            placeholder='Buscar documentos...'
-            className='block w-full mt-1 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500'
-            value={filters.searchQuery}
-            onChange={(e) => handleFilterChange('searchQuery', e.target.value)}
-          />
-        </div>
-      </div>
-    </div>
-  );
-
   // Componente para la lista de documentos compartidos
   const SharedDocumentsList = () => {
     if (!sharedDocuments || sharedDocuments.length === 0) return null;
@@ -925,7 +824,16 @@ const Dashboard = () => {
           ) : (
             <>
               {/* Filtros */}
-              <FiltersPanel />
+              <FiltersPanel
+                filters={filters}
+                onFilterChange={handleFilterChange}
+                sortField={sortField}
+                sortDirection={sortDirection}
+                onSort={handleSort}
+                onSortDirectionChange={() =>
+                  setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'))
+                }
+              />
 
               {/* Lista de documentos */}
               {paginatedDocs.length === 0 ? (

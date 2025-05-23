@@ -1070,16 +1070,70 @@ export class SignaturesService {
       );
     }
 
+    // Obtener información del propietario
+    const owner = await this.usersService.findOne(ownerUserId);
+    if (!owner) {
+      throw new NotFoundException('Propietario del documento no encontrado');
+    }
+
     // Actualizar metadatos del documento
     document.metadata = {
       ...document.metadata,
       multiSignatureProcess: true,
       pendingSigners: signerIds,
-      requiredSigners: requiredSigners || signerIds.length, // Por defecto, todos deben firmar
+      requiredSigners: requiredSigners || signerIds.length,
       initiatedAt: new Date().toISOString(),
+      initiatedBy: ownerUserId,
     };
 
     await this.documentsService.update(documentId, document);
+
+    // 1. COMPARTIR DOCUMENTO AUTOMÁTICAMENTE CON CADA FIRMANTE
+    const frontendUrl =
+      this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3001';
+    const documentUrl = `${frontendUrl}/documents/${documentId}`;
+
+    for (const signerId of signerIds) {
+      try {
+        // Obtener información del firmante
+        const signer = await this.usersService.findOne(signerId);
+        if (!signer) {
+          this.logger.warn(`Firmante no encontrado: ${signerId}`);
+          continue;
+        }
+
+        // Compartir documento con permisos de comentario (necesario para firmar)
+        await this.sharingService.shareDocumentWithUser(
+          ownerUserId,
+          {
+            documentId,
+            email: signer.email,
+            permissionLevel: 'commenter', // Mínimo necesario para firmar
+            notifyUser: false, // No enviar notificación estándar de compartición
+          },
+          'system',
+          'multi-signature-process',
+        );
+
+        this.logger.log(
+          `Documento compartido automáticamente con ${signer.email}`,
+        );
+      } catch (error) {
+        this.logger.error(
+          `Error compartiendo documento con firmante ${signerId}: ${error.message}`,
+        );
+        // Continuar con otros firmantes aunque uno falle
+      }
+    }
+
+    // 2. ENVIAR NOTIFICACIONES POR EMAIL A TODOS LOS FIRMANTES
+    await this.notifySignersForMultiSignatureProcess(
+      document,
+      owner,
+      signerIds,
+      requiredSigners || signerIds.length,
+      documentUrl,
+    );
 
     // Registrar en blockchain
     await this.blockchainService.updateDocumentRecord(
@@ -1089,9 +1143,207 @@ export class SignaturesService {
       ownerUserId,
       {
         signerIds,
-        requiredSigners,
+        requiredSigners: requiredSigners || signerIds.length,
+        notificationssent: signerIds.length,
       },
     );
+
+    // Registrar en auditoría
+    await this.auditLogService.log(
+      AuditAction.DOCUMENT_SHARE,
+      ownerUserId,
+      documentId,
+      {
+        action: 'multi_signature_init',
+        signersCount: signerIds.length,
+        requiredSigners: requiredSigners || signerIds.length,
+        notificationsStatus: 'sent',
+      },
+    );
+
+    this.logger.log(
+      `Proceso de firmas múltiples iniciado para documento ${documentId} con ${signerIds.length} firmantes`,
+    );
+  }
+
+  /**
+   * Envía notificaciones por email a todos los firmantes del proceso de firmas múltiples
+   */
+  private async notifySignersForMultiSignatureProcess(
+    document: Document,
+    owner: any,
+    signerIds: string[],
+    requiredSigners: number,
+    documentUrl: string,
+  ): Promise<void> {
+    const notifications = [];
+
+    for (const signerId of signerIds) {
+      try {
+        const signer = await this.usersService.findOne(signerId);
+        if (!signer) {
+          this.logger.warn(
+            `Firmante no encontrado para notificación: ${signerId}`,
+          );
+          continue;
+        }
+
+        // Crear promesa de envío de email
+        const emailPromise = this.emailService.sendTemplateEmail({
+          to: signer.email,
+          subject: `Solicitud de firma: "${document.title}"`,
+          template: 'multi-signature-request',
+          context: {
+            signerName: signer.name,
+            ownerName: owner.name,
+            documentTitle: document.title,
+            documentUrl: documentUrl,
+            requiredSigners: requiredSigners,
+            totalSigners: signerIds.length,
+            dueDate: this.calculateDueDate(), // 7 días por defecto
+            instructions: this.getSigningInstructions(),
+          },
+        });
+
+        notifications.push(emailPromise);
+      } catch (error) {
+        this.logger.error(
+          `Error preparando notificación para ${signerId}: ${error.message}`,
+        );
+      }
+    }
+
+    // Enviar todas las notificaciones en paralelo
+    try {
+      const results = await Promise.allSettled(notifications);
+
+      let successCount = 0;
+      let failedCount = 0;
+
+      results.forEach((result, index) => {
+        if (result.status === 'fulfilled') {
+          successCount++;
+          this.logger.log(
+            `Notificación enviada exitosamente al firmante ${signerIds[index]}`,
+          );
+        } else {
+          failedCount++;
+          this.logger.error(
+            `Error enviando notificación al firmante ${signerIds[index]}: ${result.reason}`,
+          );
+        }
+      });
+
+      this.logger.log(
+        `Notificaciones de firma múltiple: ${successCount} exitosas, ${failedCount} fallidas`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `Error enviando notificaciones masivas: ${error.message}`,
+      );
+    }
+  }
+
+  /**
+   * Calcula fecha límite para firmar (7 días por defecto)
+   */
+  private calculateDueDate(): string {
+    const dueDate = new Date();
+    dueDate.setDate(dueDate.getDate() + 7); // 7 días para firmar
+    return dueDate.toLocaleDateString('es-ES', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
+  }
+
+  /**
+   * Obtiene instrucciones para el proceso de firma
+   */
+  private getSigningInstructions(): string {
+    return 'Para firmar el documento, haga clic en el enlace anterior, inicie sesión en su cuenta y siga las instrucciones en pantalla. Si necesita ayuda, contacte al administrador del sistema.';
+  }
+
+  /**
+   * Notifica cuando un firmante completa su firma en proceso múltiple
+   */
+  private async notifyMultiSignatureProgress(
+    document: Document,
+    signer: any,
+    signature: Signature,
+    completedSigners: number,
+    requiredSigners: number,
+    remainingSigners: string[],
+  ): Promise<void> {
+    try {
+      // Obtener usuarios con acceso al documento (incluyendo propietario)
+      const usersWithAccess = await this.sharingService.getDocumentUsers(
+        document.id,
+        signer.id,
+      );
+
+      const frontendUrl =
+        this.configService.get<string>('FRONTEND_URL') ||
+        'http://localhost:3001';
+      const documentUrl = `${frontendUrl}/documents/${document.id}`;
+
+      // Notificar al propietario del documento
+      const owner = usersWithAccess.find((user) => user.id === document.userId);
+      if (owner) {
+        await this.emailService.sendTemplateEmail({
+          to: owner.email,
+          subject: `Progreso de firmas: "${document.title}"`,
+          template: 'multi-signature-progress',
+          context: {
+            ownerName: owner.name,
+            signerName: signer.name,
+            documentTitle: document.title,
+            documentUrl: documentUrl,
+            completedSigners: completedSigners,
+            requiredSigners: requiredSigners,
+            remainingSigners: remainingSigners.length,
+            progress: Math.round((completedSigners / requiredSigners) * 100),
+            isComplete: completedSigners >= requiredSigners,
+          },
+        });
+      }
+
+      // Si quedan firmantes pendientes, recordarles
+      if (remainingSigners.length > 0 && completedSigners < requiredSigners) {
+        for (const remainingSignerId of remainingSigners) {
+          try {
+            const remainingSigner =
+              await this.usersService.findOne(remainingSignerId);
+            if (remainingSigner) {
+              await this.emailService.sendTemplateEmail({
+                to: remainingSigner.email,
+                subject: `Recordatorio de firma: "${document.title}"`,
+                template: 'signature-reminder',
+                context: {
+                  signerName: remainingSigner.name,
+                  documentTitle: document.title,
+                  documentUrl: documentUrl,
+                  recentSignerName: signer.name,
+                  completedSigners: completedSigners,
+                  requiredSigners: requiredSigners,
+                  progress: Math.round(
+                    (completedSigners / requiredSigners) * 100,
+                  ),
+                },
+              });
+            }
+          } catch (error) {
+            this.logger.error(
+              `Error enviando recordatorio a ${remainingSignerId}: ${error.message}`,
+            );
+          }
+        }
+      }
+    } catch (error) {
+      this.logger.error(
+        `Error enviando notificaciones de progreso: ${error.message}`,
+      );
+    }
   }
 
   /**
@@ -1287,7 +1539,7 @@ export class SignaturesService {
     ipAddress?: string,
     userAgent?: string,
   ): Promise<Signature> {
-    // Firma normal del documento (usando código existente)
+    // Firma normal del documento
     const signature = await this.originalSignDocument(
       documentId,
       userId,
@@ -1297,13 +1549,12 @@ export class SignaturesService {
       userAgent,
     );
 
-    // Verificar si el documento está en un proceso de firmas múltiples
+    // Verificar si es proceso de firmas múltiples
     const document = await this.documentsRepository.findOne({
       where: { id: documentId },
     });
 
     if (document?.metadata?.multiSignatureProcess) {
-      // CORRECCIÓN: Solo actualizar si el usuario está en la lista y no ha completado ya
       const pendingSigners = document.metadata.pendingSigners || [];
       const completedSigners = document.metadata.completedSigners || [];
 
@@ -1311,8 +1562,12 @@ export class SignaturesService {
         pendingSigners.includes(userId) &&
         !completedSigners.includes(userId)
       ) {
-        // Añadir este firmante a la lista de completados
         const newCompletedSigners = [...completedSigners, userId];
+        const requiredSigners =
+          document.metadata.requiredSigners || pendingSigners.length;
+        const remainingSigners = pendingSigners.filter(
+          (id) => !newCompletedSigners.includes(id),
+        );
 
         // Actualizar documento
         document.metadata = {
@@ -1320,32 +1575,24 @@ export class SignaturesService {
           completedSigners: newCompletedSigners,
         };
 
-        const requiredSigners =
-          document.metadata.requiredSigners || pendingSigners.length;
         const isProcessComplete = newCompletedSigners.length >= requiredSigners;
 
         if (isProcessComplete && !document.metadata.processCompleted) {
           document.metadata.processCompleted = true;
           document.metadata.completedAt = new Date().toISOString();
 
-          // Registrar en blockchain
-          try {
-            await this.blockchainService.updateDocumentRecord(
-              documentId,
-              this.cryptoService.generateHash(document.filePath),
-              'MULTI_SIGNATURE_QUORUM_REACHED',
-              'system',
-              {
-                requiredSigners,
-                totalSigners: newCompletedSigners.length,
-                timestamp: new Date().toISOString(),
-              },
-            );
-          } catch (error) {
-            this.logger.error(
-              `Error registrando en blockchain: ${error.message}`,
-            );
-          }
+          // Registrar completitud en blockchain
+          await this.blockchainService.updateDocumentRecord(
+            documentId,
+            this.cryptoService.generateHash(document.filePath),
+            'MULTI_SIGNATURE_QUORUM_REACHED',
+            'system',
+            {
+              requiredSigners,
+              totalSigners: newCompletedSigners.length,
+              completedAt: new Date().toISOString(),
+            },
+          );
 
           // Notificar completitud
           await this.notifySignaturesCompleted(
@@ -1353,27 +1600,20 @@ export class SignaturesService {
             document,
             await this.usersService.findOne(userId),
           );
+        } else {
+          // Notificar progreso si no está completo
+          const signer = await this.usersService.findOne(userId);
+          await this.notifyMultiSignatureProgress(
+            document,
+            signer,
+            signature,
+            newCompletedSigners.length,
+            requiredSigners,
+            remainingSigners,
+          );
         }
 
         await this.documentsService.update(documentId, document);
-
-        // Notificar firma individual
-        const signer = await this.usersService.findOne(userId);
-        const pendingSignersNames = await this.getPendingSignersNames(
-          pendingSigners,
-          newCompletedSigners,
-        );
-
-        await this.notifyDocumentSigned(
-          documentId,
-          document,
-          signer,
-          signature,
-          pendingSignersNames,
-          newCompletedSigners.length,
-          requiredSigners,
-          true,
-        );
       }
     }
 
@@ -1994,6 +2234,314 @@ export class SignaturesService {
           );
         }
       }
+    }
+  }
+
+  /**
+   * Obtiene estadísticas de procesos de firmas múltiples
+   */
+  async getMultiSignatureStats(): Promise<{
+    activeProcesses: number;
+    completedProcesses: number;
+    pendingSignatures: number;
+    averageCompletionTime: number;
+  }> {
+    try {
+      // Consultar documentos con procesos de firmas múltiples
+      const activeProcesses = await this.documentsRepository
+        .createQueryBuilder('doc')
+        .where("doc.metadata->>'multiSignatureProcess' = 'true'")
+        .andWhere("doc.metadata->>'processCompleted' != 'true'")
+        .getCount();
+
+      const completedProcesses = await this.documentsRepository
+        .createQueryBuilder('doc')
+        .where("doc.metadata->>'multiSignatureProcess' = 'true'")
+        .andWhere("doc.metadata->>'processCompleted' = 'true'")
+        .getCount();
+
+      // Calcular firmas pendientes
+      const activeDocuments = await this.documentsRepository
+        .createQueryBuilder('doc')
+        .where("doc.metadata->>'multiSignatureProcess' = 'true'")
+        .andWhere("doc.metadata->>'processCompleted' != 'true'")
+        .getMany();
+
+      let pendingSignatures = 0;
+      for (const doc of activeDocuments) {
+        const pendingSigners = doc.metadata?.pendingSigners || [];
+        const completedSigners = doc.metadata?.completedSigners || [];
+        pendingSignatures += pendingSigners.length - completedSigners.length;
+      }
+
+      // Calcular tiempo promedio de completitud (simplificado)
+      const completedDocs = await this.documentsRepository
+        .createQueryBuilder('doc')
+        .where("doc.metadata->>'multiSignatureProcess' = 'true'")
+        .andWhere("doc.metadata->>'processCompleted' = 'true'")
+        .andWhere("doc.metadata->>'initiatedAt' IS NOT NULL")
+        .andWhere("doc.metadata->>'completedAt' IS NOT NULL")
+        .getMany();
+
+      let totalTime = 0;
+      for (const doc of completedDocs) {
+        const initiated = new Date(doc.metadata.initiatedAt);
+        const completed = new Date(doc.metadata.completedAt);
+        totalTime += completed.getTime() - initiated.getTime();
+      }
+
+      const averageCompletionTime =
+        completedDocs.length > 0
+          ? Math.round(totalTime / completedDocs.length / (1000 * 60 * 60 * 24)) // días
+          : 0;
+
+      return {
+        activeProcesses,
+        completedProcesses,
+        pendingSignatures,
+        averageCompletionTime,
+      };
+    } catch (error) {
+      this.logger.error(`Error obteniendo estadísticas: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Obtiene procesos activos de firmas múltiples con paginación
+   */
+  async getActiveMultiSignatureProcesses(
+    page: number = 1,
+    limit: number = 20,
+  ): Promise<{
+    processes: any[];
+    total: number;
+    page: number;
+    totalPages: number;
+  }> {
+    try {
+      const skip = (page - 1) * limit;
+
+      const [documents, total] = await this.documentsRepository
+        .createQueryBuilder('doc')
+        .leftJoinAndSelect('doc.user', 'user')
+        .where("doc.metadata->>'multiSignatureProcess' = 'true'")
+        .andWhere("doc.metadata->>'processCompleted' != 'true'")
+        .orderBy('doc.createdAt', 'DESC')
+        .skip(skip)
+        .take(limit)
+        .getManyAndCount();
+
+      const processes = await Promise.all(
+        documents.map(async (doc) => {
+          const pendingSigners = doc.metadata?.pendingSigners || [];
+          const completedSigners = doc.metadata?.completedSigners || [];
+          const requiredSigners =
+            doc.metadata?.requiredSigners || pendingSigners.length;
+
+          // Obtener información de firmantes
+          const signerDetails = await Promise.all(
+            pendingSigners.map(async (signerId: string) => {
+              try {
+                const user = await this.usersService.findOne(signerId);
+                return {
+                  id: signerId,
+                  name: user.name,
+                  email: user.email,
+                  hasSigned: completedSigners.includes(signerId),
+                };
+              } catch {
+                return {
+                  id: signerId,
+                  name: 'Usuario no encontrado',
+                  email: 'N/A',
+                  hasSigned: completedSigners.includes(signerId),
+                };
+              }
+            }),
+          );
+
+          return {
+            documentId: doc.id,
+            title: doc.title,
+            owner: {
+              name: doc.user?.name || 'N/A',
+              email: doc.user?.email || 'N/A',
+            },
+            initiatedAt: doc.metadata?.initiatedAt,
+            requiredSigners,
+            completedSigners: completedSigners.length,
+            pendingSigners: pendingSigners.length - completedSigners.length,
+            progress: Math.round(
+              (completedSigners.length / requiredSigners) * 100,
+            ),
+            signers: signerDetails,
+          };
+        }),
+      );
+
+      return {
+        processes,
+        total,
+        page,
+        totalPages: Math.ceil(total / limit),
+      };
+    } catch (error) {
+      this.logger.error(`Error obteniendo procesos activos: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Envía recordatorios masivos a firmantes pendientes
+   */
+  async sendBulkSignatureReminders(): Promise<{
+    sent: number;
+    failed: number;
+    details: string[];
+  }> {
+    try {
+      const activeDocuments = await this.documentsRepository
+        .createQueryBuilder('doc')
+        .where("doc.metadata->>'multiSignatureProcess' = 'true'")
+        .andWhere("doc.metadata->>'processCompleted' != 'true'")
+        .getMany();
+
+      let sent = 0;
+      let failed = 0;
+      const details: string[] = [];
+
+      for (const doc of activeDocuments) {
+        const pendingSigners = doc.metadata?.pendingSigners || [];
+        const completedSigners = doc.metadata?.completedSigners || [];
+        const remainingSigners = pendingSigners.filter(
+          (id: string) => !completedSigners.includes(id),
+        );
+
+        for (const signerId of remainingSigners) {
+          try {
+            const signer = await this.usersService.findOne(signerId);
+            const owner = await this.usersService.findOne(doc.userId);
+
+            if (signer && owner) {
+              const frontendUrl =
+                this.configService.get<string>('FRONTEND_URL') ||
+                'http://localhost:3001';
+
+              await this.emailService.sendSignatureReminderEmail(signer.email, {
+                signerName: signer.name,
+                documentTitle: doc.title,
+                documentUrl: `${frontendUrl}/documents/${doc.id}`,
+                recentSignerName: 'Sistema',
+                completedSigners: completedSigners.length,
+                requiredSigners:
+                  doc.metadata?.requiredSigners || pendingSigners.length,
+                progress: Math.round(
+                  (completedSigners.length /
+                    (doc.metadata?.requiredSigners || pendingSigners.length)) *
+                    100,
+                ),
+              });
+
+              sent++;
+              details.push(
+                `Recordatorio enviado a ${signer.email} para documento "${doc.title}"`,
+              );
+            }
+          } catch (error) {
+            failed++;
+            details.push(
+              `Error enviando recordatorio para documento "${doc.title}": ${error.message}`,
+            );
+          }
+        }
+      }
+
+      this.logger.log(
+        `Recordatorios masivos: ${sent} enviados, ${failed} fallidos`,
+      );
+
+      return {
+        sent,
+        failed,
+        details,
+      };
+    } catch (error) {
+      this.logger.error(`Error en recordatorios masivos: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Obtiene detalles completos de un proceso de firmas múltiples
+   */
+  async getMultiSignatureProcessDetails(documentId: string): Promise<any> {
+    try {
+      const document = await this.documentsRepository.findOne({
+        where: { id: documentId },
+      });
+
+      if (!document || !document.metadata?.multiSignatureProcess) {
+        throw new NotFoundException(
+          'Proceso de firmas múltiples no encontrado',
+        );
+      }
+
+      const owner = await this.usersService.findOne(document.userId);
+      const signatures = await this.getDocumentSignatures(documentId);
+
+      const pendingSigners = document.metadata?.pendingSigners || [];
+      const completedSigners = document.metadata?.completedSigners || [];
+      const requiredSigners =
+        document.metadata?.requiredSigners || pendingSigners.length;
+
+      // Obtener detalles de todos los firmantes
+      const signerDetails = await Promise.all(
+        pendingSigners.map(async (signerId: string) => {
+          const user = await this.usersService.findOne(signerId);
+          const signature = signatures.find((s) => s.userId === signerId);
+
+          return {
+            id: signerId,
+            name: user?.name || 'Usuario no encontrado',
+            email: user?.email || 'N/A',
+            hasSigned: completedSigners.includes(signerId),
+            signedAt: signature?.signedAt || null,
+            signatureValid: signature?.valid || false,
+          };
+        }),
+      );
+
+      return {
+        documentId: document.id,
+        title: document.title,
+        owner: {
+          id: owner?.id,
+          name: owner?.name || 'N/A',
+          email: owner?.email || 'N/A',
+        },
+        initiatedAt: document.metadata.initiatedAt,
+        completedAt: document.metadata.completedAt,
+        isCompleted: document.metadata.processCompleted || false,
+        requiredSigners,
+        totalSigners: pendingSigners.length,
+        completedSignatures: completedSigners.length,
+        pendingSignatures: pendingSigners.length - completedSigners.length,
+        progress: Math.round((completedSigners.length / requiredSigners) * 100),
+        signers: signerDetails,
+        signatures: signatures.map((sig) => ({
+          id: sig.id,
+          userId: sig.userId,
+          signedAt: sig.signedAt,
+          valid: sig.valid,
+          reason: sig.reason,
+        })),
+      };
+    } catch (error) {
+      this.logger.error(
+        `Error obteniendo detalles del proceso: ${error.message}`,
+      );
+      throw error;
     }
   }
 }

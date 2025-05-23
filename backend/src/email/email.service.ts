@@ -393,9 +393,38 @@ export class EmailService {
       documentUrl: string;
       permissionLevel: string;
       message?: string;
+      isMultiSignatureProcess?: boolean;
+      multiSignatureInfo?: {
+        requiredSigners: number;
+        totalSigners: number;
+        dueDate: string;
+      };
     },
   ): Promise<boolean> {
     this.logger.log(`Enviando notificación de documento compartido a ${email}`);
+
+    // Si es parte de un proceso de firmas múltiples, usar plantilla específica
+    if (data.isMultiSignatureProcess && data.multiSignatureInfo) {
+      return this.sendTemplateEmail({
+        to: email,
+        subject: `Solicitud de firma: "${data.documentTitle}"`,
+        template: 'multi-signature-request',
+        context: {
+          signerName: data.userName,
+          ownerName: data.sharerName,
+          documentTitle: data.documentTitle,
+          documentUrl: data.documentUrl,
+          requiredSigners: data.multiSignatureInfo.requiredSigners,
+          totalSigners: data.multiSignatureInfo.totalSigners,
+          dueDate: data.multiSignatureInfo.dueDate,
+          instructions:
+            data.message ||
+            'Para firmar el documento, haga clic en el enlace anterior, inicie sesión en su cuenta y siga las instrucciones en pantalla.',
+        },
+      });
+    }
+
+    // Usar plantilla estándar para compartición normal
     return this.sendTemplateEmail({
       to: email,
       subject: `${data.sharerName} ha compartido un documento contigo`,
@@ -526,6 +555,83 @@ export class EmailService {
       to: email,
       subject: `${data.mentionedBy} te ha mencionado en un comentario`,
       template: 'mention-notification',
+      context: data,
+    });
+  }
+
+  /**
+   * Envía notificación de solicitud de firma múltiple
+   */
+  async sendMultiSignatureRequestEmail(
+    email: string,
+    data: {
+      signerName: string;
+      ownerName: string;
+      documentTitle: string;
+      documentUrl: string;
+      requiredSigners: number;
+      totalSigners: number;
+      dueDate: string;
+      instructions: string;
+    },
+  ): Promise<boolean> {
+    this.logger.log(`Enviando solicitud de firma múltiple a ${email}`);
+    return this.sendTemplateEmail({
+      to: email,
+      subject: `Solicitud de firma: "${data.documentTitle}"`,
+      template: 'multi-signature-request',
+      context: data,
+    });
+  }
+
+  /**
+   * Envía notificación de progreso en firmas múltiples
+   */
+  async sendMultiSignatureProgressEmail(
+    email: string,
+    data: {
+      ownerName: string;
+      signerName: string;
+      documentTitle: string;
+      documentUrl: string;
+      completedSigners: number;
+      requiredSigners: number;
+      remainingSigners: number;
+      progress: number;
+      isComplete: boolean;
+    },
+  ): Promise<boolean> {
+    this.logger.log(`Enviando progreso de firma múltiple a ${email}`);
+    return this.sendTemplateEmail({
+      to: email,
+      subject: data.isComplete
+        ? `Proceso completado: "${data.documentTitle}"`
+        : `Progreso de firmas: "${data.documentTitle}"`,
+      template: 'multi-signature-progress',
+      context: data,
+    });
+  }
+
+  /**
+   * Envía recordatorio de firma pendiente
+   */
+  async sendSignatureReminderEmail(
+    email: string,
+    data: {
+      signerName: string;
+      documentTitle: string;
+      documentUrl: string;
+      recentSignerName: string;
+      completedSigners: number;
+      requiredSigners: number;
+      progress: number;
+    },
+  ): Promise<boolean> {
+    this.logger.log(`Enviando recordatorio de firma a ${email}`);
+    return this.sendTemplateEmail({
+      to: email,
+      subject: `Recordatorio de firma: "${data.documentTitle}"`,
+      template: 'signature-reminder',
       context: data,
     });
   }

@@ -1,0 +1,93 @@
+{{
+#>
+email-base}}
+<div style="max-width: 600px; margin: 0 auto; font-family: Arial, sans-serif;">
+  <div style="background: linear-gradient(135deg, #ed8936 0%, #dd6b20 100%); padding: 40px 20px; text-align: center;">
+    {{
+    #if
+    logoExists}}
+    <img src="cid:logotipo" alt="DocuSense" style="height: 40px; margin-bottom: 20px;">
+    {{
+    /if
+    }}
+    <h1 style="color: white; margin: 0; font-size: 28px; font-weight: 300;">
+      Recordatorio de Firma
+    </h1>
+  </div>
+
+  <div style="background: white; padding: 40px 30px;">
+    <div style="text-align: center; margin-bottom: 30px;">
+      <div
+        style="background: #fffaf0; border-radius: 50%; width: 80px; height: 80px; margin: 0 auto 20px; display: flex; align-items: center; justify-content: center;">
+        <svg width="40" height="40" fill="#ed8936" viewBox="0 0 24 24">
+          <path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+      </div>
+      <h2 style="color: #2d3748; margin: 0 0 10px 0; font-size: 24px;">
+        ¡Hola {{signerName}}!
+      </h2>
+      <p style="color: #718096; margin: 0; font-size: 16px;">
+        Tu firma digital sigue pendiente para este documento
+      </p>
+    </div>
+
+    <div style="background: #f7fafc; border-radius: 12px; padding: 25px; margin-bottom: 30px;">
+      <h3 style="color: #2d3748; margin: 0 0 15px 0; font-size: 18px;">
+        📄 {{documentTitle}}
+      </h3>
+
+      <div
+        style="background: #fff5f5; border: 1px solid #feb2b2; border-radius: 8px; padding: 15px; margin-bottom: 20px;">
+        <p style="color: #742a2a; margin: 0; font-size: 14px;">
+          <strong>Progreso actualizado:</strong> {{recentSignerName}} acaba de firmar el documento.
+        </p>
+      </div>
+
+      <div style="background: white; padding: 15px; border-radius: 8px; border-left: 4px solid #ed8936;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <p style="margin: 0 0 5px 0; color: #2d3748; font-weight: 600;">Estado del Proceso</p>
+            <p style="margin: 0; color: #718096; font-size: 14px;">
+              {{completedSigners}} de {{requiredSigners}} firmas completadas ({{progress}}%)
+            </p>
+          </div>
+          <div style="text-align: right;">
+            <div
+              style="background: #ed8936; color: white; padding: 6px 12px; border-radius: 15px; font-size: 12px; font-weight: 600;">
+              TU FIRMA PENDIENTE
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="text-align: center; margin-bottom: 30px;">
+      <a href="{{documentUrl}}"
+        style="display: inline-block; background: linear-gradient(135deg, #ed8936 0%, #dd6b20 100%); color: white; text-decoration: none; padding: 15px 40px; border-radius: 50px; font-weight: 600; font-size: 16px; box-shadow: 0 4px 15px rgba(237, 137, 54, 0.4);">
+        ⚡ Firmar Ahora
+      </a>
+    </div>
+
+    <div style="background: #fffbf0; border: 1px solid #f6e05e; border-radius: 8px; padding: 20px;">
+      <h4 style="color: #744210; margin: 0 0 10px 0; font-size: 16px; display: flex; align-items: center;">
+        <svg width="16" height="16" fill="#d69e2e" viewBox="0 0 24 24" style="margin-right: 8px;">
+          <path d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        ¿Por qué es importante tu firma?
+      </h4>
+      <p style="color: #744210; margin: 0; font-size: 14px; line-height: 1.6;">
+        Este documento requiere firmas múltiples para ser válido. Tu participación es esencial para completar el proceso
+        y permitir que el documento sea legalmente vinculante.
+      </p>
+    </div>
+  </div>
+
+  <div style="background: #f7fafc; padding: 30px; text-align: center; border-top: 1px solid #e2e8f0;">
+    <p style="color: #718096; margin: 0; font-size: 12px;">
+      Este es un recordatorio automático de DocuSense. No responda a este correo.
+    </p>
+  </div>
+</div>
+{{
+/email-base
+}}

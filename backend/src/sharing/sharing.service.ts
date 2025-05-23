@@ -182,13 +182,14 @@ export class SharingService {
           targetEmail: email,
           permissionLevel,
           action: 'update',
+          isMultiSignatureProcess: !!document.metadata?.multiSignatureProcess,
         },
         ipAddress,
         userAgent,
       );
 
-      // Notificar al usuario si se solicitó
-      if (notifyUser) {
+      // Notificar al usuario si se solicitó (verificar si no es proceso de firmas múltiples)
+      if (notifyUser && userAgent !== 'multi-signature-process') {
         // Obtener información del usuario que comparte
         const sharerUser = await this.usersService.findOne(sharerUserId);
 
@@ -197,7 +198,7 @@ export class SharingService {
           this.configService.get<string>('FRONTEND_URL') ||
           'http://localhost:3001';
 
-        // Enviar email de notificación
+        // Enviar email de notificación estándar
         await this.emailService.sendSharedDocumentEmail(targetUser.email, {
           userName: targetUser.name,
           sharerName: sharerUser.name,
@@ -205,6 +206,7 @@ export class SharingService {
           documentUrl: `${frontendUrl}/documents/${documentId}`,
           permissionLevel: this.translatePermissionLevel(permissionLevel),
           message: message,
+          isMultiSignatureProcess: false,
         });
 
         this.logger.log(
@@ -224,8 +226,10 @@ export class SharingService {
       expiresAt: expiresAt ? new Date(expiresAt) : null,
       createdBy: sharerUserId,
       metadata: {
-        sharedVia: 'email',
+        sharedVia:
+          userAgent === 'multi-signature-process' ? 'multi-signature' : 'email',
         message: shareDocumentDto.message,
+        isMultiSignatureProcess: !!document.metadata?.multiSignatureProcess,
       },
     });
 
@@ -242,13 +246,15 @@ export class SharingService {
         targetEmail: email,
         permissionLevel,
         action: 'create',
+        isMultiSignatureProcess: !!document.metadata?.multiSignatureProcess,
       },
       ipAddress,
       userAgent,
     );
 
-    // Notificar al usuario si se solicitó
-    if (notifyUser) {
+    // NO enviar notificación aquí si es parte de proceso de firmas múltiples
+    // Las notificaciones se manejan por separado en el servicio de firmas
+    if (notifyUser && userAgent !== 'multi-signature-process') {
       // Obtener información del usuario que comparte
       const sharerUser = await this.usersService.findOne(sharerUserId);
 
@@ -257,7 +263,7 @@ export class SharingService {
         this.configService.get<string>('FRONTEND_URL') ||
         'http://localhost:3001';
 
-      // Enviar email de notificación
+      // Enviar email de notificación estándar
       await this.emailService.sendSharedDocumentEmail(targetUser.email, {
         userName: targetUser.name,
         sharerName: sharerUser.name,
@@ -265,6 +271,7 @@ export class SharingService {
         documentUrl: `${frontendUrl}/documents/${documentId}`,
         permissionLevel: this.translatePermissionLevel(permissionLevel),
         message: message,
+        isMultiSignatureProcess: false,
       });
 
       this.logger.log(`Notificación enviada a ${email} por nuevo permiso`);

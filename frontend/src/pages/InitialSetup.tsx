@@ -1,12 +1,12 @@
-// frontend/src/pages/InitialSetup.tsx
 import { useState } from 'react';
-//import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import Button from '../components/Button';
 import Input from '../components/Input';
+import { useNotifications } from '../components/NotificationSystem';
 
 const InitialSetup = () => {
-  //const navigate = useNavigate();
+  const navigate = useNavigate();
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -15,6 +15,7 @@ const InitialSetup = () => {
   });
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const { success } = useNotifications();
 
   const handleChange = (e: any) => {
     setFormData({
@@ -30,10 +31,11 @@ const InitialSetup = () => {
 
     try {
       await api.post('/api/admin/setup/initial-admin', formData);
-      alert(
+      success(
         'Administrador inicial creado correctamente. Ahora puedes iniciar sesión.',
+        'pSDK-200',
       );
-      //navigate('/login');
+      navigate('/login');
     } catch (err: any) {
       setError(
         err.response?.data?.message || 'Error al crear administrador inicial',

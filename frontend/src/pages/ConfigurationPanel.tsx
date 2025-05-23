@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import Button from '../components/Button';
 import Input from '../components/Input';
 import configService, { SystemConfig } from '../services/ConfigService';
+import { useNotifications } from '../components/NotificationSystem';
 
 // Componente principal
 const ConfigurationPanel = () => {
@@ -15,6 +16,7 @@ const ConfigurationPanel = () => {
   const [isTesting, setIsTesting] = useState(false);
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
+  const { confirm } = useNotifications();
 
   // Cargar configuración al iniciar
   useEffect(() => {
@@ -85,11 +87,11 @@ const ConfigurationPanel = () => {
 
   // Función para resetear a valores predeterminados
   const resetToDefaults = async (section: keyof SystemConfig) => {
-    if (
-      !window.confirm(
-        `¿Estás seguro de que deseas restablecer la sección ${section} a los valores predeterminados?`,
-      )
-    ) {
+    const confirmed = await confirm(
+      `¿Estás seguro de que deseas restablecer la sección ${section} a los valores predeterminados?`,
+      'Confirmar',
+    );
+    if (!confirmed) {
       return;
     }
 

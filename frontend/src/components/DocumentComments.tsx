@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { api } from '../api/client';
 import useAuth from '../hooks/UseAuth';
 import RichCommentEditor from './RichCommentEditor';
+import { useNotifications } from '../components/NotificationSystem';
 
 interface User {
   id: string;
@@ -332,6 +333,7 @@ const DocumentComments = ({
   const [canComment, setCanComment] = useState(false);
   //@ts-ignore
   const [unreadCommentsCount, setUnreadCommentsCount] = useState(0);
+  const { errorNotification, confirm } = useNotifications();
 
   // Para verificar nuevos comentarios periódicamente (con websockets o polling)
   const checkForNewComments = () => {
@@ -536,7 +538,11 @@ const DocumentComments = ({
   };
 
   const deleteComment = async (commentId: string) => {
-    if (!window.confirm('¿Está seguro de eliminar este comentario?')) {
+    const confirmed = await confirm(
+      '¿Está seguro de eliminar este comentario? Esta acción no se puede deshacer.',
+      'Confirmar eliminación',
+    );
+    if (!confirmed) {
       return;
     }
 
@@ -546,6 +552,13 @@ const DocumentComments = ({
     } catch (err: any) {
       console.error('Error deleting comment:', err);
       setError(err?.response?.data?.message || 'Error al eliminar comentario');
+      errorNotification(
+        'No se pudo eliminar el comentario. Intente nuevamente más tarde.',
+        'pSDK-500',
+        {
+          persistent: true, // Los errores son persistentes por defecto
+        },
+      );
     }
   };
 

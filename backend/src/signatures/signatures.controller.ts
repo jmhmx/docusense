@@ -11,6 +11,7 @@ import {
   BadRequestException,
   Headers,
   Ip,
+  ForbiddenException,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { SignaturesService } from './signatures.service';
@@ -405,6 +406,29 @@ export class SignaturesController {
     } catch (error) {
       throw new BadRequestException(
         `No se pudo firmar el documento: ${error.message}`,
+      );
+    }
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('sync-all-processes')
+  async syncAllMultiSignatureProcesses(@Request() req) {
+    // Solo admins pueden ejecutar sincronización masiva
+    if (!req.user.isAdmin) {
+      throw new ForbiddenException(
+        'Solo administradores pueden ejecutar sincronización',
+      );
+    }
+
+    try {
+      await this.signaturesService.syncAllMultiSignatureProcesses();
+      return {
+        success: true,
+        message: 'Sincronización de procesos de firma múltiple completada',
+      };
+    } catch (error) {
+      throw new BadRequestException(
+        `Error en sincronización: ${error.message}`,
       );
     }
   }

@@ -7,6 +7,7 @@ import ContentSearch from '../components/ContentSearch';
 import AnalyticsDashboard from './AnalyticsDashboard';
 import Button from '../components/Button';
 import DocumentStatusBadge from '../components/DocumentStatusBadge';
+import { useNotifications } from '../components/NotificationSystem';
 
 // Tipos
 interface DocumentType {
@@ -62,6 +63,7 @@ const Dashboard = () => {
   const [sharedDocuments, setSharedDocuments] = useState<DocumentType[]>([]);
   const [showAnalytics, setShowAnalytics] = useState(false);
   const [activeView, setActiveView] = useState<'grid' | 'list'>('list');
+  const { errorNotification, confirm } = useNotifications();
 
   // Cargar documentos al iniciar
   const fetchDocuments = async () => {
@@ -169,14 +171,24 @@ const Dashboard = () => {
 
   // Eliminar documento
   const handleDeleteDocument = async (id: string) => {
-    if (!window.confirm('¿Estás seguro de eliminar este documento?')) return;
+    const confirmed = await confirm(
+      '¿Está seguro de que desea eliminar este documento? Esta acción no se puede deshacer.',
+      'Confirmar eliminación',
+    );
+    if (!confirmed) return;
 
     try {
       await api.delete(`/api/documents/${id}`);
       setDocuments(documents.filter((doc) => doc.id !== id));
     } catch (err) {
       console.error('Error al eliminar documento:', err);
-      alert('No se pudo eliminar el documento. Intente nuevamente más tarde.');
+      errorNotification(
+        'No se pudo eliminar el documento. Intente nuevamente más tarde.',
+        'pSDK-500',
+        {
+          persistent: true, // Los errores son persistentes por defecto
+        },
+      );
     }
   };
 

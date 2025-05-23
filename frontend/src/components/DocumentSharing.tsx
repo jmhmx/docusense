@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { api } from '../api/client';
 import Button from './Button';
-//import Input from './Input';
+import { useNotifications } from '../components/NotificationSystem';
 
 interface User {
   id: string;
@@ -51,6 +51,7 @@ const DocumentSharing = ({
   const [success, setSuccess] = useState<string | null>(null);
   const [shareLink, setShareLink] = useState<string | null>(null);
   const [canShare, setCanShare] = useState(true);
+  const { errorNotification, confirm } = useNotifications();
 
   useEffect(() => {
     fetchUsers();
@@ -164,7 +165,11 @@ const DocumentSharing = ({
   };
 
   const handleRevokeAccess = async (userId: string) => {
-    if (!window.confirm('¿Está seguro de revocar el acceso a este usuario?')) {
+    const confirmed = await confirm(
+      '¿Está seguro de revocar el acceso a este usuario?',
+      'Confirmar',
+    );
+    if (!confirmed) {
       return;
     }
 
@@ -193,11 +198,22 @@ const DocumentSharing = ({
     } catch (err: any) {
       console.error('Error revoking access:', err);
       setError(err?.response?.data?.message || 'Error al revocar acceso');
+      errorNotification(
+        'No se pudo revocar el acceso al usuario. Intente nuevamente más tarde.',
+        'pSDK-500',
+        {
+          persistent: true, // Los errores son persistentes por defecto
+        },
+      );
     }
   };
 
   const handleDeactivateLink = async (linkId: string) => {
-    if (!window.confirm('¿Está seguro de desactivar este enlace?')) {
+    const confirmed = await confirm(
+      '¿Está seguro de desactivar este enlace?',
+      'Confirmar',
+    );
+    if (!confirmed) {
       return;
     }
 
@@ -208,6 +224,13 @@ const DocumentSharing = ({
     } catch (err: any) {
       console.error('Error deactivating link:', err);
       setError(err?.response?.data?.message || 'Error al desactivar enlace');
+      errorNotification(
+        'No se pudo desactivar el enlace. Intente nuevamente más tarde.',
+        'pSDK-500',
+        {
+          persistent: true, // Los errores son persistentes por defecto
+        },
+      );
     }
   };
 

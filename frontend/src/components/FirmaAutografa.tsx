@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import Button from './Button';
+import { useNotifications } from '../components/NotificationSystem';
 
 interface FirmaAutografaProps {
   onSave: (firmaBase64: string) => void;
@@ -23,6 +24,7 @@ const FirmaAutografa = ({
   const [lastPoint, setLastPoint] = useState<{ x: number; y: number } | null>(
     null,
   );
+  const { errorNotification, warning } = useNotifications();
 
   // Inicializar canvas con una resolución alta para mejor calidad de firma
   useEffect(() => {
@@ -223,7 +225,7 @@ const FirmaAutografa = ({
 
       if (!hasContent) {
         console.error('Canvas vacío');
-        alert('Por favor dibuje su firma antes de guardar');
+        warning('Por favor dibuje su firma antes de guardar', 'pSDK-300');
         return;
       }
 
@@ -290,14 +292,20 @@ const FirmaAutografa = ({
         'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=='
       ) {
         console.error('Canvas resultó en imagen vacía');
-        alert('Error: la firma está vacía');
+        warning('Error: la firma está vacía', 'pSDK-300');
         return;
       }
 
       onSave(dataUrl);
     } catch (error) {
       console.error('Error al guardar la firma:', error);
-      alert('Error al procesar la firma. Intente nuevamente.');
+      errorNotification(
+        'Error al procesar la firma. Intente nuevamente.',
+        'pSDK-500',
+        {
+          persistent: true, // Los errores son persistentes por defecto
+        },
+      );
     }
   };
 

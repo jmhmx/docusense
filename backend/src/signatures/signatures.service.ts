@@ -1094,6 +1094,9 @@ export class SignaturesService {
     );
   }
 
+  /**
+   * Verifica si se ha alcanzado el quorum basándose en firmas reales
+   */
   async validateSignatureQuorum(documentId: string): Promise<boolean> {
     const document = await this.documentsRepository.findOne({
       where: { id: documentId },
@@ -1103,13 +1106,73 @@ export class SignaturesService {
       return true; // No es proceso multi-firma
     }
 
+    // Obtener firmas válidas reales
     const signatures = await this.signaturesRepository.find({
       where: { documentId, valid: true },
     });
 
+    const pendingSigners = document.metadata.pendingSigners || [];
     const requiredSigners = document.metadata.requiredSigners || 0;
 
-    return signatures.length >= requiredSigners;
+    // Contar firmas de usuarios que están en la lista de firmantes pendientes
+    const validCompletedSigners = signatures
+      .map((sig) => sig.userId)
+      .filter((userId) => pendingSigners.includes(userId));
+
+    const quorumReached = validCompletedSigners.length >= requiredSigners;
+
+    // Si el quorum se alcanzó pero no está marcado en la BD, actualizar
+    if (quorumReached && !document.metadata.processCompleted) {
+      document.metadata = {
+        ...document.metadata,
+        completedSigners: validCompletedSigners,
+        processCompleted: true,
+        completedAt: new Date().toISOString(),
+      };
+
+      await this.documentsService.update(documentId, document);
+
+      this.logger.log(
+        `Quorum alcanzado para documento ${documentId}: ${validCompletedSigners.length}/${requiredSigners}`,
+      );
+    }
+
+    return quorumReached;
+  }
+
+  /**
+   * Método para sincronizar el estado de todos los documentos con procesos de firmas múltiples
+   * Útil para ejecutar al iniciar el servicio o periódicamente
+   */
+  async syncAllMultiSignatureProcesses(): Promise<void> {
+    try {
+      // Buscar todos los documentos con procesos de firmas múltiples activos
+      const documentsWithMultiSig = await this.documentsRepository
+        .createQueryBuilder('doc')
+        .where("doc.metadata->>'multiSignatureProcess' = 'true'")
+        .andWhere("doc.metadata->>'processCompleted' != 'true'")
+        .getMany();
+
+      this.logger.log(
+        `Sincronizando ${documentsWithMultiSig.length} documentos con procesos de firma múltiple`,
+      );
+
+      for (const document of documentsWithMultiSig) {
+        try {
+          await this.getDocumentSignatureStatus(document.id);
+        } catch (error) {
+          this.logger.error(
+            `Error sincronizando documento ${document.id}: ${error.message}`,
+          );
+        }
+      }
+
+      this.logger.log(
+        'Sincronización de procesos de firma múltiple completada',
+      );
+    } catch (error) {
+      this.logger.error(`Error en sincronización masiva: ${error.message}`);
+    }
   }
 
   /**
@@ -1125,7 +1188,7 @@ export class SignaturesService {
       throw new NotFoundException(`Documento no encontrado: ${documentId}`);
     }
 
-    // Obtener todas las firmas del documento
+    // Obtener todas las firmas válidas del documento
     const signatures = await this.signaturesRepository.find({
       where: { documentId, valid: true },
     });
@@ -1143,47 +1206,71 @@ export class SignaturesService {
     const pendingSigners = document.metadata.pendingSigners || [];
     const requiredSigners = document.metadata.requiredSigners || 0;
 
-    // Determinar quiénes han completado su firma
-    const completedSigners = signatures
+    // CORRECCIÓN: Calcular completedSigners basándose en las firmas reales
+    const actualCompletedSigners = signatures
       .map((sig) => sig.userId)
       .filter((userId) => pendingSigners.includes(userId));
 
     // Verificar si el proceso está completo (quórum alcanzado)
-    const isComplete = completedSigners.length >= requiredSigners;
+    const isComplete = actualCompletedSigners.length >= requiredSigners;
 
-    // Si el proceso está completo pero no se ha marcado como tal en el documento
-    if (isComplete && !document.metadata.processCompleted) {
-      // Actualizar documento
+    // CORRECCIÓN: Verificar y actualizar el estado si es necesario
+    const storedCompletedSigners = document.metadata.completedSigners || [];
+    const processCompletedInDB = document.metadata.processCompleted || false;
+
+    // Si el estado calculado no coincide con el almacenado, actualizar
+    if (
+      isComplete !== processCompletedInDB ||
+      actualCompletedSigners.length !== storedCompletedSigners.length
+    ) {
+      this.logger.log(`Sincronizando estado del documento ${documentId}: 
+        Calculado: ${isComplete}, BD: ${processCompletedInDB}
+        Firmas calculadas: ${actualCompletedSigners.length}, BD: ${storedCompletedSigners.length}`);
+
+      // Actualizar documento con el estado real
       document.metadata = {
         ...document.metadata,
-        processCompleted: true,
-        completedAt: new Date().toISOString(),
+        completedSigners: actualCompletedSigners,
+        processCompleted: isComplete,
+        completedAt:
+          isComplete && !processCompletedInDB
+            ? new Date().toISOString()
+            : document.metadata.completedAt,
       };
 
       await this.documentsService.update(documentId, document);
 
-      // Registrar en blockchain
-      await this.blockchainService.updateDocumentRecord(
-        documentId,
-        this.cryptoService.generateHash(document.filePath),
-        'MULTI_SIGNATURE_COMPLETED',
-        'system',
-        {
-          completedSigners,
-          timestamp: new Date().toISOString(),
-        },
-      );
+      // Si se completó el proceso y no estaba marcado antes, registrar en blockchain
+      if (isComplete && !processCompletedInDB) {
+        try {
+          await this.blockchainService.updateDocumentRecord(
+            documentId,
+            this.cryptoService.generateHash(document.filePath),
+            'MULTI_SIGNATURE_COMPLETED_SYNC',
+            'system',
+            {
+              completedSigners: actualCompletedSigners,
+              timestamp: new Date().toISOString(),
+              reason: 'quorum_sync',
+            },
+          );
+        } catch (error) {
+          this.logger.error(
+            `Error registrando sincronización en blockchain: ${error.message}`,
+          );
+        }
+      }
     }
 
     return {
       multiSignatureProcess: true,
       initiatedAt: document.metadata.initiatedAt,
       pendingSigners,
-      completedSigners,
+      completedSigners: actualCompletedSigners, // Usar los calculados
       requiredSigners,
       totalSigners: pendingSigners.length,
       isComplete,
-      processCompleted: document.metadata.processCompleted || false,
+      processCompleted: isComplete, // Usar el estado calculado
       completedAt: document.metadata.completedAt,
     };
   }
@@ -1215,83 +1302,34 @@ export class SignaturesService {
       where: { id: documentId },
     });
 
-    // Obtener información del firmante para las notificaciones
-    const signer = await this.usersService.findOne(userId);
-    if (!signer) {
-      this.logger.error(`No se pudo encontrar el usuario firmante: ${userId}`);
-      return signature;
-    }
-
-    // Obtener URL del frontend
-    const frontendUrl =
-      this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3001';
-    const documentUrl = `${frontendUrl}/documents/${documentId}`;
-
-    let pendingSignersMsg = '';
-    let completedSigners = 0;
-    let totalRequiredSigners = 0;
-    let isMultiSignatureProcess = false;
-
     if (document?.metadata?.multiSignatureProcess) {
-      isMultiSignatureProcess = true;
-      // Actualizar estado del proceso
+      // CORRECCIÓN: Solo actualizar si el usuario está en la lista y no ha completado ya
       const pendingSigners = document.metadata.pendingSigners || [];
-      totalRequiredSigners =
-        document.metadata.requiredSigners || pendingSigners.length;
+      const completedSigners = document.metadata.completedSigners || [];
 
-      // Verificar si este usuario está en la lista de firmantes pendientes
-      if (pendingSigners.includes(userId)) {
-        // Obtener lista actual de completados o crear una nueva
-        const completedSignersArray = document.metadata.completedSigners || [];
-        completedSigners = completedSignersArray.length;
+      if (
+        pendingSigners.includes(userId) &&
+        !completedSigners.includes(userId)
+      ) {
+        // Añadir este firmante a la lista de completados
+        const newCompletedSigners = [...completedSigners, userId];
 
-        // Añadir este firmante si no está ya
-        if (!completedSignersArray.includes(userId)) {
-          completedSignersArray.push(userId);
-          completedSigners = completedSignersArray.length;
+        // Actualizar documento
+        document.metadata = {
+          ...document.metadata,
+          completedSigners: newCompletedSigners,
+        };
 
-          // Actualizar documento
-          document.metadata = {
-            ...document.metadata,
-            completedSigners: completedSignersArray,
-          };
+        const requiredSigners =
+          document.metadata.requiredSigners || pendingSigners.length;
+        const isProcessComplete = newCompletedSigners.length >= requiredSigners;
 
-          await this.documentsService.update(documentId, document);
+        if (isProcessComplete && !document.metadata.processCompleted) {
+          document.metadata.processCompleted = true;
+          document.metadata.completedAt = new Date().toISOString();
 
-          // Obtener nombres de firmantes pendientes para las notificaciones
-          const pendingSignersArray = pendingSigners.filter(
-            (id) => !completedSignersArray.includes(id),
-          );
-
-          if (pendingSignersArray.length > 0) {
-            // Obtener nombres de los firmantes pendientes
-            const pendingUsers = await Promise.all(
-              pendingSignersArray.map((id) => this.usersService.findOne(id)),
-            );
-
-            pendingSignersMsg = pendingUsers
-              .filter((user) => user) // Filtrar usuarios no encontrados
-              .map((user) => user.name)
-              .join(', ');
-          }
-
-          // Verificar si se ha alcanzado el quórum
-          const requiredSigners =
-            document.metadata.requiredSigners || pendingSigners.length;
-          const isProcessComplete =
-            completedSignersArray.length >= requiredSigners;
-
-          if (isProcessComplete && !document.metadata.processCompleted) {
-            // Marcar proceso como completo
-            document.metadata = {
-              ...document.metadata,
-              processCompleted: true,
-              completedAt: new Date().toISOString(),
-            };
-
-            await this.documentsService.update(documentId, document);
-
-            // Registrar en blockchain
+          // Registrar en blockchain
+          try {
             await this.blockchainService.updateDocumentRecord(
               documentId,
               this.cryptoService.generateHash(document.filePath),
@@ -1299,31 +1337,75 @@ export class SignaturesService {
               'system',
               {
                 requiredSigners,
-                totalSigners: completedSignersArray.length,
+                totalSigners: newCompletedSigners.length,
                 timestamp: new Date().toISOString(),
               },
             );
-
-            // Notificar a todos los participantes que se ha completado el proceso
-            await this.notifySignaturesCompleted(documentId, document, signer);
+          } catch (error) {
+            this.logger.error(
+              `Error registrando en blockchain: ${error.message}`,
+            );
           }
+
+          // Notificar completitud
+          await this.notifySignaturesCompleted(
+            documentId,
+            document,
+            await this.usersService.findOne(userId),
+          );
         }
+
+        await this.documentsService.update(documentId, document);
+
+        // Notificar firma individual
+        const signer = await this.usersService.findOne(userId);
+        const pendingSignersNames = await this.getPendingSignersNames(
+          pendingSigners,
+          newCompletedSigners,
+        );
+
+        await this.notifyDocumentSigned(
+          documentId,
+          document,
+          signer,
+          signature,
+          pendingSignersNames,
+          newCompletedSigners.length,
+          requiredSigners,
+          true,
+        );
       }
     }
 
-    // Notificar a todos los usuarios con acceso al documento
-    await this.notifyDocumentSigned(
-      documentId,
-      document,
-      signer,
-      signature,
-      pendingSignersMsg,
-      completedSigners,
-      totalRequiredSigners,
-      isMultiSignatureProcess,
+    return signature;
+  }
+
+  // Método auxiliar para obtener nombres de firmantes pendientes
+  private async getPendingSignersNames(
+    pendingSigners: string[],
+    completedSigners: string[],
+  ): Promise<string> {
+    const stillPendingIds = pendingSigners.filter(
+      (id) => !completedSigners.includes(id),
     );
 
-    return signature;
+    if (stillPendingIds.length === 0) return '';
+
+    try {
+      const pendingUsers = await Promise.all(
+        stillPendingIds.map((id) => this.usersService.findOne(id)),
+      );
+
+      return pendingUsers
+        .filter((user) => user)
+        .map((user) => user.name)
+        .join(', ');
+    } catch (error) {
+      this.logger.error(
+        `Error obteniendo nombres de firmantes: ${error.message}`,
+      );
+      return '';
+    }
   }
 
   // Método para notificar a todos los usuarios con acceso al documento sobre una firma

@@ -16,6 +16,7 @@ import AdminDashboard from './pages/AdminDashboard';
 import UserManagement from './pages/UserManagement';
 import ConfigurationPanel from './pages/ConfigurationPanel';
 import InitialSetup from './pages/InitialSetup';
+import { NotificationProvider } from './components/NotificationSystem';
 
 function App() {
   // Determinar si estamos en ambiente de desarrollo
@@ -23,95 +24,97 @@ function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <div className='flex flex-col min-h-screen bg-gray-50'>
-          <Navbar />
-          <div className='flex-grow'>
-            <Routes>
-              {/* Rutas existentes */}
-              <Route
-                path='/'
-                element={<Home />}
-              />
-              <Route
-                path='/login'
-                element={<Login />}
-              />
-              <Route
-                path='/register'
-                element={<Register />}
-              />
-              <Route
-                path='/dashboard'
-                element={
-                  <ProtectedRoute>
-                    <Dashboard />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path='/documents/:id'
-                element={
-                  <ProtectedRoute>
-                    <DocumentViewer />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path='/share/:token'
-                element={<SharedDocumentView />}
-              />
-              <Route
-                path='/biometric-registration'
-                element={
-                  <ProtectedRoute>
-                    <BiometricRegistration />
-                  </ProtectedRoute>
-                }
-              />
+        <NotificationProvider>
+          <div className='flex flex-col min-h-screen bg-gray-50'>
+            <Navbar />
+            <div className='flex-grow'>
+              <Routes>
+                {/* Rutas existentes */}
+                <Route
+                  path='/'
+                  element={<Home />}
+                />
+                <Route
+                  path='/login'
+                  element={<Login />}
+                />
+                <Route
+                  path='/register'
+                  element={<Register />}
+                />
+                <Route
+                  path='/dashboard'
+                  element={
+                    <ProtectedRoute>
+                      <Dashboard />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path='/documents/:id'
+                  element={
+                    <ProtectedRoute>
+                      <DocumentViewer />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path='/share/:token'
+                  element={<SharedDocumentView />}
+                />
+                <Route
+                  path='/biometric-registration'
+                  element={
+                    <ProtectedRoute>
+                      <BiometricRegistration />
+                    </ProtectedRoute>
+                  }
+                />
 
-              {/* Nuevas rutas de administración */}
-              <Route
-                path='/admin'
-                element={
-                  <AdminRoute>
-                    <AdminDashboard />
-                  </AdminRoute>
-                }
-              />
-              <Route
-                path='/admin/users'
-                element={
-                  <AdminRoute>
-                    <UserManagement />
-                  </AdminRoute>
-                }
-              />
-              <Route
-                path='/admin/configuration'
-                element={
-                  <AdminRoute>
-                    <ConfigurationPanel />
-                  </AdminRoute>
-                }
-              />
+                {/* Nuevas rutas de administración */}
+                <Route
+                  path='/admin'
+                  element={
+                    <AdminRoute>
+                      <AdminDashboard />
+                    </AdminRoute>
+                  }
+                />
+                <Route
+                  path='/admin/users'
+                  element={
+                    <AdminRoute>
+                      <UserManagement />
+                    </AdminRoute>
+                  }
+                />
+                <Route
+                  path='/admin/configuration'
+                  element={
+                    <AdminRoute>
+                      <ConfigurationPanel />
+                    </AdminRoute>
+                  }
+                />
 
-              <Route
-                path='*'
-                element={
-                  <Navigate
-                    to='/'
-                    replace
-                  />
-                }
-              />
-              <Route
-                path='/setup'
-                element={<InitialSetup />}
-              />
-            </Routes>
+                <Route
+                  path='*'
+                  element={
+                    <Navigate
+                      to='/'
+                      replace
+                    />
+                  }
+                />
+                <Route
+                  path='/setup'
+                  element={<InitialSetup />}
+                />
+              </Routes>
+            </div>
+            {isDev && <DebugHelper />}
           </div>
-          {isDev && <DebugHelper />}
-        </div>
+        </NotificationProvider>
       </AuthProvider>
     </BrowserRouter>
   );

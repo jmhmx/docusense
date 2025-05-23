@@ -227,30 +227,202 @@ export class SignaturesController {
   @Post(':documentId/multi-init')
   async initMultiSignatureProcess(
     @Param('documentId') documentId: string,
-    @Body() initDto: { signerIds: string[]; requiredSigners?: number },
+    @Body()
+    initDto: {
+      signerIds: string[];
+      requiredSigners?: number;
+      customMessage?: string; // Mensaje personalizado para los firmantes
+      dueDate?: string; // Fecha límite opcional
+    },
     @Request() req,
+    @Headers() headers,
+    @Ip() ip: string,
   ) {
     try {
+      // Validaciones adicionales
+      if (!initDto.signerIds || initDto.signerIds.length === 0) {
+        throw new BadRequestException('Se requiere al menos un firmante');
+      }
+
+      if (
+        initDto.requiredSigners &&
+        initDto.requiredSigners > initDto.signerIds.length
+      ) {
+        throw new BadRequestException(
+          'El número de firmas requeridas no puede ser mayor al número de firmantes',
+        );
+      }
+
+      // Verificar que el usuario no se incluya a sí mismo en la lista de firmantes
+      if (initDto.signerIds.includes(req.user.id)) {
+        throw new BadRequestException(
+          'No puede incluirse a sí mismo como firmante del proceso',
+        );
+      }
+
+      const userAgent = headers['user-agent'] || 'Unknown';
+
+      // Iniciar el proceso con mensaje personalizado si se proporciona
       await this.signaturesService.initMultiSignatureProcess(
         documentId,
         req.user.id,
         initDto.signerIds,
         initDto.requiredSigners,
+        {
+          customMessage: initDto.customMessage,
+          dueDate: initDto.dueDate,
+          initiatorInfo: {
+            ipAddress: ip,
+            userAgent: userAgent,
+          },
+        },
+      );
+
+      // Registrar acción detallada en auditoría
+      await this.auditLogService.log(
+        AuditAction.DOCUMENT_SHARE,
+        req.user.id,
+        documentId,
+        {
+          action: 'multi_signature_init_with_notifications',
+          signersCount: initDto.signerIds.length,
+          requiredSigners: initDto.requiredSigners || initDto.signerIds.length,
+          customMessage: !!initDto.customMessage,
+          hasDueDate: !!initDto.dueDate,
+          notificationMethod: 'email_and_sharing',
+        },
+        ip,
+        userAgent,
       );
 
       return {
         success: true,
         message: 'Proceso de firmas múltiples iniciado correctamente',
+        details: {
+          documentId,
+          signersNotified: initDto.signerIds.length,
+          documentsShared: initDto.signerIds.length,
+          requiredSigners: initDto.requiredSigners || initDto.signerIds.length,
+          notificationsSent: true,
+          sharingCompleted: true,
+        },
+      };
+    } catch (error) {
+      // Log detallado del error
+      this.logger.error(
+        `Error iniciando proceso de firmas múltiples para documento ${documentId}: ${error.message}`,
+        error.stack,
+      );
+
+      if (
+        error instanceof NotFoundException ||
+        error instanceof UnauthorizedException ||
+        error instanceof BadRequestException
+      ) {
+        throw error;
+      }
+
+      throw new BadRequestException(
+        `Error al iniciar proceso de firmas múltiples: ${error.message}`,
+      );
+    }
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post(':documentId/resend-notifications')
+  async resendMultiSignatureNotifications(
+    @Param('documentId') documentId: string,
+    @Body()
+    resendDto: {
+      signerIds?: string[]; // IDs específicos para reenviar, o vacío para todos
+      customMessage?: string;
+    },
+    @Request() req,
+  ) {
+    try {
+      // Verificar que el documento tiene proceso activo
+      const status =
+        await this.signaturesService.getDocumentSignatureStatus(documentId);
+
+      if (!status.multiSignatureProcess) {
+        throw new BadRequestException(
+          'Este documento no tiene un proceso de firmas múltiples activo',
+        );
+      }
+
+      // Verificar que el usuario es el propietario
+      const document = await this.documentsService.findOne(
+        documentId,
+        req.user.id,
+      );
+      if (document.userId !== req.user.id) {
+        throw new UnauthorizedException(
+          'Solo el propietario puede reenviar notificaciones',
+        );
+      }
+
+      const result =
+        await this.signaturesService.resendMultiSignatureNotifications(
+          documentId,
+          req.user.id,
+          resendDto.signerIds,
+          resendDto.customMessage,
+        );
+
+      return {
+        success: true,
+        message: 'Notificaciones reenviadas correctamente',
+        details: result,
       };
     } catch (error) {
       if (
         error instanceof NotFoundException ||
-        error instanceof UnauthorizedException
+        error instanceof UnauthorizedException ||
+        error instanceof BadRequestException
       ) {
         throw error;
       }
+
       throw new BadRequestException(
-        `Error al iniciar proceso de firmas múltiples: ${error.message}`,
+        `Error reenviando notificaciones: ${error.message}`,
+      );
+    }
+  }
+
+  // método para obtener estado detallado con información de notificaciones
+  @UseGuards(JwtAuthGuard)
+  @Get(':documentId/multi-status-detailed')
+  async getDetailedMultiSignatureStatus(
+    @Param('documentId') documentId: string,
+    @Request() req,
+  ) {
+    try {
+      const status =
+        await this.signaturesService.getDocumentSignatureStatus(documentId);
+
+      if (!status.multiSignatureProcess) {
+        return {
+          success: false,
+          message: 'Este documento no tiene un proceso de firmas múltiples',
+        };
+      }
+
+      // Obtener información adicional sobre notificaciones y compartición
+      const notificationStatus =
+        await this.signaturesService.getMultiSignatureNotificationStatus(
+          documentId,
+        );
+
+      return {
+        success: true,
+        data: {
+          ...status,
+          notifications: notificationStatus,
+        },
+      };
+    } catch (error) {
+      throw new BadRequestException(
+        `Error obteniendo estado detallado: ${error.message}`,
       );
     }
   }

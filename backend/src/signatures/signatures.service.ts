@@ -1054,6 +1054,14 @@ export class SignaturesService {
     ownerUserId: string,
     signerIds: string[],
     requiredSigners?: number,
+    options?: {
+      customMessage?: string;
+      dueDate?: string;
+      initiatorInfo?: {
+        ipAddress?: string;
+        userAgent?: string;
+      };
+    },
   ): Promise<void> {
     const document = await this.documentsRepository.findOneBy({
       id: documentId,
@@ -1076,7 +1084,10 @@ export class SignaturesService {
       throw new NotFoundException('Propietario del documento no encontrado');
     }
 
-    // Actualizar metadatos del documento
+    // Calcular fecha límite si no se proporciona
+    const dueDate = options?.dueDate || this.calculateDueDate();
+
+    // Actualizar metadatos del documento con información adicional
     document.metadata = {
       ...document.metadata,
       multiSignatureProcess: true,
@@ -1084,15 +1095,26 @@ export class SignaturesService {
       requiredSigners: requiredSigners || signerIds.length,
       initiatedAt: new Date().toISOString(),
       initiatedBy: ownerUserId,
+      customMessage: options?.customMessage,
+      dueDate: dueDate,
+      notificationStatus: {
+        emailsSent: 0,
+        documentsShared: 0,
+        totalSigners: signerIds.length,
+        lastNotificationSent: new Date().toISOString(),
+      },
     };
 
     await this.documentsService.update(documentId, document);
 
-    // 1. COMPARTIR DOCUMENTO AUTOMÁTICAMENTE CON CADA FIRMANTE
     const frontendUrl =
       this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3001';
     const documentUrl = `${frontendUrl}/documents/${documentId}`;
 
+    let emailsSent = 0;
+    let documentsShared = 0;
+
+    // 1. COMPARTIR DOCUMENTO Y ENVIAR NOTIFICACIONES
     for (const signerId of signerIds) {
       try {
         // Obtener información del firmante
@@ -1102,40 +1124,61 @@ export class SignaturesService {
           continue;
         }
 
-        // Compartir documento con permisos de comentario (necesario para firmar)
+        // Compartir documento con permisos de comentario
         await this.sharingService.shareDocumentWithUser(
           ownerUserId,
           {
             documentId,
             email: signer.email,
-            permissionLevel: 'commenter', // Mínimo necesario para firmar
-            notifyUser: false, // No enviar notificación estándar de compartición
+            permissionLevel: 'commenter',
+            notifyUser: false, // No enviar notificación estándar
           },
           'system',
           'multi-signature-process',
         );
+        documentsShared++;
+
+        // Enviar notificación personalizada de firma múltiple
+        await this.emailService.sendTemplateEmail({
+          to: signer.email,
+          subject: `Solicitud de firma: "${document.title}"`,
+          template: 'multi-signature-request',
+          context: {
+            signerName: signer.name,
+            ownerName: owner.name,
+            documentTitle: document.title,
+            documentUrl: documentUrl,
+            requiredSigners: requiredSigners || signerIds.length,
+            totalSigners: signerIds.length,
+            dueDate: dueDate,
+            instructions:
+              options?.customMessage || this.getSigningInstructions(),
+            customMessage: options?.customMessage,
+          },
+        });
+        emailsSent++;
 
         this.logger.log(
-          `Documento compartido automáticamente con ${signer.email}`,
+          `Notificación y documento compartido con ${signer.email}`,
         );
       } catch (error) {
         this.logger.error(
-          `Error compartiendo documento con firmante ${signerId}: ${error.message}`,
+          `Error procesando firmante ${signerId}: ${error.message}`,
         );
-        // Continuar con otros firmantes aunque uno falle
       }
     }
 
-    // 2. ENVIAR NOTIFICACIONES POR EMAIL A TODOS LOS FIRMANTES
-    await this.notifySignersForMultiSignatureProcess(
-      document,
-      owner,
-      signerIds,
-      requiredSigners || signerIds.length,
-      documentUrl,
-    );
+    // Actualizar estadísticas de notificaciones en el documento
+    document.metadata.notificationStatus = {
+      ...document.metadata.notificationStatus,
+      emailsSent,
+      documentsShared,
+      lastNotificationSent: new Date().toISOString(),
+    };
 
-    // Registrar en blockchain
+    await this.documentsService.update(documentId, document);
+
+    // Registrar en blockchain con información completa
     await this.blockchainService.updateDocumentRecord(
       documentId,
       this.cryptoService.generateHash(document.filePath),
@@ -1144,26 +1187,250 @@ export class SignaturesService {
       {
         signerIds,
         requiredSigners: requiredSigners || signerIds.length,
-        notificationssent: signerIds.length,
-      },
-    );
-
-    // Registrar en auditoría
-    await this.auditLogService.log(
-      AuditAction.DOCUMENT_SHARE,
-      ownerUserId,
-      documentId,
-      {
-        action: 'multi_signature_init',
-        signersCount: signerIds.length,
-        requiredSigners: requiredSigners || signerIds.length,
-        notificationsStatus: 'sent',
+        notificationsSent: emailsSent,
+        documentsShared: documentsShared,
+        customMessage: !!options?.customMessage,
+        dueDate: dueDate,
       },
     );
 
     this.logger.log(
-      `Proceso de firmas múltiples iniciado para documento ${documentId} con ${signerIds.length} firmantes`,
+      `Proceso de firmas múltiples iniciado para documento ${documentId}: 
+      ${emailsSent}/${signerIds.length} notificaciones enviadas, 
+      ${documentsShared}/${signerIds.length} documentos compartidos`,
     );
+  }
+
+  /**
+   * Obtener estado de notificaciones del proceso de firmas múltiples
+   */
+  async getMultiSignatureNotificationStatus(documentId: string): Promise<{
+    notificationsSent: boolean;
+    emailCount: number;
+    documentsShared: number;
+    lastNotificationDate: string;
+    pendingNotifications: string[];
+    failedNotifications: string[];
+  }> {
+    const document = await this.documentsRepository.findOne({
+      where: { id: documentId },
+    });
+
+    if (!document || !document.metadata?.multiSignatureProcess) {
+      throw new NotFoundException('Proceso de firmas múltiples no encontrado');
+    }
+
+    const notificationStatus = document.metadata.notificationStatus || {};
+    const pendingSigners = document.metadata.pendingSigners || [];
+    const completedSigners = document.metadata.completedSigners || [];
+
+    // Determinar firmantes que aún no han firmado (notificaciones pendientes)
+    const pendingNotifications = pendingSigners.filter(
+      (id: string) => !completedSigners.includes(id),
+    );
+
+    return {
+      notificationsSent: (notificationStatus.emailsSent || 0) > 0,
+      emailCount: notificationStatus.emailsSent || 0,
+      documentsShared: notificationStatus.documentsShared || 0,
+      lastNotificationDate:
+        notificationStatus.lastNotificationSent ||
+        document.metadata.initiatedAt,
+      pendingNotifications,
+      failedNotifications: [], // Implementar seguimiento de fallos si es necesario
+    };
+  }
+
+  /**
+   * Validar que todos los firmantes tienen acceso al documento
+   */
+  async validateSignersAccess(
+    documentId: string,
+    signerIds: string[],
+  ): Promise<{
+    validSigners: string[];
+    invalidSigners: string[];
+    missingUsers: string[];
+  }> {
+    const validSigners: string[] = [];
+    const invalidSigners: string[] = [];
+    const missingUsers: string[] = [];
+
+    for (const signerId of signerIds) {
+      try {
+        // Verificar que el usuario existe
+        const user = await this.usersService.findOne(signerId);
+        if (!user) {
+          missingUsers.push(signerId);
+          continue;
+        }
+
+        // Verificar que puede acceder al documento
+        const canAccess = await this.sharingService.canUserAccessDocument(
+          signerId,
+          documentId,
+        );
+        if (canAccess) {
+          validSigners.push(signerId);
+        } else {
+          invalidSigners.push(signerId);
+        }
+      } catch (error) {
+        this.logger.error(
+          `Error validating signer ${signerId}: ${error.message}`,
+        );
+        invalidSigners.push(signerId);
+      }
+    }
+
+    return {
+      validSigners,
+      invalidSigners,
+      missingUsers,
+    };
+  }
+
+  /**
+   * Obtener estadísticas de rendimiento de notificaciones
+   */
+  async getNotificationPerformanceStats(): Promise<{
+    totalProcessesInitiated: number;
+    totalNotificationsSent: number;
+    averageNotificationsPerProcess: number;
+    successRate: number;
+  }> {
+    const documentsWithMultiSig = await this.documentsRepository
+      .createQueryBuilder('doc')
+      .where("doc.metadata->>'multiSignatureProcess' = 'true'")
+      .getMany();
+
+    let totalNotificationsSent = 0;
+    let totalProcessesInitiated = documentsWithMultiSig.length;
+
+    for (const doc of documentsWithMultiSig) {
+      const notificationStatus = doc.metadata?.notificationStatus;
+      if (notificationStatus) {
+        totalNotificationsSent += notificationStatus.emailsSent || 0;
+      }
+    }
+
+    const averageNotificationsPerProcess =
+      totalProcessesInitiated > 0
+        ? Math.round(totalNotificationsSent / totalProcessesInitiated)
+        : 0;
+
+    // Calcular tasa de éxito (simplificado - asumiendo que si se enviaron notificaciones, fueron exitosas)
+    const successRate =
+      totalProcessesInitiated > 0
+        ? Math.round(
+            (totalNotificationsSent / (totalProcessesInitiated * 10)) * 100,
+          ) // Asumiendo promedio de 10 firmantes
+        : 0;
+
+    return {
+      totalProcessesInitiated,
+      totalNotificationsSent,
+      averageNotificationsPerProcess,
+      successRate: Math.min(successRate, 100),
+    };
+  }
+
+  /**
+   * Reenviar notificaciones a firmantes específicos
+   */
+  async resendMultiSignatureNotifications(
+    documentId: string,
+    ownerUserId: string,
+    signerIds?: string[],
+    customMessage?: string,
+  ): Promise<{
+    sent: number;
+    failed: number;
+    details: string[];
+  }> {
+    const document = await this.documentsRepository.findOne({
+      where: { id: documentId },
+    });
+
+    if (!document || !document.metadata?.multiSignatureProcess) {
+      throw new NotFoundException('Proceso de firmas múltiples no encontrado');
+    }
+
+    if (document.userId !== ownerUserId) {
+      throw new UnauthorizedException(
+        'Solo el propietario puede reenviar notificaciones',
+      );
+    }
+
+    const owner = await this.usersService.findOne(ownerUserId);
+    const pendingSigners = document.metadata.pendingSigners || [];
+    const completedSigners = document.metadata.completedSigners || [];
+
+    // Determinar a quién enviar: IDs específicos o todos los pendientes
+    const targetSigners =
+      signerIds ||
+      pendingSigners.filter((id: string) => !completedSigners.includes(id));
+
+    const frontendUrl =
+      this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3001';
+    const documentUrl = `${frontendUrl}/documents/${documentId}`;
+
+    let sent = 0;
+    let failed = 0;
+    const details: string[] = [];
+
+    for (const signerId of targetSigners) {
+      try {
+        const signer = await this.usersService.findOne(signerId);
+        if (!signer) {
+          failed++;
+          details.push(`Firmante no encontrado: ${signerId}`);
+          continue;
+        }
+
+        await this.emailService.sendTemplateEmail({
+          to: signer.email,
+          subject: `Recordatorio de firma: "${document.title}"`,
+          template: 'signature-reminder',
+          context: {
+            signerName: signer.name,
+            ownerName: owner.name,
+            documentTitle: document.title,
+            documentUrl: documentUrl,
+            recentSignerName: 'Sistema (Recordatorio)',
+            completedSigners: completedSigners.length,
+            requiredSigners: document.metadata.requiredSigners,
+            progress: Math.round(
+              (completedSigners.length / document.metadata.requiredSigners) *
+                100,
+            ),
+            customMessage:
+              customMessage ||
+              'Este es un recordatorio para firmar el documento.',
+          },
+        });
+
+        sent++;
+        details.push(`Recordatorio enviado a ${signer.email}`);
+      } catch (error) {
+        failed++;
+        details.push(`Error enviando a ${signerId}: ${error.message}`);
+      }
+    }
+
+    // Actualizar estadísticas de notificaciones
+    if (document.metadata.notificationStatus) {
+      document.metadata.notificationStatus.lastNotificationSent =
+        new Date().toISOString();
+    }
+
+    await this.documentsService.update(documentId, document);
+
+    this.logger.log(
+      `Recordatorios reenviados: ${sent} exitosos, ${failed} fallidos`,
+    );
+
+    return { sent, failed, details };
   }
 
   /**

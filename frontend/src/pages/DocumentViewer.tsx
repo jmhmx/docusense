@@ -95,6 +95,21 @@ const DocumentViewer = () => {
     isOwner: false,
   });
 
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case 'completed':
+        return 'Completado';
+      case 'processing':
+        return 'Procesando';
+      case 'error':
+        return 'Error';
+      case 'pending':
+        return 'Pendiente';
+      default:
+        return status;
+    }
+  };
+
   // Cargar permisos del usuario
   const checkUserPermissions = async () => {
     if (!id) return;
@@ -989,7 +1004,7 @@ const DocumentViewer = () => {
                   className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusBadgeClass(
                     document.status,
                   )}`}>
-                  {document.status}
+                  {getStatusText(document.status)}
                 </span>
                 <span className='mx-2 text-gray-500'>•</span>
                 <span className='text-sm text-gray-500'>

@@ -251,6 +251,21 @@ const Dashboard = () => {
     }
   };
 
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case 'completed':
+        return 'Completado';
+      case 'processing':
+        return 'Procesando';
+      case 'error':
+        return 'Error';
+      case 'pending':
+        return 'Pendiente';
+      default:
+        return status;
+    }
+  };
+
   const getDocumentTypeIcon = (mimeType: string = '') => {
     if (mimeType.includes('pdf')) {
       return (
@@ -405,7 +420,7 @@ const Dashboard = () => {
               className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusBadgeClass(
                 document.status,
               )}`}>
-              {document.status}
+              {getStatusText(document.status)}
             </span>
           </div>
           <div className='px-2 mt-2 text-sm text-gray-500 md:w-1/6 md:mt-0'>
